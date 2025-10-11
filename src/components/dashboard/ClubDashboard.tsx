@@ -1,0 +1,221 @@
+import React, { useState, useEffect } from 'react';
+import { MapPin, Calendar, Trophy, Users, DollarSign, TrendingUp } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuthStore } from '../../store/authStore';
+
+export const ClubDashboard: React.FC = () => {
+  const { userProfile } = useAuthStore();
+  const [stats, setStats] = useState({
+    totalCourts: 0,
+    totalBookings: 0,
+    activeTournaments: 0,
+    monthlyRevenue: 0,
+    bookingRate: 0,
+  });
+
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [courts, setCourts] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (userProfile) {
+      fetchDashboardData();
+    }
+  }, [userProfile]);
+
+  const fetchDashboardData = async () => {
+    if (!userProfile) return;
+
+    // Fetch dashboard stats using stored procedure
+    const { data: statsData, error: statsError } = await supabase
+      .rpc('get_club_dashboard_stats', { p_club_id: userProfile.id });
+
+    console.log('Club Dashboard - Stats Data:', statsData);
+    console.log('Club Dashboard - Stats Error:', statsError);
+    console.log('Club Dashboard - User Profile ID:', userProfile.id);
+
+    if (statsData && statsData.length > 0) {
+      const stat = statsData[0];
+      setStats({
+        totalCourts: stat.total_courts || 0,
+        totalBookings: stat.total_bookings || 0,
+        activeTournaments: stat.active_tournaments || 0,
+        monthlyRevenue: stat.monthly_revenue || 0,
+        bookingRate: stat.booking_rate || 0,
+      });
+    }
+
+    // Fetch recent bookings using stored procedure
+    const { data: recentBookingsData, error: bookingsError } = await supabase
+      .rpc('get_club_recent_bookings', { p_club_id: userProfile.id });
+
+    if (recentBookingsData) {
+      setRecentBookings(recentBookingsData);
+    }
+
+    // Fetch courts for display
+    const { data: courtsData } = await supabase
+      .from('courts')
+      .select('*')
+      .eq('club_id', userProfile.id);
+
+    if (courtsData) {
+      setCourts(courtsData);
+    }
+  };
+
+  const StatCard: React.FC<{ icon: React.ElementType; title: string; value: string | number; color: string }> =
+    ({ icon: Icon, title, value, color }) => (
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
+          <div className="flex-1">
+            <p className="text-xs sm:text-sm font-medium text-gray-600">{title}</p>
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          </div>
+          <div className={`p-2 sm:p-3 rounded-lg ${color} flex items-center justify-center flex-shrink-0`}>
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          </div>
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="space-y-6 sm:space-y-8">
+      {/* Welcome Section */}
+      <div className="bg-gradient-to-r from-blue-600 to-teal-600 rounded-xl p-6 sm:p-8 text-white">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Club Management Hub</h1>
+        <p className="text-blue-100 text-sm sm:text-base">Manage your courts, bookings, and tournaments all in one place</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
+        <StatCard
+          icon={MapPin}
+          title="Total Courts"
+          value={stats.totalCourts}
+          color="bg-emerald-500"
+        />
+        <StatCard
+          icon={Calendar}
+          title="Total Bookings"
+          value={stats.totalBookings}
+          color="bg-blue-500"
+        />
+        <StatCard
+          icon={Trophy}
+          title="Active Tournaments"
+          value={stats.activeTournaments}
+          color="bg-orange-500"
+        />
+        <StatCard
+          icon={DollarSign}
+          title="Monthly Revenue"
+          value={`$${stats.monthlyRevenue}`}
+          color="bg-green-500"
+        />
+        <StatCard
+          icon={TrendingUp}
+          title="Booking Rate"
+          value={`${stats.bookingRate}/court`}
+          color="bg-teal-500"
+        />
+      </div>
+
+      {/* Management Sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+        {/* Recent Bookings */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-4 sm:p-6 border-b border-gray-200">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
+              <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+              Recent Bookings
+            </h2>
+          </div>
+          <div className="p-4 sm:p-6">
+            {recentBookings.length > 0 ? (
+              <div className="space-y-3 sm:space-y-4">
+                {recentBookings.map((booking) => (
+                  <div key={booking.booking_id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {booking.player_name}
+                      </p>
+                      <p className="text-sm text-gray-600 truncate">
+                        {booking.court_name}
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-500">
+                        {booking.slot_date} at {booking.slot_start_time}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
+                        booking.booking_status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                        booking.booking_status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                        booking.booking_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {booking.booking_status}
+                      </span>
+                      {booking.total_amount && (
+                        <p className="text-sm font-medium text-gray-900">
+                          ${booking.total_amount}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8 text-sm sm:text-base">No bookings yet</p>
+            )}
+          </div>
+        </div>
+
+        {/* Courts Overview */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-4 sm:p-6 border-b border-gray-200">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
+              <MapPin className="h-5 w-5 text-emerald-600 mr-2" />
+              Courts Overview
+            </h2>
+          </div>
+          <div className="p-4 sm:p-6">
+            {courts.length > 0 ? (
+              <div className="space-y-3 sm:space-y-4">
+                {courts.map((court) => (
+                  <div key={court.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{court.name}</p>
+                      <p className="text-sm text-gray-600">{court.surface_type} Surface</p>
+                      {court.amenities && court.amenities.length > 0 && (
+                        <p className="text-xs sm:text-sm text-gray-500 truncate">
+                          {court.amenities.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
+                      <p className="text-base sm:text-lg font-semibold text-gray-900">
+                        ${court.hourly_rate}/hr
+                      </p>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
+                        court.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {court.is_available ? 'Available' : 'Unavailable'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4 text-sm sm:text-base">No courts added yet</p>
+                <button className="px-4 py-2 bg-emerald-600 text-white text-sm sm:text-base rounded-lg hover:bg-emerald-700 transition-colors">
+                  Add Your First Court
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
