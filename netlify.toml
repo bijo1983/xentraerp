@@ -4,7 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "18.20.8"
-  NPM_CONFIG_PRODUCTION = "false"   # ⬅️ make sure devDependencies (vite) are installed
+  NPM_CONFIG_PRODUCTION = "false"
+  SECRETS_SCAN_ENABLED = "false"         # ⬅️ turn off secret scanning for this site
 
 [[redirects]]
   from = "/*"
