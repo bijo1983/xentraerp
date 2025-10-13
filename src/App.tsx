@@ -7,6 +7,7 @@ import {
 } from 'react-router-dom';
 
 import { AuthForm } from './components/auth/AuthForm';
+import Register from './components/auth/Register';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { PlayerDashboard } from './components/dashboard/PlayerDashboard';
@@ -161,6 +162,8 @@ function App() {
 
         {/* Main entry point */}
         <Route path="/*" element={<AppContent />} />
+        {/* Register */}
+        <Route path="/register" element={<Register />} />
       </Routes>
     </BrowserRouter>
   );
