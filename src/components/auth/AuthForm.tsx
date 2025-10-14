@@ -1,16 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Activity, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 
-export const AuthForm: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
+type AuthFormProps = {
+  /** Force starting mode. If omitted, defaults to 'login'. */
+  initialMode?: 'login' | 'signup';
+  /** Where to go after sign-in/sign-up succeeds (defaults to '/dashboard'). */
+  afterAuthRedirectTo?: string;
+};
+
+export const AuthForm: React.FC<AuthFormProps> = ({
+  initialMode = 'login',
+  afterAuthRedirectTo = '/dashboard',
+}) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // If AuthForm is used on dedicated routes, prefer URL to set mode.
+  // Otherwise use initialMode prop.
+  const onLoginRoute = location.pathname === '/login';
+  const onRegisterRoute = location.pathname === '/register';
+
+  const [isLogin, setIsLogin] = useState(
+    onLoginRoute ? true : onRegisterRoute ? false : initialMode !== 'signup'
+  );
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [countriesLoading, setCountriesLoading] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
-  
+  const [error, setError] = useState('');
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -23,44 +45,36 @@ export const AuthForm: React.FC = () => {
   const [countries, setCountries] = useState<any[]>([]);
   const { signIn, signUp } = useAuthStore();
 
-  React.useEffect(() => {
+  // Keep local mode in sync if initialMode prop changes (embedded usage)
+  useEffect(() => {
+    if (!onLoginRoute && !onRegisterRoute) {
+      setIsLogin(initialMode !== 'signup');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMode]);
+
+  // Load countries only for signup mode
+  useEffect(() => {
     const fetchCountries = async () => {
       setCountriesLoading(true);
       try {
-        console.log('Fetching countries...');
-        
-        // Simple direct query without connection test
         const { data, error } = await supabase
           .from('countries')
           .select('id, name, code')
           .order('name');
-        
-        console.log('Countries response:', { data, error });
-        
-        if (error) {
-          console.error('Error fetching countries:', error);
-          // Don't show error for countries - it's optional
+        if (error || !data) {
           setCountries([]);
-        } else if (data) {
-          console.log(`Loaded ${data.length} countries`);
-          setCountries(data);
         } else {
-          console.warn('No countries data received');
-          setCountries([]);
+          setCountries(data);
         }
-      } catch (err: any) {
-        console.error('Failed to fetch countries:', err);
-        // Don't show error for countries - it's optional
+      } catch {
         setCountries([]);
       } finally {
         setCountriesLoading(false);
       }
     };
-    
-    // Only fetch countries if not in login mode
-    if (!isLogin) {
-      fetchCountries();
-    }
+
+    if (!isLogin) fetchCountries();
   }, [isLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,22 +86,13 @@ export const AuthForm: React.FC = () => {
       if (isLogin) {
         await signIn(formData.email, formData.password);
       } else {
-        console.log('Submitting signup with data:', {
-          email: formData.email,
-          userType: formData.userType,
-          name: formData.name,
-          phone_number: formData.phone,
-          country_id: formData.country,
-        });
-
         await signUp(formData.email, formData.password, {
           name: formData.name,
           userType: formData.userType,
           phone_number: formData.phone,
           country_id: formData.country,
         });
-        
-        // Clear form after successful signup
+        // Clear form on successful signup
         setFormData({
           email: '',
           password: '',
@@ -97,21 +102,27 @@ export const AuthForm: React.FC = () => {
           country: '',
         });
       }
+
+      // Navigate after success
+      navigate(afterAuthRedirectTo, { replace: true });
     } catch (err: any) {
-      console.error('Auth error:', err);
-      const errorMessage = err.message || 'An error occurred';
-      
-      // Handle specific error types
-      if (errorMessage.includes('User already registered')) {
+      const msg = err?.message || 'An error occurred';
+      if (msg.includes('User already registered')) {
         setError('This email is already registered. Please sign in instead.');
-      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('Network connection failed')) {
-        setError('Unable to connect to the server. Please ensure you have connected to Supabase and try again.');
-      } else if (errorMessage.includes('Invalid login credentials')) {
-        setError('Invalid email or password. Please check your credentials and try again.');
-      } else if (errorMessage.includes('Missing Supabase environment variables')) {
+      } else if (
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        msg.includes('Network connection failed')
+      ) {
+        setError(
+          'Unable to connect to the server. Please ensure Supabase is configured and try again.'
+        );
+      } else if (msg.includes('Invalid login credentials')) {
+        setError('Invalid email or password.');
+      } else if (msg.includes('Missing Supabase environment variables')) {
         setError('Database connection not configured. Please connect to Supabase first.');
       } else {
-        setError(errorMessage);
+        setError(msg);
       }
     } finally {
       setLoading(false);
@@ -123,7 +134,6 @@ export const AuthForm: React.FC = () => {
       setError('Please enter your email address first');
       return;
     }
-
     setLoading(true);
     setError('');
 
@@ -131,17 +141,28 @@ export const AuthForm: React.FC = () => {
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-
       if (error) throw error;
-
       setResetEmailSent(true);
-      setError('');
-    } catch (err: any) {
-      console.error('Password reset error:', err);
+    } catch {
       setError('Failed to send reset email. Please check your email address.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const switchAuthMode = () => {
+    // If we are on dedicated routes, navigate between them instead of toggling local state
+    if (onLoginRoute) {
+      navigate('/register');
+      return;
+    }
+    if (onRegisterRoute) {
+      navigate('/login');
+      return;
+    }
+    // Embedded usage: just toggle
+    setIsLogin((s) => !s);
+    setError('');
   };
 
   return (
@@ -162,9 +183,9 @@ export const AuthForm: React.FC = () => {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm">{error}</p>
-            {error.includes('connect to Supabase') && (
+            {error.includes('Supabase') && (
               <p className="text-red-600 text-xs mt-2">
-                Click the "Connect to Supabase" button in the top right corner to set up your database connection.
+                Click the “Connect to Supabase” button in the top right to set up your connection.
               </p>
             )}
           </div>
@@ -173,12 +194,12 @@ export const AuthForm: React.FC = () => {
         {resetEmailSent && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-green-700 text-sm">
-              Password reset email sent! Check your inbox and follow the instructions to reset your password.
+              Password reset email sent! Check your inbox and follow the instructions.
             </p>
           </div>
         )}
 
-        {/* Forgot Password Link */}
+        {/* Forgot Password Link (only in login) */}
         {isLogin && (
           <div className="text-center">
             <button
@@ -221,8 +242,8 @@ export const AuthForm: React.FC = () => {
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                onClick={() => setShowPassword((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -237,25 +258,24 @@ export const AuthForm: React.FC = () => {
                 </label>
                 <select
                   value={formData.userType}
-                  onChange={(e) => {
-                    console.log('User type changed to:', e.target.value);
-                    setFormData({ ...formData, userType: e.target.value });
-                  }}
+                  onChange={(e) =>
+                    setFormData({ ...formData, userType: e.target.value })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 >
                   <option value="Player">Player</option>
                   <option value="Club">Club</option>
                   <option value="Organizer">Organizer</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Selected: {formData.userType}
-                </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.userType === 'Player' ? 'Full Name' : 
-                   formData.userType === 'Club' ? 'Club Name' : 'Organization Name'}
+                  {formData.userType === 'Player'
+                    ? 'Full Name'
+                    : formData.userType === 'Club'
+                    ? 'Club Name'
+                    : 'Organization Name'}
                 </label>
                 <input
                   type="text"
@@ -294,25 +314,12 @@ export const AuthForm: React.FC = () => {
                     <option value="">
                       {countriesLoading ? 'Loading...' : 'Select country'}
                     </option>
-                    {countries.map((country) => (
-                      <option key={country.id} value={country.id}>
-                        {country.name}
+                    {countries.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
                       </option>
                     ))}
                   </select>
-                  {countriesLoading && (
-                    <p className="text-xs text-gray-500 mt-1">Loading countries...</p>
-                  )}
-                  {!countriesLoading && countries.length === 0 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Countries will load after connecting to Supabase
-                    </p>
-                  )}
-                  {!countriesLoading && countries.length > 0 && (
-                    <p className="text-xs text-green-600 mt-1">
-                      {countries.length} countries available
-                    </p>
-                  )}
                 </div>
               </div>
             </>
@@ -323,16 +330,13 @@ export const AuthForm: React.FC = () => {
             disabled={loading}
             className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
+            {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <button
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError(''); // Clear any existing errors when switching
-            }}
+            onClick={switchAuthMode}
             className="text-emerald-600 hover:text-emerald-700 font-medium"
           >
             {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
