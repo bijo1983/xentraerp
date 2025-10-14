@@ -208,52 +208,69 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /* ------------------------------- sign up -------------------------------- */
-  signUp: async (email, password, userData) => {
+ // ⬇️ REPLACE your current signUp implementation with this block
+signUp: async (email, password, userData) => {
+  const { set, get } = useAuthStore.getState() as any;
+  try {
+    set({ loading: true });
+
+    dbg('signup:start', { email, meta: userData });
+    dbg('signup:calling supabase.auth.signUp');
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          userType: userData.userType,
-          name: userData.name,
-          phone_number: userData.phone_number ?? null,
-          country_id: userData.country_id ?? null,
-          address: userData.address ?? null,
-          website: userData.website ?? null,
-          company_name: userData.company_name ?? null,
-          skill_level: userData.skill_level ?? null,
+          name: userData?.name ?? null,
+          phone_number: userData?.phone_number ?? null,
+          country_id: userData?.country_id ?? null,
+          // IMPORTANT: this is read by your DB trigger
+          profile_type: userData?.userType ?? 'Player',
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // NOTE: email redirect is configured in your client or Supabase settings
       },
     });
-    if (error) throw error;
+
+    dbg('signup:result', { data, error });
+
+    if (error) {
+      set({ loading: false });
+      throw error;
+    }
 
     const sessionUser = data.user ?? null;
+    dbg('signup:sessionUser', { hasUser: !!sessionUser });
 
-    // If confirm-email is ON, there is typically no session here.
+    // If email confirmations are enabled, there’s no session yet.
     if (!sessionUser) {
       set({ loading: false });
       return 'needs_verification';
     }
 
-    // If we *do* have a session immediately, provision role row now.
-    // Role row created by DB trigger after signup; no client insert needed.
-    // const profile_id = await getProfileIdByName(userData.userType);
-    // await createRoleRowForUser(sessionUser, profile_id, {
-      userType: userData.userType,
-      name: userData.name,
-      phone_number: userData.phone_number ?? null,
-      country_id: userData.country_id ?? null,
-      address: userData.address ?? null,
-      website: userData.website ?? null,
-      company_name: userData.company_name ?? null,
-      skill_level: userData.skill_level ?? null,
+    // ✅ Role row is created by DB trigger now — no client insert here.
+    // Previously you had:
+    //   const profile_id = await getProfileIdByName(userData.userType);
+    //   await createRoleRowForUser(sessionUser, profile_id, { ... });
+    // We removed that to avoid RLS issues during signup.
+
+    dbg('signup:loadUserProfile');
+    const profile = await get().loadUserProfile(sessionUser);
+    dbg('signup:profile', profile);
+
+    set({
+      user: sessionUser,
+      profile,
+      loading: false,
     });
 
-    const profile = await loadUserProfile(sessionUser);
-    set({ user: sessionUser, userProfile: profile ?? null, loading: false });
-    return 'signed_in';
-  },
+    return 'success';
+  } catch (err: any) {
+    set({ loading: false, error: err?.message ?? 'Sign up failed' });
+    throw err;
+  }
+},
+
 
   /* ------------------------------- sign out ------------------------------- */
   signOut: async () => {
