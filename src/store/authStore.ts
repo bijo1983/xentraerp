@@ -41,26 +41,19 @@ interface AuthState {
 
 /* -------------------------- helpers (DB lookups) -------------------------- */
 
-const profileIdCache = new Map<string, string>();
+const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string> = {
+  Player:       'REPLACE_WITH_PLAYER_UUID',
+  Club:         'REPLACE_WITH_CLUB_UUID',
+  Organizer:    'REPLACE_WITH_ORGANIZER_UUID',
+  Administrator:'REPLACE_WITH_ADMIN_UUID',
+};
 
 async function getProfileIdByName(
   name: 'Player' | 'Club' | 'Organizer' | 'Administrator'
 ): Promise<string> {
-  const cached = profileIdCache.get(name);
-  if (cached) return cached;
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('name', name)
-    .maybeSingle();
-
-  if (error || !data) {
-    throw new Error(`Could not fetch profile_id for "${name}".`);
-  }
-
-  profileIdCache.set(name, data.id);
-  return data.id;
+  const id = PROFILE_ID_MAP[name];
+  if (!id) throw new Error(`Profile id not configured for "${name}"`);
+  return id;
 }
 
 async function createRoleRowForUser(
