@@ -71,7 +71,7 @@ export const Login = () => {
     }
   };
 
-  if (loading) return <div className="p-6 text-center">🔄 Loading BadmintonHub...</div>;
+  if (loading) return <div className="p-6 text-center">🔄 Loading Badminton Booking...</div>;
 
   if (!loading && user && !userProfile) {
     return (
@@ -93,7 +93,7 @@ export const Login = () => {
               <div className="flex items-center space-x-2">
                 <Activity className="h-8 w-8 sm:h-10 sm:w-10 text-blue-600" />
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">
-                  BadmintonHub
+                  Badminton Booking
                 </h1>
               </div>
               <p className="text-base sm:text-xl text-gray-600 leading-relaxed">
