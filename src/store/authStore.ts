@@ -25,12 +25,28 @@ interface AuthState {
   fetchUserProfile: () => Promise<void>;
 }
 
-/**
- * Create role row in the correct table (player_users / club_users / organizer_users).
- * Requires an active session so RLS (auth.uid()) is not NULL.
- */
+// cache profile ids once fetched
+const profileIdCache = new Map<string, string>();
+
+async function getProfileIdByName(name: 'Player' | 'Club' | 'Organizer' | 'Administrator'): Promise<string> {
+  const cached = profileIdCache.get(name);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('name', name)
+    .maybeSingle();
+
+  if (error || !data) throw new Error(`Could not fetch profile_id for "${name}".`);
+
+  profileIdCache.set(name, data.id);
+  return data.id;
+}
+
 async function createRoleRowForUser(
   user: User,
+  profile_id: string,
   userData: {
     userType: 'Player' | 'Club' | 'Organizer';
     name: string;
@@ -43,7 +59,8 @@ async function createRoleRowForUser(
   }
 ) {
   const base = {
-    user_id: user.id, // if you added the DB trigger, you can omit this
+    user_id: user.id, // if you added a trigger to set this, you can omit it
+    profile_id,       // ✅ REQUIRED by your schema
     email: user.email ?? '',
     phone_number: userData.phone_number ?? null,
     country_id: userData.country_id ?? null,
@@ -90,12 +107,7 @@ async function createRoleRowForUser(
   throw new Error('Unhandled user type');
 }
 
-/**
- * Reads the compact profile from your view and expands basic details from the role table.
- * Expects an active session.
- */
 async function loadUserProfile(user: User): Promise<UserProfile | null> {
-  // Compact mapping view of user -> profile
   const { data: profileRow, error: profileErr } = await supabase
     .from('auth_user_profiles')
     .select('*')
@@ -103,13 +115,12 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
     .maybeSingle();
 
   if (profileErr) throw profileErr;
-  if (!profileRow) return null; // not created yet
+  if (!profileRow) return null;
 
   const profileType: UserProfile['type'] = profileRow.profile_type;
 
-  let roleTable: string;
-  let nameField: string;
-
+  let roleTable = '';
+  let nameField = '';
   switch (profileType) {
     case 'Player':
       roleTable = 'player_users';
@@ -131,13 +142,11 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
       return null;
   }
 
-  const { data: info, error: infoErr } = await supabase
+  const { data: info } = await supabase
     .from(roleTable)
     .select(`${nameField}, email, phone_number, country_id`)
     .eq('user_id', user.id)
     .maybeSingle();
-
-  if (infoErr) throw infoErr;
 
   return {
     id: profileRow.profile_id,
@@ -163,13 +172,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = data.user;
     if (!user) throw new Error('Login failed: no user in session');
 
-    // After login, ensure a role row/profile exists (handles the “confirm email first” flow).
-    // We try to load; if missing but we have metadata from signup, create it now.
+    // Try to load profile; if missing, build from metadata (first login after confirmation)
     let profile = await loadUserProfile(user);
     if (!profile) {
       const meta = user.user_metadata ?? {};
       if (meta.userType && meta.name) {
-        await createRoleRowForUser(user, {
+        const profile_id = await getProfileIdByName(meta.userType);
+        await createRoleRowForUser(user, profile_id, {
           userType: meta.userType,
           name: meta.name,
           phone_number: meta.phone_number ?? null,
@@ -187,7 +196,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signUp: async (email, password, userData) => {
-    // Store user metadata so we can create the role row later if email confirmation is required
+    // store metadata so we can finish provisioning after email confirmation
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -206,12 +215,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     if (error) throw error;
 
-    // If email confirmation is disabled, you’ll have a session now and can create the role row immediately.
-    // If confirmation is required, do nothing here. The create happens on first login in signIn() above.
+    // If confirmation is disabled and we already have a session, we can create the role row now.
     const sessionUser = data.user;
     if (sessionUser) {
-      // We do have a session (auto confirmed)
-      await createRoleRowForUser(sessionUser, {
+      const profile_id = await getProfileIdByName(userData.userType);
+      await createRoleRowForUser(sessionUser, profile_id, {
         userType: userData.userType,
         name: userData.name,
         phone_number: userData.phone_number ?? null,
@@ -222,53 +230,4 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         skill_level: userData.skill_level ?? null,
       });
       const profile = await loadUserProfile(sessionUser);
-      set({ user: sessionUser, userProfile: profile ?? null, loading: false });
-    } else {
-      // No session yet (most likely email confirmation). Let the UI show “check your inbox”.
-      set({ loading: false });
-    }
-  },
-
-  signOut: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, userProfile: null, loading: false });
-  },
-
-  fetchUserProfile: async () => {
-    const { data: session } = await supabase.auth.getSession();
-    const user = session.session?.user ?? null;
-
-    if (!user) {
-      set({ user: null, userProfile: null, loading: false });
-      return;
-    }
-
-    const profile = await loadUserProfile(user);
-    set({ user, userProfile: profile ?? null, loading: false });
-  },
-}));
-
-// Bootstrapping: pick up current session on load
-supabase.auth.getUser().then(({ data: { user } }) => {
-  if (user) {
-    useAuthStore.setState({ user, loading: true });
-    useAuthStore.getState().fetchUserProfile().catch(() => {
-      useAuthStore.setState({ loading: false });
-    });
-  } else {
-    useAuthStore.setState({ user: null, userProfile: null, loading: false });
-  }
-});
-
-// Keep store in sync with auth changes
-supabase.auth.onAuthStateChange((_event, session) => {
-  const user = session?.user ?? null;
-  if (user) {
-    useAuthStore.setState({ user, loading: true });
-    useAuthStore.getState().fetchUserProfile().catch(() => {
-      useAuthStore.setState({ loading: false });
-    });
-  } else {
-    useAuthStore.setState({ user: null, userProfile: null, loading: false });
-  }
-});
+      set({
