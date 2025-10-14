@@ -174,7 +174,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               <Activity className="h-8 w-8 text-emerald-600" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">BadmintonHub</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Badminton Booking</h1>
           <p className="text-gray-600 mt-2">
             {isLogin ? 'Welcome back!' : 'Join the community'}
           </p>
