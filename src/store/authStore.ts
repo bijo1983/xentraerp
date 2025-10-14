@@ -5,14 +5,10 @@ import type { User } from '@supabase/supabase-js';
 
 const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 
-// Custom error code you can catch in the UI to redirect to /check-email
-export class EmailNotVerifiedError extends Error {
-  code = 'EMAIL_NOT_VERIFIED';
-  constructor(msg = 'Please verify your email address.') { super(msg); }
-}
+/* ============================== Types ==================================== */
 
 export type UserProfile = {
-  id: string; // equals profile_id
+  id: string; // equals profile_id in your role catalog
   user_id: string;
   type: 'Player' | 'Club' | 'Organizer' | 'Administrator';
   name: string;
@@ -28,12 +24,33 @@ interface AuthState {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
+
+  // Password auth (kept)
   signIn: (email: string, password: string) => Promise<void>;
+
+  // OTP flow (new)
+  sendEmailOtp: (
+    email: string,
+    userData: {
+      userType: 'Player' | 'Club' | 'Organizer';
+      name: string;
+      phone_number?: string | null;
+      country_id?: string | null;
+      address?: string | null;
+      website?: string | null;
+      company_name?: string | null;
+      skill_level?: string | null;
+    }
+  ) => Promise<void>;
+
+  verifyEmailOtp: (email: string, token: string, newPassword?: string) => Promise<void>;
+
+  // Optional: keep original signUp for password route (returns status)
   signUp: (
     email: string,
     password: string,
     userData: {
-      userType: 'Player' | 'Club' | 'Organizer'; // add 'Administrator' if exposed in UI
+      userType: 'Player' | 'Club' | 'Organizer';
       name: string;
       phone_number?: string | null;
       country_id?: string | null;
@@ -43,11 +60,12 @@ interface AuthState {
       skill_level?: string | null;
     }
   ) => Promise<SignUpStatus>;
+
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
 }
 
-/* -------------------------- role/profile helpers -------------------------- */
+/* ========================= Helpers / DB lookups ========================== */
 
 const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
@@ -56,79 +74,128 @@ const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string
   Administrator: '484435eb-ffde-450b-a3f5-0915b24e1907',
 };
 
-function roleMetaByType(type: UserProfile['type']): { table: string; nameField: string } {
-  switch (type) {
-    case 'Player':        return { table: 'player_users',     nameField: 'full_name' };
-    case 'Club':          return { table: 'club_users',       nameField: 'club_name' };
-    case 'Organizer':     return { table: 'organizer_users',  nameField: 'organizer_name' };
-    case 'Administrator': return { table: 'admin_users',      nameField: 'full_name' };
-  }
-}
-
-function resolveUserType(user: User): UserProfile['type'] {
-  const meta = (user?.user_metadata ?? {}) as Record<string, any>;
-  const t = (meta.profile_type ?? meta.userType ?? 'Player') as string;
-  const norm = (t || 'Player').toString();
-  if (['Player','Club','Organizer','Administrator'].includes(norm)) {
-    return norm as UserProfile['type'];
-  }
-  return 'Player';
-}
-
-function resolveProfileIdByType(type: UserProfile['type']): string {
-  const id = PROFILE_ID_MAP[type];
-  if (!id) throw new Error(`PROFILE_ID_MAP missing id for type ${type}`);
+async function getProfileIdByName(
+  name: 'Player' | 'Club' | 'Organizer' | 'Administrator'
+): Promise<string> {
+  const id = PROFILE_ID_MAP[name];
+  if (!id) throw new Error(`Profile id not configured for "${name}"`);
   return id;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// NOTE: Player is created by DB trigger; this fallback only handles Club/Organizer client-side
+async function createRoleRowForUser(
+  user: User,
+  profile_id: string,
+  userData: {
+    userType: 'Player' | 'Club' | 'Organizer';
+    name: string;
+    phone_number?: string | null;
+    country_id?: string | null;
+    address?: string | null;
+    website?: string | null;
+    company_name?: string | null;
+    skill_level?: string | null;
+  }
+): Promise<void> {
+  const base = {
+    user_id: user.id,
+    profile_id,
+    email: user.email ?? '',
+    phone_number: userData.phone_number ?? null,
+    country_id: userData.country_id ?? null,
+  };
 
-/**
- * Read the user's role row that the DB trigger creates after email verification.
- * A tiny one-shot retry helps in edge cases where redirect and trigger complete at the same time.
- */
-async function loadUserProfile(user: User): Promise<UserProfile | null> {
-  const type = resolveUserType(user);
-  const { table, nameField } = roleMetaByType(type);
-  const profile_id = resolveProfileIdByType(type);
-
-  // attempt + one retry
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { data: info, error } = await supabase
-      .from(table)
-      .select(`${nameField}, email, phone_number, country_id`)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (info) {
-      return {
-        id: profile_id,
-        user_id: user.id,
-        profile_id,
-        type,
-        name: (info as any)?.[nameField] ?? '',
-        email: (info as any)?.email ?? (user.email ?? ''),
-        phone_number: (info as any)?.phone_number ?? undefined,
-        country_id: (info as any)?.country_id ?? null,
-      };
-    }
-
-    // brief backoff before a single retry
-    if (attempt === 0) await sleep(300);
+  if (userData.userType === 'Player') {
+    // Player row must be created by the DB trigger (we avoid RLS timing issues).
+    return;
   }
 
-  return null;
+  if (userData.userType === 'Club') {
+    const { error } = await supabase.from('club_users').insert({
+      ...base,
+      club_name: userData.name,
+      address: userData.address ?? null,
+      website: userData.website ?? null,
+    });
+    if (error) throw error;
+    return;
+  }
+
+  if (userData.userType === 'Organizer') {
+    const { error } = await supabase.from('organizer_users').insert({
+      ...base,
+      organizer_name: userData.name,
+      company_name: userData.company_name ?? null,
+      website: userData.website ?? null,
+    });
+    if (error) throw error;
+    return;
+  }
+
+  throw new Error('Unhandled user type');
 }
 
-/* ------------------------------ zustand store ----------------------------- */
+async function loadUserProfile(user: User): Promise<UserProfile | null> {
+  const { data: profileRow, error: profileErr } = await supabase
+    .from('auth_user_profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (profileErr) throw profileErr;
+  if (!profileRow) return null;
+
+  const pType = profileRow.profile_type as UserProfile['type'];
+  let roleTable = '';
+  let nameField = '';
+
+  switch (pType) {
+    case 'Player':
+      roleTable = 'player_users';
+      nameField = 'full_name';
+      break;
+    case 'Club':
+      roleTable = 'club_users';
+      nameField = 'club_name';
+      break;
+    case 'Organizer':
+      roleTable = 'organizer_users';
+      nameField = 'organizer_name';
+      break;
+    case 'Administrator':
+      roleTable = 'admin_users';
+      nameField = 'full_name';
+      break;
+    default:
+      return null;
+  }
+
+  const { data: info } = await supabase
+    .from(roleTable)
+    .select(`${nameField}, email, phone_number, country_id`)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  return {
+    id: profileRow.profile_id,
+    user_id: user.id,
+    profile_id: profileRow.profile_id,
+    type: pType,
+    name: (info as any)?.[nameField] ?? '',
+    email: (info as any)?.email ?? (user.email ?? ''),
+    phone_number: (info as any)?.phone_number ?? undefined,
+    country_id: (info as any)?.country_id ?? null,
+  };
+}
+
+/* =============================== Store =================================== */
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   userProfile: null,
   loading: true,
 
-  /* ------------------------------- sign in -------------------------------- */
+  /* ----------------------------- PASSWORD SIGN-IN ------------------------- */
   signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -136,49 +203,145 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = data.user;
     if (!user) throw new Error('Login failed: no user in session');
 
-    // Block unverified users → let UI route to /check-email
+    // Enforce email confirmation for password flow
     if (!user.email_confirmed_at) {
-      // keep the app unauthenticated to avoid hitting dashboard
       await supabase.auth.signOut();
-      throw new EmailNotVerifiedError('Please verify your email address. Check Inbox & Junk/Spam.');
+      throw new Error('Please verify your email address. Check your inbox for the confirmation code.');
     }
 
-    // Load provisioned role row (trigger created it after verification)
-    const profile = await loadUserProfile(user);
+    // Load or finish provisioning (Club/Organizer fallback; Player done by trigger)
+    let profile = await loadUserProfile(user);
+    if (!profile) {
+      const meta = user.user_metadata ?? {};
+      if (meta.userType && meta.name) {
+        const profile_id = await getProfileIdByName(meta.userType);
+        await createRoleRowForUser(user, profile_id, {
+          userType: meta.userType,
+          name: meta.name,
+          phone_number: meta.phone_number ?? null,
+          country_id: meta.country_id ?? null,
+          address: meta.address ?? null,
+          website: meta.website ?? null,
+          company_name: meta.company_name ?? null,
+          skill_level: meta.skill_level ?? null,
+        });
+        profile = await loadUserProfile(user);
+      }
+    }
+
     set({ user, userProfile: profile ?? null, loading: false });
   },
 
-  /* ------------------------------- sign up -------------------------------- */
+  /* --------------------------------- OTP SEND ---------------------------- */
+  sendEmailOtp: async (email, userData) => {
+    set({ loading: true });
+    dbg('otp:send:start', { email, meta: userData });
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: {
+          name: userData?.name ?? null,
+          phone_number: userData?.phone_number ?? null,
+          country_id: userData?.country_id ?? null,
+          profile_type: userData?.userType ?? 'Player', // ← your trigger reads this
+          address: userData?.address ?? null,
+          website: userData?.website ?? null,
+          company_name: userData?.company_name ?? null,
+          skill_level: userData?.skill_level ?? null,
+        },
+      },
+    });
+
+    if (error) {
+      set({ loading: false });
+      throw error;
+    }
+
+    // Stay loading=false so UI can show code entry screen
+    set({ loading: false });
+  },
+
+  /* ------------------------------- OTP VERIFY ---------------------------- */
+  verifyEmailOtp: async (email, token, newPassword) => {
+    set({ loading: true });
+    dbg('otp:verify:start', { email });
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,          // 6-digit code from the email
+      type: 'email',  // verifying email OTP
+    });
+
+    if (error) {
+      set({ loading: false });
+      throw error;
+    }
+
+    const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
+    if (!user) {
+      set({ loading: false });
+      throw new Error('Verification succeeded but no user session');
+    }
+
+    // Optional: set a password after OTP so users can log in with password later
+    if (newPassword) {
+      const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (pwErr) {
+        set({ loading: false });
+        throw pwErr;
+      }
+    }
+
+    // Load profile (Player row should be created by trigger at user creation time)
+    let profile = await loadUserProfile(user);
+
+    // If profile is still missing (e.g., role not Player), try safe fallback for Club/Organizer
+    if (!profile) {
+      const meta = user.user_metadata ?? {};
+      if (meta.userType && meta.name && meta.userType !== 'Player') {
+        const profile_id = await getProfileIdByName(meta.userType);
+        await createRoleRowForUser(user, profile_id, {
+          userType: meta.userType,
+          name: meta.name,
+          phone_number: meta.phone_number ?? null,
+          country_id: meta.country_id ?? null,
+          address: meta.address ?? null,
+          website: meta.website ?? null,
+          company_name: meta.company_name ?? null,
+          skill_level: meta.skill_level ?? null,
+        });
+        profile = await loadUserProfile(user);
+      }
+    }
+
+    set({ user, userProfile: profile ?? null, loading: false });
+  },
+
+  /* ------------------------------ PASSWORD SIGN-UP (optional keep) ------- */
   signUp: async (email, password, userData) => {
     try {
       set({ loading: true });
+      dbg('signup:start', { email, meta: userData });
 
-      const profile_type = (userData?.userType ?? 'Player') as UserProfile['type'];
-      const profile_id = resolveProfileIdByType(profile_type);
-
-      dbg('signup:start', { email, profile_type, profile_id, meta: userData });
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          // where Supabase will redirect after the user clicks the email link
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             name: userData?.name ?? null,
             phone_number: userData?.phone_number ?? null,
             country_id: userData?.country_id ?? null,
+            profile_type: userData?.userType ?? 'Player', // ← trigger uses this
             address: userData?.address ?? null,
             website: userData?.website ?? null,
             company_name: userData?.company_name ?? null,
             skill_level: userData?.skill_level ?? null,
-            // Trigger reads these and inserts into the correct role table AFTER verification
-            profile_type,
-            profile_id,
           },
         },
       });
 
-      dbg('signup:result', { data, error });
       if (error) {
         set({ loading: false });
         throw error;
@@ -186,36 +349,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const sessionUser = data.user ?? null;
 
-      // With email confirmations on, this will be null (no session yet)
+      // With email confirmation ON, there is no session yet:
       if (!sessionUser) {
         set({ loading: false });
         return 'needs_verification';
       }
 
-      // If you allow auto-confirm in some environments, guard against unverified
-      if (!sessionUser.email_confirmed_at) {
-        await supabase.auth.signOut();
-        set({ loading: false });
-        return 'needs_verification';
-      }
-
-      // Verified immediately (rare) → role rows should exist now
+      // If you turned confirmations OFF, we might already be signed in:
       const profile = await loadUserProfile(sessionUser);
       set({ user: sessionUser, userProfile: profile ?? null, loading: false });
       return 'signed_in';
-    } catch (err: any) {
+    } catch (err) {
       set({ loading: false });
       throw err;
     }
   },
 
-  /* ------------------------------- sign out ------------------------------- */
+  /* --------------------------------- SIGN OUT ---------------------------- */
   signOut: async () => {
     await supabase.auth.signOut();
     set({ user: null, userProfile: null, loading: false });
   },
 
-  /* --------------------------- fetch user profile -------------------------- */
+  /* --------------------------- FETCH USER PROFILE ------------------------ */
   fetchUserProfile: async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user ?? null;
@@ -225,35 +381,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
-    // Don’t hit role tables before email is confirmed
-    if (!user.email_confirmed_at) {
-      set({ user: null, userProfile: null, loading: false });
-      return;
-    }
-
     const profile = await loadUserProfile(user);
     set({ user, userProfile: profile ?? null, loading: false });
   },
 }));
 
-/* -------------------------- bootstrap auth state -------------------------- */
+/* ============================= Bootstrap state =========================== */
 
 supabase.auth.getUser().then(({ data: { user } }) => {
-  if (user && user.email_confirmed_at) {
+  if (user) {
     useAuthStore.setState({ user, loading: true });
     useAuthStore
       .getState()
       .fetchUserProfile()
       .catch(() => useAuthStore.setState({ loading: false }));
   } else {
-    // If not confirmed or no user, stay logged out so router can show /check-email or /login
     useAuthStore.setState({ user: null, userProfile: null, loading: false });
   }
 });
 
 supabase.auth.onAuthStateChange((_event, session) => {
   const user = session?.user ?? null;
-  if (user && user.email_confirmed_at) {
+  if (user) {
     useAuthStore.setState({ user, loading: true });
     useAuthStore
       .getState()
