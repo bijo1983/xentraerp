@@ -42,10 +42,10 @@ interface AuthState {
 /* -------------------------- helpers (DB lookups) -------------------------- */
 
 const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string> = {
-  Player:       'REPLACE_WITH_PLAYER_UUID',
-  Club:         'REPLACE_WITH_CLUB_UUID',
-  Organizer:    'REPLACE_WITH_ORGANIZER_UUID',
-  Administrator:'REPLACE_WITH_ADMIN_UUID',
+  Player:       'c5289148-8bcd-4b49-8c7a-834b1947ddae',
+  Club:         'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
+  Organizer:    '51de8f1e-02f6-4bbd-b628-5b831dff6350',
+  Administrator:'484435eb-ffde-450b-a3f5-0915b24e1907',
 };
 
 async function getProfileIdByName(
