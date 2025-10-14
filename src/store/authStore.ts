@@ -14,12 +14,27 @@ export type UserProfile = {
   profile_id: string;
 };
 
+type SignUpStatus = 'needs_verification' | 'signed_in';
+
 interface AuthState {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, userData: any) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    userData: {
+      userType: 'Player' | 'Club' | 'Organizer';
+      name: string;
+      phone_number?: string | null;
+      country_id?: string | null;
+      address?: string | null;
+      website?: string | null;
+      company_name?: string | null;
+      skill_level?: string | null;
+    }
+  ) => Promise<SignUpStatus>;
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
 }
@@ -63,8 +78,8 @@ async function createRoleRowForUser(
   }
 ): Promise<void> {
   const base = {
-    user_id: user.id, // keep explicit for clarity/RLS
-    profile_id,       // ✅ required by your schema
+    user_id: user.id,
+    profile_id, // ✅ required by schema
     email: user.email ?? '',
     phone_number: userData.phone_number ?? null,
     country_id: userData.country_id ?? null,
@@ -173,8 +188,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = data.user;
     if (!user) throw new Error('Login failed: no user in session');
 
-    // Try to load profile. If first login and profile tables are not provisioned yet,
-    // use user_metadata to finish provisioning.
+    // 🚫 Block if email not confirmed
+    if (!user.email_confirmed_at) {
+      await supabase.auth.signOut();
+      throw new Error('Please verify your email address. Check your inbox for the confirmation link.');
+    }
+
+    // Load or finish provisioning
     let profile = await loadUserProfile(user);
     if (!profile) {
       const meta = user.user_metadata ?? {};
@@ -199,7 +219,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   /* ------------------------------- sign up -------------------------------- */
   signUp: async (email, password, userData) => {
-    // Put essentials into user_metadata (helps if email confirmation delays session)
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -214,30 +233,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           company_name: userData.company_name ?? null,
           skill_level: userData.skill_level ?? null,
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) throw error;
 
-    // If you get a session immediately, provision role row now; otherwise it will finish on first login.
     const sessionUser = data.user ?? null;
-    if (sessionUser) {
-      const profile_id = await getProfileIdByName(userData.userType);
-      await createRoleRowForUser(sessionUser, profile_id, {
-        userType: userData.userType,
-        name: userData.name,
-        phone_number: userData.phone_number ?? null,
-        country_id: userData.country_id ?? null,
-        address: userData.address ?? null,
-        website: userData.website ?? null,
-        company_name: userData.company_name ?? null,
-        skill_level: userData.skill_level ?? null,
-      });
 
-      const profile = await loadUserProfile(sessionUser);
-      set({ user: sessionUser, userProfile: profile ?? null, loading: false });
-    } else {
+    // If confirm-email is ON, there is typically no session here.
+    if (!sessionUser) {
       set({ loading: false });
+      return 'needs_verification';
     }
+
+    // If we *do* have a session immediately, provision role row now.
+    const profile_id = await getProfileIdByName(userData.userType);
+    await createRoleRowForUser(sessionUser, profile_id, {
+      userType: userData.userType,
+      name: userData.name,
+      phone_number: userData.phone_number ?? null,
+      country_id: userData.country_id ?? null,
+      address: userData.address ?? null,
+      website: userData.website ?? null,
+      company_name: userData.company_name ?? null,
+      skill_level: userData.skill_level ?? null,
+    });
+
+    const profile = await loadUserProfile(sessionUser);
+    set({ user: sessionUser, userProfile: profile ?? null, loading: false });
+    return 'signed_in';
   },
 
   /* ------------------------------- sign out ------------------------------- */
@@ -248,8 +272,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   /* --------------------------- fetch user profile -------------------------- */
   fetchUserProfile: async () => {
-    const { data: session } = await supabase.auth.getSession();
-    const user = session.session?.user ?? null;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData.session?.user ?? null;
 
     if (!user) {
       set({ user: null, userProfile: null, loading: false });
