@@ -25,6 +25,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     onLoginRoute ? true : onRegisterRoute ? false : initialMode !== 'signup'
   );
 
+  // 🔹 OTP stage handling (for signup only)
+  const [stage, setStage] = useState<'form' | 'otp'>('form');
+  const [otpCode, setOtpCode] = useState('');
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [countriesLoading, setCountriesLoading] = useState(false);
@@ -41,12 +45,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({
   });
 
   const [countries, setCountries] = useState<any[]>([]);
-  const { signIn, signUp } = useAuthStore();
+
+  // ⬇️ Pull in store actions (includes OTP methods)
+  const { signIn, sendEmailOtp, verifyEmailOtp } = useAuthStore();
 
   // Keep local mode in sync if initialMode prop changes (embedded usage)
   useEffect(() => {
     if (!onLoginRoute && !onRegisterRoute) {
       setIsLogin(initialMode !== 'signup');
+      setStage('form'); // reset stage when switching mode
+      setOtpCode('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMode]);
@@ -82,38 +90,36 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
     try {
       if (isLogin) {
-        // ---- LOGIN ----
+        // ---- LOGIN (password) ----
         await signIn(formData.email, formData.password);
         navigate(afterAuthRedirectTo, { replace: true });
       } else {
-        // ---- SIGNUP ----
-        const status = await signUp(formData.email, formData.password, {
-          name: formData.name,
-          userType: formData.userType as 'Player' | 'Club' | 'Organizer',
-          phone_number: formData.phone || null,
-          country_id: formData.country || null,
-          // (address/website/company_name/skill_level not collected here)
-        });
-
-        if (status === 'needs_verification') {
-          // Show verify instructions page (no dashboard yet)
-          setFormData({
-            email: '',
-            password: '',
-            name: '',
-            userType: 'Player',
-            phone: '',
-            country: '',
+        // ---- SIGNUP (OTP flow) ----
+        if (stage === 'form') {
+          // 1) Send OTP and switch UI to OTP screen
+          await sendEmailOtp(formData.email, {
+            userType: formData.userType as 'Player' | 'Club' | 'Organizer',
+            name: formData.name,
+            phone_number: formData.phone || null,
+            country_id: formData.country || null,
+            // (address/website/company_name/skill_level not collected here)
           });
-          navigate('/check-email', { replace: true });
+          setStage('otp');
+          setLoading(false);
           return;
         }
 
-        // Auto-confirm environments land here
-        navigate(afterAuthRedirectTo, { replace: true });
+        if (stage === 'otp') {
+          // 2) Verify the entered 6-digit code (optional: set password after OTP)
+          await verifyEmailOtp(formData.email, otpCode, formData.password || undefined);
+
+          // success → go to app
+          navigate(afterAuthRedirectTo, { replace: true });
+          return;
+        }
       }
     } catch (err: any) {
-      // Handle store’s EmailNotVerifiedError specially
+      // Handle store’s EmailNotVerifiedError specially (mainly for password flow)
       if (err?.code === 'EMAIL_NOT_VERIFIED') {
         navigate('/check-email', { replace: true });
         setLoading(false);
@@ -121,7 +127,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
       }
 
       const msg = err?.message || 'An error occurred';
-      if (msg.includes('User already registered')) {
+      if (msg.includes('User already registered') && stage === 'form') {
         setError('This email is already registered. Please sign in instead.');
       } else if (
         msg.includes('Failed to fetch') ||
@@ -174,7 +180,34 @@ export const AuthForm: React.FC<AuthFormProps> = ({
       return;
     }
     setIsLogin((s) => !s);
+    setStage('form');
+    setOtpCode('');
     setError('');
+  };
+
+  // For OTP screen, let user fix email/name etc.
+  const goBackToForm = () => {
+    setStage('form');
+    setOtpCode('');
+    setError('');
+  };
+
+  // Resend OTP
+  const handleResendOtp = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      await sendEmailOtp(formData.email, {
+        userType: formData.userType as 'Player' | 'Club' | 'Organizer',
+        name: formData.name,
+        phone_number: formData.phone || null,
+        country_id: formData.country || null,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Failed to resend code');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -188,7 +221,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Badminton Booking</h1>
           <p className="text-gray-600 mt-2">
-            {isLogin ? 'Welcome back!' : 'Join the community'}
+            {isLogin ? 'Welcome back!' : stage === 'form' ? 'Join the community' : 'Check your email and enter the code'}
           </p>
         </div>
 
@@ -198,7 +231,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           </div>
         )}
 
-        {resetEmailSent && (
+        {resetEmailSent && isLogin && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-green-700 text-sm">
               Password reset email sent! Check your inbox and follow the instructions.
@@ -207,7 +240,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         )}
 
         {isLogin && (
-          <div className="text-center">
+          <div className="text-center mb-4">
             <button
               type="button"
               onClick={handleForgotPassword}
@@ -218,46 +251,92 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           </div>
         )}
 
+        {/* ========================== FORM / OTP VIEWS ========================== */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-              placeholder="Enter your email"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-              >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
-            </div>
-          </div>
-
-          {!isLogin && (
+          {/* ---------------------------- LOGIN VIEW ---------------------------- */}
+          {isLogin && (
             <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* --------------------------- SIGNUP FORM VIEW ----------------------- */}
+          {!isLogin && stage === 'form' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Password (optional — can set after OTP)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    placeholder="Choose a password (optional)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  You can set a password now or later after verifying your email.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   User Type
@@ -331,12 +410,67 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             </>
           )}
 
+          {/* ----------------------------- OTP VIEW ---------------------------- */}
+          {!isLogin && stage === 'otp' && (
+            <>
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+                We’ve sent a 6-digit verification code to <b>{formData.email}</b>. Enter it below.
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  6-digit code
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="tracking-widest text-center text-lg w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="______"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Didn’t get it?{' '}
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    className="text-emerald-600 hover:text-emerald-700 font-medium"
+                    disabled={loading}
+                  >
+                    Resend code
+                  </button>
+                </p>
+              </div>
+
+              {/* Optional: allow editing email/name if user mistyped */}
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  onClick={goBackToForm}
+                  className="text-sm text-gray-600 hover:text-gray-800"
+                  disabled={loading}
+                >
+                  Edit details
+                </button>
+              </div>
+            </>
+          )}
+
           <button
             type="submit"
             disabled={loading}
             className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
+            {loading
+              ? 'Please wait...'
+              : isLogin
+              ? 'Sign In'
+              : stage === 'form'
+              ? 'Create Account'
+              : 'Verify & Continue'}
           </button>
         </form>
 
