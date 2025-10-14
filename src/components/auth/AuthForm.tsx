@@ -78,20 +78,25 @@ export const AuthForm: React.FC<AuthFormProps> = ({
   }, [isLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('[UI] submit:start', { isLogin, formData });
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
       if (isLogin) {
+        console.log('[UI] submit:signIn calling');
         await signIn(formData.email, formData.password);
+        console.log('[UI] submit:signIn done');
       } else {
+        console.log('[UI] submit:signUp calling');
         await signUp(formData.email, formData.password, {
           name: formData.name,
           userType: formData.userType,
           phone_number: formData.phone,
           country_id: formData.country,
         });
+        console.log('[UI] submit:signUp done');
         // Clear form on successful signup
         setFormData({
           email: '',
@@ -106,6 +111,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
       // Navigate after success
       navigate(afterAuthRedirectTo, { replace: true });
     } catch (err: any) {
+      console.error('[UI] submit:error', err);
       const msg = err?.message || 'An error occurred';
       if (msg.includes('User already registered')) {
         setError('This email is already registered. Please sign in instead.');
