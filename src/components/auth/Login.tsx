@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
+import { useNavigate, Link } from 'react-router-dom';
 import { Activity, Trophy, Users, Calendar, ArrowRight } from 'lucide-react';
 
 export const Login = () => {
@@ -223,15 +223,13 @@ export const Login = () => {
 
               <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 text-center">
                 <p className="text-gray-600 text-xs sm:text-sm mb-3">
-                  Don't have an account?
+                    Don&apos;t have an account?
                 </p>
-                <a
-                  href="/"
-                  className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 text-sm sm:text-base font-semibold transition-colors group"
-                >
+                <Link to="/register"
+                      className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 text-sm sm:text-base font-semibold transition-colors group">
                   Create an account
-                  <ArrowRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </a>
+                <ArrowRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
               </div>
 
               <div className="mt-4 sm:mt-6 text-center">
