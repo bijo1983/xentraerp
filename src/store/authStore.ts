@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 export type UserProfile = {
-  id: string; // profile_id
+  id: string; // equals profile_id
   user_id: string;
   type: 'Player' | 'Club' | 'Organizer' | 'Administrator';
   name: string;
@@ -18,17 +18,19 @@ interface AuthState {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, userData: any) => Promise<void>;
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
 }
 
-// cache profile ids once fetched
+/* -------------------------- helpers (DB lookups) -------------------------- */
+
 const profileIdCache = new Map<string, string>();
 
-async function getProfileIdByName(name: 'Player' | 'Club' | 'Organizer' | 'Administrator'): Promise<string> {
+async function getProfileIdByName(
+  name: 'Player' | 'Club' | 'Organizer' | 'Administrator'
+): Promise<string> {
   const cached = profileIdCache.get(name);
   if (cached) return cached;
 
@@ -38,7 +40,9 @@ async function getProfileIdByName(name: 'Player' | 'Club' | 'Organizer' | 'Admin
     .eq('name', name)
     .maybeSingle();
 
-  if (error || !data) throw new Error(`Could not fetch profile_id for "${name}".`);
+  if (error || !data) {
+    throw new Error(`Could not fetch profile_id for "${name}".`);
+  }
 
   profileIdCache.set(name, data.id);
   return data.id;
@@ -57,49 +61,43 @@ async function createRoleRowForUser(
     company_name?: string | null;
     skill_level?: string | null;
   }
-) {
+): Promise<void> {
   const base = {
-    user_id: user.id, // if you added a trigger to set this, you can omit it
-    profile_id,       // ✅ REQUIRED by your schema
+    user_id: user.id, // keep explicit for clarity/RLS
+    profile_id,       // ✅ required by your schema
     email: user.email ?? '',
     phone_number: userData.phone_number ?? null,
     country_id: userData.country_id ?? null,
   };
 
   if (userData.userType === 'Player') {
-    const { error } = await supabase
-      .from('player_users')
-      .insert({
-        ...base,
-        full_name: userData.name,
-        skill_level: userData.skill_level ?? 'Beginner',
-      });
+    const { error } = await supabase.from('player_users').insert({
+      ...base,
+      full_name: userData.name,
+      skill_level: userData.skill_level ?? 'Beginner',
+    });
     if (error) throw error;
     return;
   }
 
   if (userData.userType === 'Club') {
-    const { error } = await supabase
-      .from('club_users')
-      .insert({
-        ...base,
-        club_name: userData.name,
-        address: userData.address ?? null,
-        website: userData.website ?? null,
-      });
+    const { error } = await supabase.from('club_users').insert({
+      ...base,
+      club_name: userData.name,
+      address: userData.address ?? null,
+      website: userData.website ?? null,
+    });
     if (error) throw error;
     return;
   }
 
   if (userData.userType === 'Organizer') {
-    const { error } = await supabase
-      .from('organizer_users')
-      .insert({
-        ...base,
-        organizer_name: userData.name,
-        company_name: userData.company_name ?? null,
-        website: userData.website ?? null,
-      });
+    const { error } = await supabase.from('organizer_users').insert({
+      ...base,
+      organizer_name: userData.name,
+      company_name: userData.company_name ?? null,
+      website: userData.website ?? null,
+    });
     if (error) throw error;
     return;
   }
@@ -117,11 +115,11 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   if (profileErr) throw profileErr;
   if (!profileRow) return null;
 
-  const profileType: UserProfile['type'] = profileRow.profile_type;
-
+  const pType = profileRow.profile_type as UserProfile['type'];
   let roleTable = '';
   let nameField = '';
-  switch (profileType) {
+
+  switch (pType) {
     case 'Player':
       roleTable = 'player_users';
       nameField = 'full_name';
@@ -152,7 +150,7 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
     id: profileRow.profile_id,
     user_id: user.id,
     profile_id: profileRow.profile_id,
-    type: profileType,
+    type: pType,
     name: info?.[nameField] ?? '',
     email: info?.email ?? (user.email ?? ''),
     phone_number: info?.phone_number ?? undefined,
@@ -160,11 +158,14 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   };
 }
 
+/* ------------------------------ zustand store ----------------------------- */
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   userProfile: null,
   loading: true,
 
+  /* ------------------------------- sign in -------------------------------- */
   signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -172,7 +173,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = data.user;
     if (!user) throw new Error('Login failed: no user in session');
 
-    // Try to load profile; if missing, build from metadata (first login after confirmation)
+    // Try to load profile. If first login and profile tables are not provisioned yet,
+    // use user_metadata to finish provisioning.
     let profile = await loadUserProfile(user);
     if (!profile) {
       const meta = user.user_metadata ?? {};
@@ -195,8 +197,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user, userProfile: profile ?? null, loading: false });
   },
 
+  /* ------------------------------- sign up -------------------------------- */
   signUp: async (email, password, userData) => {
-    // store metadata so we can finish provisioning after email confirmation
+    // Put essentials into user_metadata (helps if email confirmation delays session)
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -215,8 +218,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     if (error) throw error;
 
-    // If confirmation is disabled and we already have a session, we can create the role row now.
-    const sessionUser = data.user;
+    // If you get a session immediately, provision role row now; otherwise it will finish on first login.
+    const sessionUser = data.user ?? null;
     if (sessionUser) {
       const profile_id = await getProfileIdByName(userData.userType);
       await createRoleRowForUser(sessionUser, profile_id, {
@@ -229,5 +232,58 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         company_name: userData.company_name ?? null,
         skill_level: userData.skill_level ?? null,
       });
+
       const profile = await loadUserProfile(sessionUser);
-      set({
+      set({ user: sessionUser, userProfile: profile ?? null, loading: false });
+    } else {
+      set({ loading: false });
+    }
+  },
+
+  /* ------------------------------- sign out ------------------------------- */
+  signOut: async () => {
+    await supabase.auth.signOut();
+    set({ user: null, userProfile: null, loading: false });
+  },
+
+  /* --------------------------- fetch user profile -------------------------- */
+  fetchUserProfile: async () => {
+    const { data: session } = await supabase.auth.getSession();
+    const user = session.session?.user ?? null;
+
+    if (!user) {
+      set({ user: null, userProfile: null, loading: false });
+      return;
+    }
+
+    const profile = await loadUserProfile(user);
+    set({ user, userProfile: profile ?? null, loading: false });
+  },
+}));
+
+/* -------------------------- bootstrap auth state -------------------------- */
+
+supabase.auth.getUser().then(({ data: { user } }) => {
+  if (user) {
+    useAuthStore.setState({ user, loading: true });
+    useAuthStore
+      .getState()
+      .fetchUserProfile()
+      .catch(() => useAuthStore.setState({ loading: false }));
+  } else {
+    useAuthStore.setState({ user: null, userProfile: null, loading: false });
+  }
+});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  const user = session?.user ?? null;
+  if (user) {
+    useAuthStore.setState({ user, loading: true });
+    useAuthStore
+      .getState()
+      .fetchUserProfile()
+      .catch(() => useAuthStore.setState({ loading: false }));
+  } else {
+    useAuthStore.setState({ user: null, userProfile: null, loading: false });
+  }
+});
