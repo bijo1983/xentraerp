@@ -5,6 +5,12 @@ import type { User } from '@supabase/supabase-js';
 
 const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 
+// Custom error code you can catch in the UI to redirect to /check-email
+export class EmailNotVerifiedError extends Error {
+  code = 'EMAIL_NOT_VERIFIED';
+  constructor(msg = 'Please verify your email address.') { super(msg); }
+}
+
 export type UserProfile = {
   id: string; // equals profile_id
   user_id: string;
@@ -27,7 +33,7 @@ interface AuthState {
     email: string,
     password: string,
     userData: {
-      userType: 'Player' | 'Club' | 'Organizer'; // (Add 'Administrator' if you expose it in UI)
+      userType: 'Player' | 'Club' | 'Organizer'; // add 'Administrator' if exposed in UI
       name: string;
       phone_number?: string | null;
       country_id?: string | null;
@@ -50,7 +56,7 @@ const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string
   Administrator: '484435eb-ffde-450b-a3f5-0915b24e1907',
 };
 
-function roleMetaByType(type: UserProfile['type']) {
+function roleMetaByType(type: UserProfile['type']): { table: string; nameField: string } {
   switch (type) {
     case 'Player':        return { table: 'player_users',     nameField: 'full_name' };
     case 'Club':          return { table: 'club_users',       nameField: 'club_name' };
@@ -61,9 +67,7 @@ function roleMetaByType(type: UserProfile['type']) {
 
 function resolveUserType(user: User): UserProfile['type'] {
   const meta = (user?.user_metadata ?? {}) as Record<string, any>;
-  // Support either "profile_type" or legacy "userType"
   const t = (meta.profile_type ?? meta.userType ?? 'Player') as string;
-  // Normalize capitalization just in case
   const norm = (t || 'Player').toString();
   if (['Player','Club','Organizer','Administrator'].includes(norm)) {
     return norm as UserProfile['type'];
@@ -77,34 +81,44 @@ function resolveProfileIdByType(type: UserProfile['type']): string {
   return id;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * Read the user's role row that the DB trigger should have created.
- * Returns null if not found (e.g., just after email confirmation and trigger hasn’t run yet).
+ * Read the user's role row that the DB trigger creates after email verification.
+ * A tiny one-shot retry helps in edge cases where redirect and trigger complete at the same time.
  */
 async function loadUserProfile(user: User): Promise<UserProfile | null> {
   const type = resolveUserType(user);
   const { table, nameField } = roleMetaByType(type);
   const profile_id = resolveProfileIdByType(type);
 
-  const { data: info, error } = await supabase
-    .from(table)
-    .select(`${nameField}, email, phone_number, country_id`)
-    .eq('user_id', user.id)
-    .maybeSingle();
+  // attempt + one retry
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: info, error } = await supabase
+      .from(table)
+      .select(`${nameField}, email, phone_number, country_id`)
+      .eq('user_id', user.id)
+      .maybeSingle();
 
-  if (error) throw error;
-  if (!info) return null;
+    if (error) throw error;
+    if (info) {
+      return {
+        id: profile_id,
+        user_id: user.id,
+        profile_id,
+        type,
+        name: (info as any)?.[nameField] ?? '',
+        email: (info as any)?.email ?? (user.email ?? ''),
+        phone_number: (info as any)?.phone_number ?? undefined,
+        country_id: (info as any)?.country_id ?? null,
+      };
+    }
 
-  return {
-    id: profile_id,
-    user_id: user.id,
-    profile_id,
-    type,
-    name: (info as any)?.[nameField] ?? '',
-    email: (info as any)?.email ?? (user.email ?? ''),
-    phone_number: (info as any)?.phone_number ?? undefined,
-    country_id: (info as any)?.country_id ?? null,
-  };
+    // brief backoff before a single retry
+    if (attempt === 0) await sleep(300);
+  }
+
+  return null;
 }
 
 /* ------------------------------ zustand store ----------------------------- */
@@ -122,15 +136,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = data.user;
     if (!user) throw new Error('Login failed: no user in session');
 
-    // 🚫 Block if email not confirmed
+    // Block unverified users → let UI route to /check-email
     if (!user.email_confirmed_at) {
+      // keep the app unauthenticated to avoid hitting dashboard
       await supabase.auth.signOut();
-      throw new Error('Please verify your email address. Check your inbox for the confirmation link.');
+      throw new EmailNotVerifiedError('Please verify your email address. Check Inbox & Junk/Spam.');
     }
 
-    // Load provisioned role row (the DB trigger should have created it)
+    // Load provisioned role row (trigger created it after verification)
     const profile = await loadUserProfile(user);
-
     set({ user, userProfile: profile ?? null, loading: false });
   },
 
@@ -147,6 +161,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         email,
         password,
         options: {
+          // where Supabase will redirect after the user clicks the email link
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             name: userData?.name ?? null,
             phone_number: userData?.phone_number ?? null,
@@ -155,7 +171,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             website: userData?.website ?? null,
             company_name: userData?.company_name ?? null,
             skill_level: userData?.skill_level ?? null,
-            // 👇 Server trigger reads these to insert into the correct role table
+            // Trigger reads these and inserts into the correct role table AFTER verification
             profile_type,
             profile_id,
           },
@@ -170,21 +186,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const sessionUser = data.user ?? null;
 
-      // If email confirmations are enabled, there may be no session yet.
+      // With email confirmations on, this will be null (no session yet)
       if (!sessionUser) {
         set({ loading: false });
         return 'needs_verification';
       }
 
-      // Trigger should have provisioned the role row already
+      // If you allow auto-confirm in some environments, guard against unverified
+      if (!sessionUser.email_confirmed_at) {
+        await supabase.auth.signOut();
+        set({ loading: false });
+        return 'needs_verification';
+      }
+
+      // Verified immediately (rare) → role rows should exist now
       const profile = await loadUserProfile(sessionUser);
-
-      set({
-        user: sessionUser,
-        userProfile: profile ?? null,
-        loading: false,
-      });
-
+      set({ user: sessionUser, userProfile: profile ?? null, loading: false });
       return 'signed_in';
     } catch (err: any) {
       set({ loading: false });
@@ -208,6 +225,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
+    // Don’t hit role tables before email is confirmed
+    if (!user.email_confirmed_at) {
+      set({ user: null, userProfile: null, loading: false });
+      return;
+    }
+
     const profile = await loadUserProfile(user);
     set({ user, userProfile: profile ?? null, loading: false });
   },
@@ -216,20 +239,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 /* -------------------------- bootstrap auth state -------------------------- */
 
 supabase.auth.getUser().then(({ data: { user } }) => {
-  if (user) {
+  if (user && user.email_confirmed_at) {
     useAuthStore.setState({ user, loading: true });
     useAuthStore
       .getState()
       .fetchUserProfile()
       .catch(() => useAuthStore.setState({ loading: false }));
   } else {
+    // If not confirmed or no user, stay logged out so router can show /check-email or /login
     useAuthStore.setState({ user: null, userProfile: null, loading: false });
   }
 });
 
 supabase.auth.onAuthStateChange((_event, session) => {
   const user = session?.user ?? null;
-  if (user) {
+  if (user && user.email_confirmed_at) {
     useAuthStore.setState({ user, loading: true });
     useAuthStore
       .getState()
