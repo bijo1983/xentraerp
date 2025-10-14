@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
+const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
+
 export type UserProfile = {
   id: string; // equals profile_id
   user_id: string;
@@ -42,10 +44,10 @@ interface AuthState {
 /* -------------------------- helpers (DB lookups) -------------------------- */
 
 const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string> = {
-  Player:       'c5289148-8bcd-4b49-8c7a-834b1947ddae',
-  Club:         'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
-  Organizer:    '51de8f1e-02f6-4bbd-b628-5b831dff6350',
-  Administrator:'484435eb-ffde-450b-a3f5-0915b24e1907',
+  Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
+  Club:          'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
+  Organizer:     '51de8f1e-02f6-4bbd-b628-5b831dff6350',
+  Administrator: '484435eb-ffde-450b-a3f5-0915b24e1907',
 };
 
 async function getProfileIdByName(
@@ -72,16 +74,15 @@ async function createRoleRowForUser(
 ): Promise<void> {
   const base = {
     user_id: user.id,
-    profile_id, // ✅ required by schema
+    profile_id, // FK to role catalog row
     email: user.email ?? '',
     phone_number: userData.phone_number ?? null,
     country_id: userData.country_id ?? null,
   };
 
+  // IMPORTANT:
+  // Player row is created by DB trigger after signup. Do nothing here.
   if (userData.userType === 'Player') {
-    const { error } = /* direct insert removed: handled by DB trigger */
-
-    if (error) throw error;
     return;
   }
 
@@ -156,10 +157,10 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
     user_id: user.id,
     profile_id: profileRow.profile_id,
     type: pType,
-    name: info?.[nameField] ?? '',
-    email: info?.email ?? (user.email ?? ''),
-    phone_number: info?.phone_number ?? undefined,
-    country_id: info?.country_id ?? null,
+    name: (info as any)?.[nameField] ?? '',
+    email: (info as any)?.email ?? (user.email ?? ''),
+    phone_number: (info as any)?.phone_number ?? undefined,
+    country_id: (info as any)?.country_id ?? null,
   };
 }
 
@@ -208,69 +209,61 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /* ------------------------------- sign up -------------------------------- */
- // ⬇️ REPLACE your current signUp implementation with this block
-signUp: async (email, password, userData) => {
-  const { set, get } = useAuthStore.getState() as any;
-  try {
-    set({ loading: true });
+  signUp: async (email, password, userData) => {
+    try {
+      set({ loading: true });
 
-    dbg('signup:start', { email, meta: userData });
-    dbg('signup:calling supabase.auth.signUp');
+      dbg('signup:start', { email, meta: userData });
+      dbg('signup:calling supabase.auth.signUp');
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name: userData?.name ?? null,
-          phone_number: userData?.phone_number ?? null,
-          country_id: userData?.country_id ?? null,
-          // IMPORTANT: this is read by your DB trigger
-          profile_type: userData?.userType ?? 'Player',
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: userData?.name ?? null,
+            phone_number: userData?.phone_number ?? null,
+            country_id: userData?.country_id ?? null,
+            // Read by your DB trigger to create the correct role-mapping row
+            profile_type: userData?.userType ?? 'Player',
+          },
         },
-        // NOTE: email redirect is configured in your client or Supabase settings
-      },
-    });
+      });
 
-    dbg('signup:result', { data, error });
+      dbg('signup:result', { data, error });
 
-    if (error) {
+      if (error) {
+        set({ loading: false });
+        throw error;
+      }
+
+      const sessionUser = data.user ?? null;
+      dbg('signup:sessionUser', { hasUser: !!sessionUser });
+
+      // If email confirmations are enabled, there’s no session yet.
+      if (!sessionUser) {
+        set({ loading: false });
+        return 'needs_verification';
+      }
+
+      // ✅ Role row is created by DB trigger now — no client insert here.
+
+      dbg('signup:loadUserProfile');
+      const profile = await loadUserProfile(sessionUser);
+      dbg('signup:profile', profile);
+
+      set({
+        user: sessionUser,
+        userProfile: profile ?? null,
+        loading: false,
+      });
+
+      return 'signed_in';
+    } catch (err: any) {
       set({ loading: false });
-      throw error;
+      throw err;
     }
-
-    const sessionUser = data.user ?? null;
-    dbg('signup:sessionUser', { hasUser: !!sessionUser });
-
-    // If email confirmations are enabled, there’s no session yet.
-    if (!sessionUser) {
-      set({ loading: false });
-      return 'needs_verification';
-    }
-
-    // ✅ Role row is created by DB trigger now — no client insert here.
-    // Previously you had:
-    //   const profile_id = await getProfileIdByName(userData.userType);
-    //   await createRoleRowForUser(sessionUser, profile_id, { ... });
-    // We removed that to avoid RLS issues during signup.
-
-    dbg('signup:loadUserProfile');
-    const profile = await get().loadUserProfile(sessionUser);
-    dbg('signup:profile', profile);
-
-    set({
-      user: sessionUser,
-      profile,
-      loading: false,
-    });
-
-    return 'success';
-  } catch (err: any) {
-    set({ loading: false, error: err?.message ?? 'Sign up failed' });
-    throw err;
-  }
-},
-
+  },
 
   /* ------------------------------- sign out ------------------------------- */
   signOut: async () => {
