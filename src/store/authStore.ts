@@ -3,9 +3,6 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
-const dbg = (...args:any[]) => console.log('[AUTH]', ...args);
-
-
 export type UserProfile = {
   id: string; // equals profile_id
   user_id: string;
@@ -82,11 +79,8 @@ async function createRoleRowForUser(
   };
 
   if (userData.userType === 'Player') {
-    const { error } = await supabase.from('player_users').insert({
-      ...base,
-      full_name: userData.name,
-      skill_level: userData.skill_level ?? 'Beginner',
-    });
+    const { error } = /* direct insert removed: handled by DB trigger */
+
     if (error) throw error;
     return;
   }
@@ -215,8 +209,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   /* ------------------------------- sign up -------------------------------- */
   signUp: async (email, password, userData) => {
-    dbg('signup:start', { email, meta: userData });
-    dbg('signup:calling supabase.auth.signUp');
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -237,21 +229,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (error) throw error;
 
     const sessionUser = data.user ?? null;
-    dbg('signup:sessionUser', { hasUser: !!sessionUser });
 
     // If confirm-email is ON, there is typically no session here.
     if (!sessionUser) {
-      dbg('signup:needs_verification');
       set({ loading: false });
       return 'needs_verification';
     }
 
     // If we *do* have a session immediately, provision role row now.
-    dbg('signup:getProfileIdByName', userData.userType);
-    const profile_id = await getProfileIdByName(userData.userType);
-    dbg('signup:profile_id', profile_id);
-    dbg('signup:createRoleRowForUser');
-    await createRoleRowForUser(sessionUser, profile_id, {
+    // Role row created by DB trigger after signup; no client insert needed.
+    // const profile_id = await getProfileIdByName(userData.userType);
+    // await createRoleRowForUser(sessionUser, profile_id, {
       userType: userData.userType,
       name: userData.name,
       phone_number: userData.phone_number ?? null,
@@ -262,9 +250,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       skill_level: userData.skill_level ?? null,
     });
 
-    dbg('signup:loadUserProfile');
     const profile = await loadUserProfile(sessionUser);
-    dbg('signup:profile', profile);
     set({ user: sessionUser, userProfile: profile ?? null, loading: false });
     return 'signed_in';
   },
@@ -305,7 +291,6 @@ supabase.auth.getUser().then(({ data: { user } }) => {
 });
 
 supabase.auth.onAuthStateChange((_event, session) => {
-  dbg('auth:onAuthStateChange', { event: _event, hasSession: !!session });
   const user = session?.user ?? null;
   if (user) {
     useAuthStore.setState({ user, loading: true });
