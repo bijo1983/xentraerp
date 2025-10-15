@@ -5,8 +5,6 @@ import type { User } from '@supabase/supabase-js';
 
 const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 
-/* ============================== Types ==================================== */
-
 export type UserType = 'Player' | 'Club' | 'Organizer' | 'Administrator';
 
 export type UserProfile = {
@@ -23,8 +21,8 @@ export type UserProfile = {
 type SignUpStatus = 'needs_verification' | 'signed_in';
 
 type SignupMeta = {
-  userType?: UserType;          // our app-friendly key
-  profile_type?: UserType;      // Supabase metadata key you've stored
+  userType?: UserType;          // your app key
+  profile_type?: UserType;      // key you saved in Supabase metadata
   name?: string;
   phone_number?: string | null;
   country_id?: string | null;
@@ -47,9 +45,8 @@ interface AuthState {
   fetchUserProfile: () => Promise<void>;
 }
 
-/* ========================= Helpers / DB lookups ========================== */
+/* ========================= Helpers ========================== */
 
-// SHA-256 hex (WebCrypto)
 async function sha256Hex(s: string): Promise<string> {
   if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available for hashing');
   const enc = new TextEncoder().encode(s);
@@ -57,7 +54,6 @@ async function sha256Hex(s: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Map friendly role -> profile_id (keep in sync with your catalog)
 const PROFILE_ID_MAP: Record<UserType, string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
   Club:          'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
@@ -71,55 +67,76 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-/** Upsert role row (idempotent) — adjust payload fields to your schema if needed */
+/** Upsert role row (idempotent). Uses .select('user_id') to surface RLS/column errors in Network/console. */
+async function upsertRoleRow(
+  table:
+    | 'player_users'
+    | 'club_users'
+    | 'organizer_users'
+    | 'admin_users',
+  payload: Record<string, any>
+): Promise<void> {
+  console.log('[AUTH] upsert', table, payload);
+  const { error } = await supabase
+    .from(table)
+    .upsert(payload, { onConflict: 'user_id' })
+    .select('user_id'); // forces representation; easier to debug if RLS fails
+  if (error) {
+    console.error(`[AUTH] upsert ${table} failed`, error);
+    throw error;
+  }
+}
+
+/** Create role row based on userType */
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
-  userData: Required<Pick<SignupMeta, 'name'>> & { userType: UserType } & SignupMeta
+  userType: UserType,
+  meta: SignupMeta
 ): Promise<void> {
   const base = {
     user_id: user.id,
     profile_id,
     email: user.email ?? '',
-    phone_number: userData.phone_number ?? null,
-    country_id: userData.country_id ?? null,
+    phone_number: meta.phone_number ?? null,
+    country_id: meta.country_id ?? null,
   };
 
-  if (userData.userType === 'Player') {
-    const payload = { ...base, full_name: userData.name ?? (user.user_metadata as any)?.name ?? null, skill_level: userData.skill_level ?? null };
-    console.log('[AUTH] upsert player_users', payload);
-    const { error } = await supabase.from('player_users').upsert(payload, { onConflict: 'user_id' });
-    if (error) { console.error('[AUTH] upsert player_users failed', error); throw error; }
-    return;
+  switch (userType) {
+    case 'Player':
+      await upsertRoleRow('player_users', {
+        ...base,
+        full_name: meta.name ?? (user.user_metadata as any)?.name ?? null,
+        skill_level: meta.skill_level ?? null,
+      });
+      return;
+    case 'Club':
+      await upsertRoleRow('club_users', {
+        ...base,
+        club_name: meta.name ?? (user.user_metadata as any)?.name ?? null,
+        address: meta.address ?? null,
+        website: meta.website ?? null,
+      });
+      return;
+    case 'Organizer':
+      await upsertRoleRow('organizer_users', {
+        ...base,
+        organizer_name: meta.name ?? (user.user_metadata as any)?.name ?? null,
+        company_name: meta.company_name ?? null,
+        website: meta.website ?? null,
+      });
+      return;
+    case 'Administrator':
+      await upsertRoleRow('admin_users', {
+        ...base,
+        full_name: meta.name ?? (user.user_metadata as any)?.name ?? null,
+        website: meta.website ?? null,
+      });
+      return;
   }
-
-  if (userData.userType === 'Club') {
-    const payload = { ...base, club_name: userData.name, address: userData.address ?? null, website: userData.website ?? null };
-    console.log('[AUTH] upsert club_users', payload);
-    const { error } = await supabase.from('club_users').upsert(payload, { onConflict: 'user_id' });
-    if (error) { console.error('[AUTH] upsert club_users failed', error); throw error; }
-    return;
-  }
-
-  if (userData.userType === 'Organizer') {
-    const payload = { ...base, organizer_name: userData.name, company_name: userData.company_name ?? null, website: userData.website ?? null };
-    console.log('[AUTH] upsert organizer_users', payload);
-    const { error } = await supabase.from('organizer_users').upsert(payload, { onConflict: 'user_id' });
-    if (error) { console.error('[AUTH] upsert organizer_users failed', error); throw error; }
-    return;
-  }
-
-  if (userData.userType === 'Administrator') {
-    const payload = { ...base, full_name: userData.name, website: userData.website ?? null };
-    console.log('[AUTH] upsert admin_users', payload);
-    const { error } = await supabase.from('admin_users').upsert(payload, { onConflict: 'user_id' });
-    if (error) { console.error('[AUTH] upsert admin_users failed', error); throw error; }
-    return;
-  }
-
-  throw new Error('Unhandled user type');
 }
 
+/** Read aggregated profile via your view */
 async function loadUserProfile(user: User): Promise<UserProfile | null> {
   const { data: profileRow, error: profileErr } = await supabase
     .from('auth_user_profiles')
@@ -130,30 +147,19 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   if (profileErr) throw profileErr;
   if (!profileRow) return null;
 
-  const pType = profileRow.profile_type as UserType;
-  let roleTable = '';
-  let nameField = '';
+  const type = profileRow.profile_type as UserType;
 
-  switch (pType) {
-    case 'Player':
-      roleTable = 'player_users';
-      nameField = 'full_name';
-      break;
-    case 'Club':
-      roleTable = 'club_users';
-      nameField = 'club_name';
-      break;
-    case 'Organizer':
-      roleTable = 'organizer_users';
-      nameField = 'organizer_name';
-      break;
-    case 'Administrator':
-      roleTable = 'admin_users';
-      nameField = 'full_name';
-      break;
-    default:
-      return null;
-  }
+  const roleTable =
+    type === 'Player' ? 'player_users' :
+    type === 'Club' ? 'club_users' :
+    type === 'Organizer' ? 'organizer_users' :
+    type === 'Administrator' ? 'admin_users' : '';
+
+  const nameField =
+    type === 'Player' ? 'full_name' :
+    type === 'Club' ? 'club_name' :
+    type === 'Organizer' ? 'organizer_name' :
+    'full_name';
 
   const { data: info, error: infoErr } = await supabase
     .from(roleTable)
@@ -167,7 +173,7 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
     id: profileRow.profile_id,
     user_id: user.id,
     profile_id: profileRow.profile_id,
-    type: pType,
+    type,
     name: (info as any)?.[nameField] ?? '',
     email: (info as any)?.email ?? (user.email ?? ''),
     phone_number: (info as any)?.phone_number ?? undefined,
@@ -175,30 +181,23 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   };
 }
 
-/** Ensure a role row exists, then read the aggregated profile */
+/** Ensure role row exists (provision) then read profile */
 async function ensureProvisioned(user: User): Promise<UserProfile | null> {
-  // Try to load first (in case it already exists)
+  // If exists, return
   let profile = await loadUserProfile(user);
   if (profile) return profile;
 
-  // Derive desired role from metadata; prefer profile_type (your metadata), then userType
+  // Determine intended type: prefer profile_type, then userType, default Player
   const meta = (user.user_metadata ?? {}) as SignupMeta;
-  const type: UserType = ((meta.profile_type as UserType) || (meta.userType as UserType) || 'Player');
+  const intendedType: UserType =
+    (meta.profile_type as UserType) ||
+    (meta.userType as UserType) ||
+    'Player';
 
-  const profile_id = await getProfileIdByName(type);
+  const profile_id = await getProfileIdByName(intendedType);
+  console.log('[AUTH] provision:start', { user_id: user.id, intendedType, meta });
 
-  console.log('[AUTH] provision:start', { user_id: user.id, type, meta });
-
-  await createRoleRowForUser(user, profile_id, {
-    userType: type,
-    name: meta.name ?? (user.email ?? 'User'),
-    phone_number: meta.phone_number ?? null,
-    country_id: meta.country_id ?? null,
-    address: meta.address ?? null,
-    website: meta.website ?? null,
-    company_name: meta.company_name ?? null,
-    skill_level: meta.skill_level ?? null,
-  });
+  await createRoleRowForUser(user, profile_id, intendedType, meta);
 
   profile = await loadUserProfile(user);
   console.log('[AUTH] provision:end', { user_id: user.id, ok: !!profile });
@@ -213,7 +212,7 @@ export const useAuthStore = create<AuthState>(() => ({
   userProfile: null,
   loading: true,
 
-  /* ----------------------------- PASSWORD SIGN-IN ------------------------- */
+  /* PASSWORD SIGN-IN */
   signIn: async (rawEmail, password) => {
     const email = (rawEmail ?? '').trim().toLowerCase();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -231,7 +230,7 @@ export const useAuthStore = create<AuthState>(() => ({
     useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 
-  /* --------------------------------- OTP SEND ---------------------------- */
+  /* OTP SEND */
   sendEmailOtp: async (rawEmail, userData) => {
     useAuthStore.setState({ loading: true });
     const email = (rawEmail ?? '').trim().toLowerCase();
@@ -242,10 +241,11 @@ export const useAuthStore = create<AuthState>(() => ({
       options: {
         shouldCreateUser: true,
         data: {
+          // IMPORTANT: write profile_type so we can provision correctly after verify
+          profile_type: userData?.profile_type ?? userData?.userType ?? 'Player',
           name: userData?.name ?? null,
           phone_number: userData?.phone_number ?? null,
           country_id: userData?.country_id ?? null,
-          profile_type: userData?.profile_type ?? userData?.userType ?? 'Player', // store profile_type
           address: userData?.address ?? null,
           website: userData?.website ?? null,
           company_name: userData?.company_name ?? null,
@@ -259,7 +259,7 @@ export const useAuthStore = create<AuthState>(() => ({
       throw error;
     }
 
-    // Audit "sent" (no ?select)
+    // Fire & forget audit (NO .select()!!)
     supabase.from('email_otp_audit').insert({
       email,
       context: 'email_otp',
@@ -270,15 +270,15 @@ export const useAuthStore = create<AuthState>(() => ({
     useAuthStore.setState({ loading: false });
   },
 
-  /* ------------------------------- OTP VERIFY ---------------------------- */
+  /* OTP VERIFY */
   verifyEmailOtp: async (rawEmail, rawToken, newPassword) => {
     useAuthStore.setState({ loading: true });
     const email = (rawEmail ?? '').trim().toLowerCase();
-    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim(); // digits only
+    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim();
 
     dbg('otp:verify:start', { email, token_len: token.length });
 
-    // Audit attempt (insert only; no ?select)
+    // Fire & forget audit (NO .select()!!)
     (async () => {
       try {
         const tokenHash = await sha256Hex(token);
@@ -296,7 +296,7 @@ export const useAuthStore = create<AuthState>(() => ({
       }
     })();
 
-    // Verify with Supabase — type 'email'
+    // Verify with Supabase
     const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) {
       dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
@@ -310,7 +310,6 @@ export const useAuthStore = create<AuthState>(() => ({
       throw new Error('Verification succeeded but no user session');
     }
 
-    // Optional: set password post-OTP
     if (newPassword) {
       const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
       if (pwErr) {
@@ -319,10 +318,10 @@ export const useAuthStore = create<AuthState>(() => ({
       }
     }
 
-    // Provision/load profile
+    // Provision/load profile (forces upsert to show up in Network; will log errors)
     const profile = await ensureProvisioned(user);
 
-    // Audit validated (second insert; no ?select)
+    // Audit validated (NO .select()!!)
     supabase.from('email_otp_audit').insert({
       email,
       context: 'email_otp',
@@ -334,7 +333,7 @@ export const useAuthStore = create<AuthState>(() => ({
     useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 
-  /* ------------------------------ PASSWORD SIGN-UP (optional) ------------ */
+  /* PASSWORD SIGN-UP (optional) */
   signUp: async (rawEmail, password, userData) => {
     try {
       useAuthStore.setState({ loading: true });
@@ -346,10 +345,10 @@ export const useAuthStore = create<AuthState>(() => ({
         password,
         options: {
           data: {
+            profile_type: userData?.profile_type ?? userData?.userType ?? 'Player',
             name: userData?.name ?? null,
             phone_number: userData?.phone_number ?? null,
             country_id: userData?.country_id ?? null,
-            profile_type: userData?.profile_type ?? userData?.userType ?? 'Player',
             address: userData?.address ?? null,
             website: userData?.website ?? null,
             company_name: userData?.company_name ?? null,
@@ -379,14 +378,13 @@ export const useAuthStore = create<AuthState>(() => ({
     }
   },
 
-  /* --------------------------------- SIGN OUT ---------------------------- */
+  /* SIGN OUT (ignore stale JWT 403s) */
   signOut: async () => {
-    // Best-effort: ignore 403 "user_not_found" from stale JWT
     try { await supabase.auth.signOut(); } catch (e) { console.warn('[AUTH] signOut ignored', e); }
     useAuthStore.setState({ user: null, userProfile: null, loading: false });
   },
 
-  /* --------------------------- FETCH USER PROFILE ------------------------ */
+  /* FETCH PROFILE (boot) */
   fetchUserProfile: async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user ?? null;
@@ -401,15 +399,12 @@ export const useAuthStore = create<AuthState>(() => ({
   },
 }));
 
-/* ============================= Bootstrap state =========================== */
+/* ============================= Bootstrap =========================== */
 
 supabase.auth.getUser().then(({ data: { user } }) => {
   if (user) {
     useAuthStore.setState({ user, loading: true });
-    useAuthStore
-      .getState()
-      .fetchUserProfile()
-      .catch(() => useAuthStore.setState({ loading: false }));
+    useAuthStore.getState().fetchUserProfile().catch(() => useAuthStore.setState({ loading: false }));
   } else {
     useAuthStore.setState({ user: null, userProfile: null, loading: false });
   }
@@ -419,10 +414,7 @@ supabase.auth.onAuthStateChange((_event, session) => {
   const user = session?.user ?? null;
   if (user) {
     useAuthStore.setState({ user, loading: true });
-    useAuthStore
-      .getState()
-      .fetchUserProfile()
-      .catch(() => useAuthStore.setState({ loading: false }));
+    useAuthStore.getState().fetchUserProfile().catch(() => useAuthStore.setState({ loading: false }));
   } else {
     useAuthStore.setState({ user: null, userProfile: null, loading: false });
   }
