@@ -5,6 +5,8 @@ import type { User } from '@supabase/supabase-js';
 
 const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 
+/* ============================== Types ==================================== */
+
 export type UserType = 'Player' | 'Club' | 'Organizer' | 'Administrator';
 
 export type UserProfile = {
@@ -21,7 +23,7 @@ export type UserProfile = {
 type SignUpStatus = 'needs_verification' | 'signed_in';
 
 type SignupMeta = {
-  userType?: UserType;          // your app key
+  userType?: UserType;          // app-friendly key (we also read profile_type)
   profile_type?: UserType;      // key you saved in Supabase metadata
   name?: string;
   phone_number?: string | null;
@@ -32,14 +34,22 @@ type SignupMeta = {
   skill_level?: string | null;
 };
 
+type UiStatus =
+  | 'idle'
+  | 'otp_sent'
+  | 'verified_required_login'
+  | 'error';
+
 interface AuthState {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  status: UiStatus;
+  message: string | null;
 
   signIn: (email: string, password: string) => Promise<void>;
-  sendEmailOtp: (email: string, userData?: SignupMeta) => Promise<void>;
-  verifyEmailOtp: (email: string, token: string, newPassword?: string) => Promise<void>;
+  sendEmailOtp: (email: string, password: string, userData?: SignupMeta) => Promise<void>;
+  verifyEmailOtp: (email: string, token: string) => Promise<void>;
   signUp: (email: string, password: string, userData?: SignupMeta) => Promise<SignUpStatus>;
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
@@ -47,12 +57,8 @@ interface AuthState {
 
 /* ========================= Helpers ========================== */
 
-async function sha256Hex(s: string): Promise<string> {
-  if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available for hashing');
-  const enc = new TextEncoder().encode(s);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// In-memory stash to carry the password from OTP send → verify.
+const pendingPasswords = new Map<string, string>();
 
 const PROFILE_ID_MAP: Record<UserType, string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
@@ -67,7 +73,24 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-/** Upsert role row (idempotent). Uses .select('user_id') to surface RLS/column errors in Network/console. */
+/** Optional: call your server to delete a half-created user (requires Service Role on the server). */
+async function requestUserDeletion(userId: string, email: string) {
+  // Implement on your server (e.g., /api/delete-user) using Supabase Admin API with Service Key.
+  // This is a best-effort cleanup. Client code cannot delete auth.users directly.
+  try {
+    const endpoint = (globalThis as any).AUTH_DELETE_USER_ENDPOINT as string | undefined;
+    if (!endpoint) return;
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ userId, email }),
+    });
+  } catch (e) {
+    console.warn('[AUTH] requestUserDeletion failed (ignored)', e);
+  }
+}
+
+/** Upsert role row (idempotent). Uses .select('user_id') to surface RLS/column errors in Network. */
 async function upsertRoleRow(
   table:
     | 'player_users'
@@ -80,7 +103,7 @@ async function upsertRoleRow(
   const { error } = await supabase
     .from(table)
     .upsert(payload, { onConflict: 'user_id' })
-    .select('user_id'); // forces representation; easier to debug if RLS fails
+    .select('user_id'); // forces representation; easier to debug if RLS/columns mismatch
   if (error) {
     console.error(`[AUTH] upsert ${table} failed`, error);
     throw error;
@@ -211,6 +234,8 @@ export const useAuthStore = create<AuthState>(() => ({
   user: null,
   userProfile: null,
   loading: true,
+  status: 'idle',
+  message: null,
 
   /* PASSWORD SIGN-IN */
   signIn: async (rawEmail, password) => {
@@ -227,13 +252,28 @@ export const useAuthStore = create<AuthState>(() => ({
     }
 
     const profile = await ensureProvisioned(user);
-    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
+    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false, status: 'idle', message: null });
   },
 
-  /* OTP SEND */
-  sendEmailOtp: async (rawEmail, userData) => {
-    useAuthStore.setState({ loading: true });
+  /**
+   * OTP SEND — requires password first.
+   * We stash the password until verification so we can set it after OTP confirm,
+   * then we sign the user out and force a normal password login.
+   */
+  sendEmailOtp: async (rawEmail, rawPassword, userData) => {
+    useAuthStore.setState({ loading: true, status: 'idle', message: null });
+
     const email = (rawEmail ?? '').trim().toLowerCase();
+    const password = (rawPassword ?? '').trim();
+
+    if (!password || password.length < 6) {
+      useAuthStore.setState({ loading: false, status: 'error', message: 'Please enter a password (min 6 chars) before requesting the OTP.' });
+      throw new Error('Password required before sending OTP');
+    }
+
+    // keep password in memory until verify
+    pendingPasswords.set(email, password);
+
     dbg('otp:send:start', { email, meta: userData });
 
     const { error } = await supabase.auth.signInWithOtp({
@@ -255,88 +295,89 @@ export const useAuthStore = create<AuthState>(() => ({
     });
 
     if (error) {
-      useAuthStore.setState({ loading: false });
+      useAuthStore.setState({ loading: false, status: 'error', message: error.message || 'Failed to send OTP.' });
       throw error;
     }
 
-    // Fire & forget audit (NO .select()!!)
-    supabase.from('email_otp_audit').insert({
-      email,
-      context: 'email_otp',
-      status: 'sent',
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-    }).catch(e => console.warn('[AUTH] audit insert (send) failed', e));
-
-    useAuthStore.setState({ loading: false });
+    useAuthStore.setState({ loading: false, status: 'otp_sent', message: 'OTP sent to your email.' });
   },
 
-  /* OTP VERIFY */
-  verifyEmailOtp: async (rawEmail, rawToken, newPassword) => {
-    useAuthStore.setState({ loading: true });
+  /**
+   * OTP VERIFY — sets password, provisions role, THEN logs out and asks user to sign in.
+   * No audit writes, no auto-login beyond verify — we enforce normal credentials login.
+   */
+  verifyEmailOtp: async (rawEmail, rawToken) => {
+    useAuthStore.setState({ loading: true, status: 'idle', message: null });
+
     const email = (rawEmail ?? '').trim().toLowerCase();
-    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim();
+    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim(); // digits only
 
     dbg('otp:verify:start', { email, token_len: token.length });
-
-    // Fire & forget audit (NO .select()!!)
-    (async () => {
-      try {
-        const tokenHash = await sha256Hex(token);
-        await supabase.from('email_otp_audit').insert({
-          email,
-          context: 'email_otp',
-          token_hash: tokenHash,
-          token_last4: token.slice(-4),
-          attempts: 1,
-          status: 'sent',
-          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-        });
-      } catch (e) {
-        console.warn('[AUTH] audit insert (verify) failed', e);
-      }
-    })();
 
     // Verify with Supabase
     const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) {
       dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
-      useAuthStore.setState({ loading: false });
+      useAuthStore.setState({ loading: false, status: 'error', message: error.message || 'OTP verification failed.' });
       throw error;
     }
 
     const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
     if (!user) {
-      useAuthStore.setState({ loading: false });
+      useAuthStore.setState({ loading: false, status: 'error', message: 'Verification succeeded but no user session.' });
       throw new Error('Verification succeeded but no user session');
     }
 
-    if (newPassword) {
-      const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
-      if (pwErr) {
-        useAuthStore.setState({ loading: false });
-        throw pwErr;
+    try {
+      // Set password captured at OTP-send time
+      const pw = pendingPasswords.get(email);
+      if (!pw) {
+        throw new Error('Missing password captured at OTP request. Please request OTP again with a password.');
       }
+
+      const { error: pwErr } = await supabase.auth.updateUser({ password: pw });
+      if (pwErr) throw pwErr;
+
+      // Provision role + profile once (idempotent)
+      await ensureProvisioned(user);
+
+      // Clear pending password
+      pendingPasswords.delete(email);
+
+      // Immediately sign user out to enforce credentialed login
+      try { await supabase.auth.signOut(); } catch (e) { /* ignore 403 stale jwt */ }
+
+      useAuthStore.setState({
+        user: null,
+        userProfile: null,
+        loading: false,
+        status: 'verified_required_login',
+        message: 'Verification successful. Please sign in with your email and password.',
+      });
+    } catch (provisionErr: any) {
+      console.error('[AUTH] verify:provisioning failed', provisionErr);
+
+      // Best-effort cleanup (server must implement with Service Key)
+      try { await requestUserDeletion(user.id, email); } catch {}
+
+      try { await supabase.auth.signOut(); } catch {}
+
+      useAuthStore.setState({
+        user: null,
+        userProfile: null,
+        loading: false,
+        status: 'error',
+        message: provisionErr?.message || 'Registration failed. Your account could not be created.',
+      });
+
+      throw provisionErr;
     }
-
-    // Provision/load profile (forces upsert to show up in Network; will log errors)
-    const profile = await ensureProvisioned(user);
-
-    // Audit validated (NO .select()!!)
-    supabase.from('email_otp_audit').insert({
-      email,
-      context: 'email_otp',
-      status: 'validated',
-      user_id: user.id,
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-    }).catch(e => console.warn('[AUTH] audit insert (validated) failed', e));
-
-    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 
-  /* PASSWORD SIGN-UP (optional) */
+  /* PASSWORD SIGN-UP (optional; if you keep this path) */
   signUp: async (rawEmail, password, userData) => {
     try {
-      useAuthStore.setState({ loading: true });
+      useAuthStore.setState({ loading: true, status: 'idle', message: null });
       const email = (rawEmail ?? '').trim().toLowerCase();
       dbg('signup:start', { email, meta: userData });
 
@@ -358,22 +399,22 @@ export const useAuthStore = create<AuthState>(() => ({
       });
 
       if (error) {
-        useAuthStore.setState({ loading: false });
+        useAuthStore.setState({ loading: false, status: 'error', message: error.message || 'Sign up failed.' });
         throw error;
       }
 
       const sessionUser = data.user ?? null;
 
       if (!sessionUser) {
-        useAuthStore.setState({ loading: false });
+        useAuthStore.setState({ loading: false, status: 'otp_sent', message: 'We sent you a confirmation email. Enter the code to verify.' });
         return 'needs_verification';
       }
 
       const profile = await ensureProvisioned(sessionUser);
-      useAuthStore.setState({ user: sessionUser, userProfile: profile ?? null, loading: false });
+      useAuthStore.setState({ user: sessionUser, userProfile: profile ?? null, loading: false, status: 'idle', message: null });
       return 'signed_in';
     } catch (err) {
-      useAuthStore.setState({ loading: false });
+      useAuthStore.setState({ loading: false, status: 'error', message: (err as any)?.message || 'Sign up failed.' });
       throw err;
     }
   },
@@ -381,7 +422,7 @@ export const useAuthStore = create<AuthState>(() => ({
   /* SIGN OUT (ignore stale JWT 403s) */
   signOut: async () => {
     try { await supabase.auth.signOut(); } catch (e) { console.warn('[AUTH] signOut ignored', e); }
-    useAuthStore.setState({ user: null, userProfile: null, loading: false });
+    useAuthStore.setState({ user: null, userProfile: null, loading: false, status: 'idle', message: null });
   },
 
   /* FETCH PROFILE (boot) */
@@ -390,12 +431,12 @@ export const useAuthStore = create<AuthState>(() => ({
     const user = sessionData.session?.user ?? null;
 
     if (!user) {
-      useAuthStore.setState({ user: null, userProfile: null, loading: false });
+      useAuthStore.setState({ user: null, userProfile: null, loading: false, status: 'idle', message: null });
       return;
     }
 
     const profile = await ensureProvisioned(user);
-    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
+    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false, status: 'idle', message: null });
   },
 }));
 
