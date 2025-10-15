@@ -1,12 +1,9 @@
-// src/components/bookings/ManageBookings.tsx (or your path)
 import React, { useState, useEffect } from 'react';
 import { Clock, Plus, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
 import { format, addDays } from 'date-fns';
-
-/* ========================== Types ========================== */
 
 type PlayerUser = {
   id: string;
@@ -21,14 +18,13 @@ type Court = {
   name: string;
   hourly_rate: number;
   surface_type?: string | null;
-  club_id?: string | null;
 };
 
 type Booking = {
   id: string;
   total_amount: number;
-  status: 'pending' | 'approved' | 'cancelled' | 'rejected';
-  payment_status: 'pending' | 'completed' | 'paid';
+  status: 'pending' | 'approved' | 'cancelled';
+  payment_status: 'pending' | 'completed';
   notes?: string | null;
   player_id: string;
   player_users?: {
@@ -48,8 +44,11 @@ type SlotRow = {
   custom_price?: number | null;
   courts?: {
     hourly_rate: number;
+    club_users?: {
+      countries?: { currency_code: string } | null;
+    } | null;
   } | null;
-  bookings?: Booking[];
+  bookings?: Booking[]; // joined array
 };
 
 type EnrichedSlot = SlotRow & {
@@ -57,8 +56,6 @@ type EnrichedSlot = SlotRow & {
   booking: Booking | null;
   isBookedComputed: boolean;
 };
-
-/* ====================== Component ========================= */
 
 export const ManageBookings: React.FC = () => {
   const { userProfile } = useAuthStore();
@@ -78,8 +75,6 @@ export const ManageBookings: React.FC = () => {
   const [playerSearch, setPlayerSearch] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
 
-  /* -------------------- Effects -------------------- */
-
   useEffect(() => {
     if (userProfile) {
       fetchCourts();
@@ -95,48 +90,37 @@ export const ManageBookings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourt, selectedDate]);
 
-  /* -------------------- Data loaders -------------------- */
-
-  // ⬇️ SAME PATTERN AS ViewBookings: find club_ids, then courts by club_id
   const fetchCourts = async () => {
     if (!userProfile) return;
 
-    // 1) club memberships for this user
-    const { data: clubRows, error: clubErr } = await supabase
+    // FIX #1: get club_id for the logged-in club user
+    const { data: clubUser, error: clubError } = await supabase
       .from('club_users')
       .select('club_id')
-      .eq('user_id', userProfile.user_id);
+      .eq('user_id', userProfile.user_id)
+      .single();
 
-    if (clubErr) {
-      console.error('[ManageBookings] club_users lookup failed:', clubErr);
-      setCourts([]);
+    if (clubError || !clubUser) {
+      console.error('Error fetching club user:', clubError);
       return;
     }
 
-    const clubIds = (clubRows ?? []).map((r: any) => r.club_id).filter(Boolean);
-    if (clubIds.length === 0) {
-      console.warn('[ManageBookings] user has no club memberships');
-      setCourts([]);
-      return;
-    }
-
-    // 2) courts owned by those clubs
-    const { data: courtRows, error: courtErr } = await supabase
+    const { data, error } = await supabase
       .from('courts')
-      .select('id, name, hourly_rate, surface_type, club_id')
-      .in('club_id', clubIds)
+      .select('*')
+      .eq('club_id', clubUser.club_id)
       .order('name');
 
-    if (courtErr) {
-      console.error('[ManageBookings] courts load failed:', courtErr);
-      setCourts([]);
+    if (error) {
+      console.error('Error fetching courts:', error);
       return;
     }
 
-    const list = (courtRows ?? []) as Court[];
-    setCourts(list);
-    if (list.length > 0 && !list.some((c) => c.id === selectedCourt)) {
-      setSelectedCourt(list[0].id);
+    if (data) {
+      setCourts(data as Court[]);
+      if (data.length > 0 && !selectedCourt) {
+        setSelectedCourt(data[0].id);
+      }
     }
   };
 
@@ -147,22 +131,28 @@ export const ManageBookings: React.FC = () => {
       .order('full_name');
 
     if (error) {
-      console.error('[ManageBookings] fetch players failed:', error);
+      console.error('Error fetching players:', error);
       return;
     }
-    setPlayers((data ?? []) as PlayerUser[]);
+
+    if (data) setPlayers(data as PlayerUser[]);
   };
 
   const fetchAvailableSlots = async () => {
     if (!selectedCourt || !selectedDate) return;
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-
     const { data, error } = await supabase
       .from('court_slots')
       .select(`
         *,
-        courts (hourly_rate),
+        courts (
+          *,
+          club_users (
+            *,
+            countries (currency_code)
+          )
+        ),
         bookings (
           id,
           total_amount,
@@ -170,7 +160,11 @@ export const ManageBookings: React.FC = () => {
           payment_status,
           notes,
           player_id,
-          player_users (full_name, email, phone_number)
+          player_users (
+            full_name,
+            email,
+            phone_number
+          )
         )
       `)
       .eq('court_id', selectedCourt)
@@ -178,40 +172,39 @@ export const ManageBookings: React.FC = () => {
       .order('start_time');
 
     if (error) {
-      console.error('[ManageBookings] fetch slots failed:', error);
+      console.error('Error fetching slots:', error);
       return;
     }
 
-    const rows = (data ?? []) as SlotRow[];
-    const slotsWithPricing: EnrichedSlot[] = await Promise.all(
-      rows.map(async (slot) => {
-        // (Optional) if you have a pricing function
-        const { data: priceData } = await supabase.rpc('calculate_slot_price', {
-          p_court_id: slot.court_id,
-          p_date: dateStr,
-          p_start_time: slot.start_time,
-          p_end_time: slot.end_time,
-        });
+    if (data) {
+      // FIX #2: compute booked state from active booking (pending/approved)
+      const slotsWithPricing: EnrichedSlot[] = await Promise.all(
+        (data as SlotRow[]).map(async (slot) => {
+          const { data: priceData } = await supabase.rpc('calculate_slot_price', {
+            p_court_id: slot.court_id,
+            p_date: dateStr,
+            p_start_time: slot.start_time,
+            p_end_time: slot.end_time
+          });
 
-        const activeBooking =
-          (slot.bookings ?? []).find((b) => b.status !== 'cancelled' && b.status !== 'rejected') ?? null;
+          const activeBooking =
+            (slot.bookings ?? []).find((b) => b.status !== 'cancelled') ?? null;
 
-        return {
-          ...slot,
-          calculated_price:
-            (typeof priceData === 'number' ? priceData : undefined) ??
-            slot.courts?.hourly_rate ??
-            0,
-          booking: activeBooking,
-          isBookedComputed: !!activeBooking,
-        };
-      })
-    );
+          return {
+            ...slot,
+            calculated_price:
+              (typeof priceData === 'number' ? priceData : undefined) ??
+              slot.courts?.hourly_rate ??
+              0,
+            booking: activeBooking,
+            isBookedComputed: !!activeBooking
+          };
+        })
+      );
 
-    setAvailableSlots(slotsWithPricing);
+      setAvailableSlots(slotsWithPricing);
+    }
   };
-
-  /* -------------------- UI actions -------------------- */
 
   const openCreateBookingModal = async (slot: EnrichedSlot) => {
     if (slot.isBookedComputed) {
@@ -231,36 +224,44 @@ export const ManageBookings: React.FC = () => {
         .from('bookings')
         .select(`
           *,
-          player_users (full_name, email, phone_number),
-          court_slots (start_time, end_time)
+          player_users (
+            full_name,
+            email,
+            phone_number
+          ),
+          court_slots (
+            start_time,
+            end_time
+          )
         `)
         .eq('slot_id', slotId)
         .maybeSingle();
 
       if (error) {
-        console.error('[ManageBookings] fetch booking details failed:', error);
+        console.error('Error fetching booking details:', error);
         return;
       }
 
       if (data) {
         setBookingDetails(data);
-        setSelectedSlot((prev) => ({
-          ...(prev || ({} as any)),
+        setSelectedSlot({
+          // minimal shape for time display
+          ...(selectedSlot as any),
           id: slotId,
           start_time: data.court_slots?.start_time,
           end_time: data.court_slots?.end_time,
           calculated_price: data.total_amount,
           isBookedComputed: true,
-          booking: data,
-        } as EnrichedSlot));
+          booking: data
+        } as EnrichedSlot);
         setShowBookingModal(true);
       }
     } catch (err) {
-      console.error('[ManageBookings] fetch booking details exception:', err);
+      console.error('Error fetching booking details:', err);
     }
   };
 
-  const updateBookingStatus = async (bookingId: string, newStatus: Booking['status']) => {
+  const updateBookingStatus = async (bookingId: string, newStatus: string) => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -283,7 +284,7 @@ export const ManageBookings: React.FC = () => {
       setBookingDetails(null);
       fetchAvailableSlots();
     } catch (err) {
-      console.error('[ManageBookings] update booking failed:', err);
+      console.error('Error updating booking:', err);
       alert('Error updating booking. Please try again.');
     } finally {
       setLoading(false);
@@ -301,13 +302,14 @@ export const ManageBookings: React.FC = () => {
       const bookingAmount =
         selectedSlot.custom_price ?? selectedSlot.calculated_price ?? 0;
 
+      // default to 'pending' to match your earlier requirement
       const { error: bookingError } = await supabase.from('bookings').insert({
         player_id: selectedPlayer,
         slot_id: selectedSlot.id,
         total_amount: bookingAmount,
         status: 'pending',
         payment_status: 'pending',
-        notes: bookingNotes || null,
+        notes: bookingNotes || null
       });
 
       if (bookingError) throw bookingError;
@@ -326,14 +328,12 @@ export const ManageBookings: React.FC = () => {
       setBookingNotes('');
       fetchAvailableSlots();
     } catch (err) {
-      console.error('[ManageBookings] create booking failed:', err);
+      console.error('Error creating booking:', err);
       alert('Error creating booking. Please try again.');
     } finally {
       setLoading(false);
     }
   };
-
-  /* -------------------- Helpers -------------------- */
 
   const getSelectedCourtInfo = () => courts.find((c) => c.id === selectedCourt);
 
@@ -344,8 +344,6 @@ export const ManageBookings: React.FC = () => {
       p.email.toLowerCase().includes(q)
     );
   });
-
-  /* -------------------- Render -------------------- */
 
   return (
     <div className="space-y-8">
@@ -372,11 +370,6 @@ export const ManageBookings: React.FC = () => {
                 </option>
               ))}
             </select>
-            {courts.length === 0 && (
-              <p className="mt-2 text-sm text-gray-500">
-                No courts found for your club membership. Check club membership and RLS policies.
-              </p>
-            )}
           </div>
 
           <div>
@@ -420,7 +413,7 @@ export const ManageBookings: React.FC = () => {
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center">
             <Clock className="h-5 w-5 text-green-600 mr-2" />
-            Available Slots — {format(selectedDate, 'EEEE, MMM d, yyyy')}
+            Available Slots - {format(selectedDate, 'EEEE, MMM d, yyyy')}
           </h2>
         </div>
         <div className="p-6">
@@ -505,7 +498,6 @@ export const ManageBookings: React.FC = () => {
         </div>
       </div>
 
-      {/* Booking details modal */}
       {showBookingModal && bookingDetails && selectedSlot && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -573,7 +565,7 @@ export const ManageBookings: React.FC = () => {
                       </label>
                       <span
                         className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          bookingDetails.payment_status === 'completed' || bookingDetails.payment_status === 'paid'
+                          bookingDetails.payment_status === 'completed'
                             ? 'bg-green-100 text-green-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}
@@ -603,8 +595,8 @@ export const ManageBookings: React.FC = () => {
                   >
                     Close
                   </button>
-                  {/* Optional inline actions:
-                  {bookingDetails?.id && (
+                  {/* Example action buttons (uncomment if you want inline status updates) */}
+                  {/* {bookingDetails?.id && (
                     <>
                       <button
                         onClick={() => updateBookingStatus(bookingDetails.id, 'approved')}
@@ -629,7 +621,6 @@ export const ManageBookings: React.FC = () => {
         </div>
       )}
 
-      {/* Create booking modal */}
       {showCreateModal && selectedSlot && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
