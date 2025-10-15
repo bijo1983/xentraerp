@@ -23,8 +23,8 @@ export type UserProfile = {
 type SignUpStatus = 'needs_verification' | 'signed_in';
 
 type SignupMeta = {
-  userType?: UserType;          // app-friendly key (we also read profile_type)
-  profile_type?: UserType;      // key you saved in Supabase metadata
+  userType?: UserType;          // app key (we also store profile_type)
+  profile_type?: UserType;      // stored in supabase user_metadata
   name?: string;
   phone_number?: string | null;
   country_id?: string | null;
@@ -57,8 +57,9 @@ interface AuthState {
 
 /* ========================= Helpers ========================== */
 
-// In-memory stash to carry the password from OTP send → verify.
+// In-memory stash across OTP send -> verify (per email)
 const pendingPasswords = new Map<string, string>();
+const pendingMetas     = new Map<string, SignupMeta>();
 
 const PROFILE_ID_MAP: Record<UserType, string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
@@ -73,24 +74,7 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-/** Optional: call your server to delete a half-created user (requires Service Role on the server). */
-async function requestUserDeletion(userId: string, email: string) {
-  // Implement on your server (e.g., /api/delete-user) using Supabase Admin API with Service Key.
-  // This is a best-effort cleanup. Client code cannot delete auth.users directly.
-  try {
-    const endpoint = (globalThis as any).AUTH_DELETE_USER_ENDPOINT as string | undefined;
-    if (!endpoint) return;
-    await fetch(endpoint, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ userId, email }),
-    });
-  } catch (e) {
-    console.warn('[AUTH] requestUserDeletion failed (ignored)', e);
-  }
-}
-
-/** Upsert role row (idempotent). Uses .select('user_id') to surface RLS/column errors in Network. */
+/** Upsert role row (idempotent) and force returning to surface RLS/column errors in console. */
 async function upsertRoleRow(
   table:
     | 'player_users'
@@ -103,14 +87,14 @@ async function upsertRoleRow(
   const { error } = await supabase
     .from(table)
     .upsert(payload, { onConflict: 'user_id' })
-    .select('user_id'); // forces representation; easier to debug if RLS/columns mismatch
+    .select('user_id'); // ensures any RLS/column errors show up in Network
   if (error) {
     console.error(`[AUTH] upsert ${table} failed`, error);
     throw error;
   }
 }
 
-/** Create role row based on userType */
+/** Create role row based on userType (adjust columns to match your schema exactly). */
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
@@ -204,18 +188,27 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   };
 }
 
-/** Ensure role row exists (provision) then read profile */
+/** Ensure role row exists (uses PENDING META first; falls back to user_metadata; default Player) */
 async function ensureProvisioned(user: User): Promise<UserProfile | null> {
-  // If exists, return
   let profile = await loadUserProfile(user);
   if (profile) return profile;
 
-  // Determine intended type: prefer profile_type, then userType, default Player
-  const meta = (user.user_metadata ?? {}) as SignupMeta;
+  const email = (user.email ?? '').toLowerCase();
+  const metaFromPending = pendingMetas.get(email) ?? {};
+  const metaFromUser    = (user.user_metadata ?? {}) as SignupMeta;
+
   const intendedType: UserType =
-    (meta.profile_type as UserType) ||
-    (meta.userType as UserType) ||
+    (metaFromPending.profile_type as UserType) ||
+    (metaFromPending.userType as UserType) ||
+    (metaFromUser.profile_type as UserType) ||
+    (metaFromUser.userType as UserType) ||
     'Player';
+
+  const meta: SignupMeta = {
+    ...metaFromUser,
+    ...metaFromPending,
+    profile_type: intendedType,
+  };
 
   const profile_id = await getProfileIdByName(intendedType);
   console.log('[AUTH] provision:start', { user_id: user.id, intendedType, meta });
@@ -256,9 +249,8 @@ export const useAuthStore = create<AuthState>(() => ({
   },
 
   /**
-   * OTP SEND — requires password first.
-   * We stash the password until verification so we can set it after OTP confirm,
-   * then we sign the user out and force a normal password login.
+   * OTP SEND — requires password first (min 8 chars).
+   * We stash both password and meta until verification.
    */
   sendEmailOtp: async (rawEmail, rawPassword, userData) => {
     useAuthStore.setState({ loading: true, status: 'idle', message: null });
@@ -266,31 +258,30 @@ export const useAuthStore = create<AuthState>(() => ({
     const email = (rawEmail ?? '').trim().toLowerCase();
     const password = (rawPassword ?? '').trim();
 
-    if (!password || password.length < 6) {
-      useAuthStore.setState({ loading: false, status: 'error', message: 'Please enter a password (min 6 chars) before requesting the OTP.' });
+    if (!password || password.length < 8) {
+      useAuthStore.setState({
+        loading: false,
+        status: 'error',
+        message: 'Password is required (min 8 characters) before requesting the OTP.',
+      });
       throw new Error('Password required before sending OTP');
     }
 
-    // keep password in memory until verify
+    // keep password + meta in memory until verify
     pendingPasswords.set(email, password);
+    pendingMetas.set(email, {
+      ...userData,
+      profile_type: userData?.profile_type ?? userData?.userType ?? 'Player',
+    });
 
-    dbg('otp:send:start', { email, meta: userData });
+    dbg('otp:send:start', { email, meta: pendingMetas.get(email) });
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
-        data: {
-          // IMPORTANT: write profile_type so we can provision correctly after verify
-          profile_type: userData?.profile_type ?? userData?.userType ?? 'Player',
-          name: userData?.name ?? null,
-          phone_number: userData?.phone_number ?? null,
-          country_id: userData?.country_id ?? null,
-          address: userData?.address ?? null,
-          website: userData?.website ?? null,
-          company_name: userData?.company_name ?? null,
-          skill_level: userData?.skill_level ?? null,
-        },
+        // we try to persist meta here, but we rely on our pending cache later
+        data: pendingMetas.get(email),
       },
     });
 
@@ -303,18 +294,17 @@ export const useAuthStore = create<AuthState>(() => ({
   },
 
   /**
-   * OTP VERIFY — sets password, provisions role, THEN logs out and asks user to sign in.
-   * No audit writes, no auto-login beyond verify — we enforce normal credentials login.
+   * OTP VERIFY — confirms OTP, writes password & metadata, provisions role,
+   * then signs out and asks user to log in with credentials.
    */
   verifyEmailOtp: async (rawEmail, rawToken) => {
     useAuthStore.setState({ loading: true, status: 'idle', message: null });
 
     const email = (rawEmail ?? '').trim().toLowerCase();
-    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim(); // digits only
+    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim();
 
     dbg('otp:verify:start', { email, token_len: token.length });
 
-    // Verify with Supabase
     const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) {
       dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
@@ -328,53 +318,51 @@ export const useAuthStore = create<AuthState>(() => ({
       throw new Error('Verification succeeded but no user session');
     }
 
-    try {
-      // Set password captured at OTP-send time
-      const pw = pendingPasswords.get(email);
-      if (!pw) {
-        throw new Error('Missing password captured at OTP request. Please request OTP again with a password.');
-      }
-
-      const { error: pwErr } = await supabase.auth.updateUser({ password: pw });
-      if (pwErr) throw pwErr;
-
-      // Provision role + profile once (idempotent)
-      await ensureProvisioned(user);
-
-      // Clear pending password
-      pendingPasswords.delete(email);
-
-      // Immediately sign user out to enforce credentialed login
-      try { await supabase.auth.signOut(); } catch (e) { /* ignore 403 stale jwt */ }
-
-      useAuthStore.setState({
-        user: null,
-        userProfile: null,
-        loading: false,
-        status: 'verified_required_login',
-        message: 'Verification successful. Please sign in with your email and password.',
-      });
-    } catch (provisionErr: any) {
-      console.error('[AUTH] verify:provisioning failed', provisionErr);
-
-      // Best-effort cleanup (server must implement with Service Key)
-      try { await requestUserDeletion(user.id, email); } catch {}
-
+    // 1) Set password + metadata captured at OTP-send time
+    const pw   = pendingPasswords.get(email);
+    const meta = pendingMetas.get(email);
+    if (!pw || !meta) {
+      // ensure the user cannot proceed without password
       try { await supabase.auth.signOut(); } catch {}
-
       useAuthStore.setState({
         user: null,
         userProfile: null,
         loading: false,
         status: 'error',
-        message: provisionErr?.message || 'Registration failed. Your account could not be created.',
+        message: 'Password not provided. Please request a new OTP after entering a password.',
       });
-
-      throw provisionErr;
+      throw new Error('Missing password/meta at verify');
     }
+
+    const { error: upErr } = await supabase.auth.updateUser({
+      password: pw,
+      data: meta, // ensure profile_type persists to user
+    });
+    if (upErr) {
+      useAuthStore.setState({ loading: false, status: 'error', message: upErr.message || 'Failed to set password.' });
+      throw upErr;
+    }
+
+    // 2) Provision role + profile (uses pending meta first)
+    await ensureProvisioned(user);
+
+    // clear pending caches
+    pendingPasswords.delete(email);
+    pendingMetas.delete(email);
+
+    // 3) Immediately sign out to enforce credentialed login and show success page
+    try { await supabase.auth.signOut(); } catch { /* ignore stale jwt */ }
+
+    useAuthStore.setState({
+      user: null,
+      userProfile: null,
+      loading: false,
+      status: 'verified_required_login',
+      message: 'Verification successful. Please sign in again with your email and password.',
+    });
   },
 
-  /* PASSWORD SIGN-UP (optional; if you keep this path) */
+  /* PASSWORD SIGN-UP (optional path) */
   signUp: async (rawEmail, password, userData) => {
     try {
       useAuthStore.setState({ loading: true, status: 'idle', message: null });
