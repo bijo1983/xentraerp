@@ -1,6 +1,7 @@
 // src/main.tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import './index.css';                // ✅ make sure this line exists
 import App from './App';
 import QueryProvider from './components/ui/QueryProvider';
 
