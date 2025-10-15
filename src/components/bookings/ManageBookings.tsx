@@ -21,12 +21,7 @@ type Court = {
   name: string;
   hourly_rate: number;
   surface_type?: string | null;
-  // optional ownership columns (we don't rely on these at compile time)
   club_id?: string | null;
-  club_user_id?: string | null;
-  owner_user_id?: string | null;
-  created_by?: string | null;
-  created_by_user_id?: string | null;
 };
 
 type Booking = {
@@ -57,7 +52,7 @@ type SlotRow = {
       countries?: { currency_code: string } | null;
     } | null;
   } | null;
-  bookings?: Booking[]; // joined array
+  bookings?: Booking[];
 };
 
 type EnrichedSlot = SlotRow & {
@@ -105,118 +100,50 @@ export const ManageBookings: React.FC = () => {
 
   /* -------------------- Data loaders -------------------- */
 
-  // ⚠️ Robust loader: tries several schema shapes and logs what succeeds
-  // Replace your fetchCourts with this:
-const fetchCourts = async () => {
-  if (!userProfile) return;
+  const fetchCourts = async () => {
+    if (!userProfile) return;
 
-  try {
-    const uid = userProfile.user_id;
-    console.log('[manageBookings] fetchCourts -> uid:', uid);
+    try {
+      const uid = userProfile.user_id;
 
-    // 1) find the club(s) this user belongs to
-    const { data: clubRows, error: clubErr } = await supabase
-      .from('club_users')
-      .select('club_id')
-      .eq('user_id', uid);
+      // 1) Get the club(s) current user belongs to
+      const { data: clubRows, error: clubErr } = await supabase
+        .from('club_users')
+        .select('club_id')
+        .eq('user_id', uid);
 
-    if (clubErr) {
-      console.error('[manageBookings] club_users lookup failed:', clubErr);
-      setCourts([]);
-      return;
-    }
-
-    const clubIds = (clubRows ?? [])
-      .map((r: any) => r.club_id)
-      .filter(Boolean);
-
-    if (clubIds.length === 0) {
-      console.warn('[manageBookings] user has no club memberships');
-      setCourts([]);
-      return;
-    }
-
-    // 2) load courts for those club(s)
-    const { data: courtRows, error: courtErr } = await supabase
-      .from('courts')
-      .select('id, name, hourly_rate, surface_type, club_id')
-      .in('club_id', clubIds)     // <-- the only relationship we use
-      .order('name');
-
-    if (courtErr) {
-      console.error('[manageBookings] courts load failed:', courtErr);
-      setCourts([]);
-      return;
-    }
-
-    const list = (courtRows ?? []) as Court[];
-    setCourts(list);
-    if (list.length > 0 && !list.some(c => c.id === selectedCourt)) {
-      setSelectedCourt(list[0].id);
-    }
-
-    console.log('[manageBookings] courts loaded:', list.length);
-  } catch (e) {
-    console.error('[manageBookings] fetchCourts exception:', e);
-    setCourts([]);
-  }
-};
-
-      // 2) Try various court ownership shapes until one returns rows successfully
-      const tryCourtsBy = async (
-        shape: 'club_id' | 'club_user_id' | 'owner_user_id' | 'created_by' | 'created_by_user_id'
-      ) => {
-        let q = supabase.from('courts').select('id, name, hourly_rate, surface_type, club_id, club_user_id, owner_user_id, created_by, created_by_user_id').order('name');
-
-        if (shape === 'club_id') {
-          if (!clubIds?.length) return { ok: false as const };
-          q = q.in('club_id', clubIds);
-        } else if (shape === 'club_user_id') {
-          if (!membershipIds?.length) return { ok: false as const };
-          q = q.in('club_user_id', membershipIds);
-        } else if (shape === 'owner_user_id') {
-          q = q.eq('owner_user_id', uid);
-        } else if (shape === 'created_by') {
-          q = q.eq('created_by', uid);
-        } else if (shape === 'created_by_user_id') {
-          q = q.eq('created_by_user_id', uid);
-        }
-
-        const { data, error } = await q;
-        if (error) {
-          console.warn(`[manageBookings] courts by ${shape} failed:`, error);
-          return { ok: false as const };
-        }
-        console.log(`[manageBookings] courts by ${shape} →`, data?.length ?? 0);
-        return { ok: true as const, data: (data ?? []) as Court[] };
-      };
-
-      const shapes: Array<Parameters<typeof tryCourtsBy>[0]> = [
-        'club_id',
-        'club_user_id',
-        'owner_user_id',
-        'created_by',
-        'created_by_user_id',
-      ];
-
-      let found: Court[] | null = null;
-      for (const s of shapes) {
-        const r = await tryCourtsBy(s);
-        if (r.ok) {
-          found = r.data ?? [];
-          break;
-        }
-      }
-
-      if (!found) {
-        console.error('[manageBookings] No courts found with any schema shape. Check RLS/columns.');
+      if (clubErr) {
+        console.error('[manageBookings] club_users lookup failed:', clubErr);
         setCourts([]);
         return;
       }
 
-      setCourts(found);
-      if (found.length > 0 && !found.some((c) => c.id === selectedCourt)) {
-        setSelectedCourt(found[0].id);
+      const clubIds = (clubRows ?? []).map((r: any) => r.club_id).filter(Boolean);
+
+      if (clubIds.length === 0) {
+        console.warn('[manageBookings] user has no club memberships');
+        setCourts([]);
+        return;
+      }
+
+      // 2) Load courts for those club(s)
+      const { data: courtRows, error: courtErr } = await supabase
+        .from('courts')
+        .select('id, name, hourly_rate, surface_type, club_id')
+        .in('club_id', clubIds)
+        .order('name');
+
+      if (courtErr) {
+        console.error('[manageBookings] courts load failed:', courtErr);
+        setCourts([]);
+        return;
+      }
+
+      const list = (courtRows ?? []) as Court[];
+      setCourts(list);
+
+      if (list.length > 0 && !list.some((c) => c.id === selectedCourt)) {
+        setSelectedCourt(list[0].id);
       }
     } catch (e) {
       console.error('[manageBookings] fetchCourts exception:', e);
@@ -702,25 +629,6 @@ const fetchCourts = async () => {
                   >
                     Close
                   </button>
-                  {/* Example inline actions:
-                  {bookingDetails?.id && (
-                    <>
-                      <button
-                        onClick={() => updateBookingStatus(bookingDetails.id, 'approved')}
-                        disabled={loading}
-                        className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => updateBookingStatus(bookingDetails.id, 'cancelled')}
-                        disabled={loading}
-                        className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )} */}
                 </div>
               </div>
             </div>
@@ -768,18 +676,18 @@ const fetchCourts = async () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Player
                   </label>
-                    <select
-                      value={selectedPlayer}
-                      onChange={(e) => setSelectedPlayer(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="">Choose a player</option>
-                      {filteredPlayers.map((player) => (
-                        <option key={player.id} value={player.id}>
-                          {player.full_name} ({player.email})
-                        </option>
-                      ))}
-                    </select>
+                  <select
+                    value={selectedPlayer}
+                    onChange={(e) => setSelectedPlayer(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="">Choose a player</option>
+                    {filteredPlayers.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.full_name} ({player.email})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -824,3 +732,4 @@ const fetchCourts = async () => {
     </div>
   );
 };
+
