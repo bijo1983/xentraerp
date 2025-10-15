@@ -69,8 +69,10 @@ export const ManageBookings: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<EnrichedSlot[]>([]);
 
+  // Players (now driven by RPC search)
   const [players, setPlayers] = useState<PlayerUser[]>([]);
   const [playerSearch, setPlayerSearch] = useState('');
+  const [playersLoading, setPlayersLoading] = useState(false);
 
   const [selectedSlot, setSelectedSlot] = useState<EnrichedSlot | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string>('');
@@ -87,7 +89,7 @@ export const ManageBookings: React.FC = () => {
   useEffect(() => {
     if (userProfile) {
       fetchCourts();
-      fetchPlayers(); // RLS will scope visibility to club/country
+      // Don't prefetch all players — we will call RPC on open modal / search.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile]);
@@ -98,6 +100,29 @@ export const ManageBookings: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourt, selectedDate]);
+
+  // When Create Booking modal opens, load initial players (empty query)
+  useEffect(() => {
+    if (showCreateModal) {
+      void searchPlayersRPC(''); // initial list per RLS visibility
+    } else {
+      // cleanup state when closed
+      setPlayers([]);
+      setPlayerSearch('');
+      setSelectedPlayer('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreateModal]);
+
+  // Debounced player search via RPC
+  useEffect(() => {
+    if (!showCreateModal) return;
+    const t = setTimeout(() => {
+      void searchPlayersRPC(playerSearch);
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerSearch, showCreateModal]);
 
   /* -------------------- Data loaders -------------------- */
 
@@ -143,18 +168,27 @@ export const ManageBookings: React.FC = () => {
     }
   };
 
-  const fetchPlayers = async () => {
-    const { data, error } = await supabase
-      .from('player_users')
-      .select('id, full_name, email, phone_number, countries(name, currency_code)')
-      .order('full_name');
-
-    if (error) {
-      console.error('Error fetching players:', error);
+  // RPC search (contains name/email/phone) with RLS scoping
+  const searchPlayersRPC = async (q: string) => {
+    try {
+      setPlayersLoading(true);
+      const { data, error } = await supabase.rpc('search_players', {
+        q: q ?? '',
+        p_limit: 50,
+        p_offset: 0
+      });
+      if (error) {
+        console.error('[ManageBookings] search_players RPC error:', error);
+        setPlayers([]);
+        return;
+      }
+      setPlayers((data ?? []) as PlayerUser[]);
+    } catch (err) {
+      console.error('[ManageBookings] searchPlayersRPC exception:', err);
       setPlayers([]);
-      return;
+    } finally {
+      setPlayersLoading(false);
     }
-    setPlayers((data ?? []) as PlayerUser[]);
   };
 
   const fetchAvailableSlots = async () => {
@@ -348,12 +382,6 @@ export const ManageBookings: React.FC = () => {
   /* -------------------- Helpers -------------------- */
 
   const getSelectedCourtInfo = () => courts.find((c) => c.id === selectedCourt);
-
-  const filteredPlayers = players.filter((p) => {
-    const q = playerSearch.trim().toLowerCase();
-    if (!q) return true;
-    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q);
-  });
 
   /* -------------------- Render -------------------- */
 
@@ -571,25 +599,6 @@ export const ManageBookings: React.FC = () => {
                   >
                     Close
                   </button>
-                  {/* Optional inline actions:
-                  {bookingDetails?.id && (
-                    <>
-                      <button
-                        onClick={() => updateBookingStatus(bookingDetails.id, 'approved')}
-                        disabled={loading}
-                        className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => updateBookingStatus(bookingDetails.id, 'cancelled')}
-                        disabled={loading}
-                        className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )} */}
                 </div>
               </div>
             </div>
@@ -623,10 +632,13 @@ export const ManageBookings: React.FC = () => {
                       type="text"
                       value={playerSearch}
                       onChange={(e) => setPlayerSearch(e.target.value)}
-                      placeholder="Search by name or email"
+                      placeholder="Search by name, email, or phone"
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
+                  {playersLoading && (
+                    <p className="mt-1 text-xs text-gray-500">Searching…</p>
+                  )}
                 </div>
 
                 <div>
@@ -637,13 +649,14 @@ export const ManageBookings: React.FC = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   >
                     <option value="">Choose a player</option>
-                    {filteredPlayers.map((player) => (
+                    {players.map((player) => (
                       <option key={player.id} value={player.id}>
-                        {player.full_name} ({player.email})
+                        {player.full_name} ({player.email}
+                        {player.phone_number ? ` • ${player.phone_number}` : ''})
                       </option>
                     ))}
                   </select>
-                  {filteredPlayers.length === 0 && (
+                  {players.length === 0 && !playersLoading && (
                     <p className="text-xs text-gray-500 mt-1">No players found.</p>
                   )}
                 </div>
