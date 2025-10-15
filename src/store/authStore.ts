@@ -70,7 +70,10 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-// Create/ensure role row (idempotent) — upserts on user_id
+/**
+ * Create/ensure role row (idempotent) — upserts on user_id.
+ * Adjust payload keys if your table schemas differ.
+ */
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
@@ -85,72 +88,34 @@ async function createRoleRowForUser(
   };
 
   if (userData.userType === 'Player') {
-    dbg('provision:player:start', { user_id: user.id });
-    const { error } = await supabase
-      .from('player_users')
-      .upsert(
-        {
-          ...base,
-          full_name: userData.name ?? (user.user_metadata as any)?.name ?? null,
-          skill_level: userData.skill_level ?? null,
-        },
-        { onConflict: 'user_id' }
-      );
-    if (error) throw error;
-    dbg('provision:player:done', { user_id: user.id });
+    const payload = { ...base, full_name: userData.name ?? (user.user_metadata as any)?.name ?? null, skill_level: userData.skill_level ?? null };
+    console.log('[AUTH] upsert player_users', payload);
+    const { error } = await supabase.from('player_users').upsert(payload, { onConflict: 'user_id' });
+    if (error) { console.error('[AUTH] upsert player_users failed', error); throw error; }
     return;
   }
 
   if (userData.userType === 'Club') {
-    dbg('provision:club:start', { user_id: user.id });
-    const { error } = await supabase
-      .from('club_users')
-      .upsert(
-        {
-          ...base,
-          club_name: userData.name,
-          address: userData.address ?? null,
-          website: userData.website ?? null,
-        },
-        { onConflict: 'user_id' }
-      );
-    if (error) throw error;
-    dbg('provision:club:done', { user_id: user.id });
+    const payload = { ...base, club_name: userData.name, address: userData.address ?? null, website: userData.website ?? null };
+    console.log('[AUTH] upsert club_users', payload);
+    const { error } = await supabase.from('club_users').upsert(payload, { onConflict: 'user_id' });
+    if (error) { console.error('[AUTH] upsert club_users failed', error); throw error; }
     return;
   }
 
   if (userData.userType === 'Organizer') {
-    dbg('provision:organizer:start', { user_id: user.id });
-    const { error } = await supabase
-      .from('organizer_users')
-      .upsert(
-        {
-          ...base,
-          organizer_name: userData.name,
-          company_name: userData.company_name ?? null,
-          website: userData.website ?? null,
-        },
-        { onConflict: 'user_id' }
-      );
-    if (error) throw error;
-    dbg('provision:organizer:done', { user_id: user.id });
+    const payload = { ...base, organizer_name: userData.name, company_name: userData.company_name ?? null, website: userData.website ?? null };
+    console.log('[AUTH] upsert organizer_users', payload);
+    const { error } = await supabase.from('organizer_users').upsert(payload, { onConflict: 'user_id' });
+    if (error) { console.error('[AUTH] upsert organizer_users failed', error); throw error; }
     return;
   }
 
   if (userData.userType === 'Administrator') {
-    dbg('provision:admin:start', { user_id: user.id });
-    const { error } = await supabase
-      .from('admin_users')
-      .upsert(
-        {
-          ...base,
-          full_name: userData.name,
-          website: userData.website ?? null,
-        },
-        { onConflict: 'user_id' }
-      );
-    if (error) throw error;
-    dbg('provision:admin:done', { user_id: user.id });
+    const payload = { ...base, full_name: userData.name, website: userData.website ?? null };
+    console.log('[AUTH] upsert admin_users', payload);
+    const { error } = await supabase.from('admin_users').upsert(payload, { onConflict: 'user_id' });
+    if (error) { console.error('[AUTH] upsert admin_users failed', error); throw error; }
     return;
   }
 
@@ -212,13 +177,13 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   };
 }
 
-// Ensure a role row exists, then read the aggregated profile
+/** Ensure a role row exists, then read the aggregated profile */
 async function ensureProvisioned(user: User): Promise<UserProfile | null> {
-  // try load first
+  // Try to load first
   let profile = await loadUserProfile(user);
   if (profile) return profile;
 
-  // derive desired role from metadata; default to Player
+  // Derive desired role from metadata; default to Player
   const meta = (user.user_metadata ?? {}) as {
     userType?: UserType; name?: string; phone_number?: string | null;
     country_id?: string | null; address?: string | null;
@@ -229,7 +194,7 @@ async function ensureProvisioned(user: User): Promise<UserProfile | null> {
   const type: UserType = (meta.userType as UserType) ?? 'Player';
   const profile_id = await getProfileIdByName(type);
 
-  dbg('provision:start', { user_id: user.id, type });
+  console.log('[AUTH] provision:start', { user_id: user.id, type, meta });
 
   await createRoleRowForUser(user, profile_id, {
     userType: type,
@@ -243,7 +208,7 @@ async function ensureProvisioned(user: User): Promise<UserProfile | null> {
   });
 
   profile = await loadUserProfile(user);
-  dbg('provision:end', { user_id: user.id, ok: !!profile });
+  console.log('[AUTH] provision:end', { user_id: user.id, ok: !!profile });
 
   return profile;
 }
@@ -301,17 +266,13 @@ export const useAuthStore = create<AuthState>(() => ({
       throw error;
     }
 
-    // Audit "sent" (non-blocking, no select=id)
-    try {
-     await supabase.from('email_otp_audit').insert({
-  email,
-  context: 'email_otp',
-  status: 'sent',
-  user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-}).catch(e => console.warn('[AUTH] audit insert (send) failed', e));
-    } catch (e) {
-      console.warn('[AUTH] audit insert failed (send)', e);
-    }
+    // Audit "sent" (non-blocking, no ?select)
+    supabase.from('email_otp_audit').insert({
+      email,
+      context: 'email_otp',
+      status: 'sent',
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    }).catch(e => console.warn('[AUTH] audit insert (send) failed', e));
 
     useAuthStore.setState({ loading: false });
   },
@@ -324,27 +285,26 @@ export const useAuthStore = create<AuthState>(() => ({
 
     dbg('otp:verify:start', { email, token_len: token.length });
 
-    // 1) Audit attempt (non-blocking; insert only, no select=id)
-    try {
-      const tokenHash = await sha256Hex(token);
-      const tokenLast4 = token.slice(-4);
-      await supabase.from('email_otp_audit').insert({
-  email,
-  context: 'email_otp',
-  status: 'validated',
-  user_id: user.id,
-  user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-}).catch(e => console.warn('[AUTH] audit insert (validated) failed', e));
-    } catch (e) {
-      console.warn('[AUTH] audit insert failed (verify)', e);
-    }
+    // Audit attempt (non-blocking; insert only)
+    (async () => {
+      try {
+        const tokenHash = await sha256Hex(token);
+        await supabase.from('email_otp_audit').insert({
+          email,
+          context: 'email_otp',
+          token_hash: tokenHash,
+          token_last4: token.slice(-4),
+          attempts: 1,
+          status: 'sent',
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        });
+      } catch (e) {
+        console.warn('[AUTH] audit insert (verify) failed', e);
+      }
+    })();
 
-    // 2) Verify with Supabase — type 'email'
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
+    // Verify with Supabase — type 'email'
+    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) {
       dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
       useAuthStore.setState({ loading: false });
@@ -366,21 +326,17 @@ export const useAuthStore = create<AuthState>(() => ({
       }
     }
 
-    // 3) Provision/load profile
+    // Provision/load profile
     const profile = await ensureProvisioned(user);
 
-    // 4) Audit validated (just insert a second row; avoid updates/selects)
-    try {
-      await supabase.from('email_otp_audit').insert({
-        email,
-        context: 'email_otp',
-        status: 'validated',
-        user_id: user.id,
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      });
-    } catch (e) {
-      console.warn('[AUTH] audit insert failed (validated)', e);
-    }
+    // Audit validated (separate insert; avoid updates/selects)
+    supabase.from('email_otp_audit').insert({
+      email,
+      context: 'email_otp',
+      status: 'validated',
+      user_id: user.id,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    }).catch(e => console.warn('[AUTH] audit insert (validated) failed', e));
 
     useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
