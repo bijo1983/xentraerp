@@ -10,7 +10,7 @@ const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 export type UserType = 'Player' | 'Club' | 'Organizer' | 'Administrator';
 
 export type UserProfile = {
-  id: string;
+  id: string;               // profile_id from your catalog/view
   user_id: string;
   type: UserType;
   name: string;
@@ -38,22 +38,31 @@ interface AuthState {
   userProfile: UserProfile | null;
   loading: boolean;
 
+  // Password auth
   signIn: (email: string, password: string) => Promise<void>;
+
+  // OTP auth (email magic code)
   sendEmailOtp: (email: string, userData?: SignupMeta) => Promise<void>;
   verifyEmailOtp: (email: string, token: string, newPassword?: string) => Promise<void>;
+
+  // Optional classic signup
   signUp: (email: string, password: string, userData?: SignupMeta) => Promise<SignUpStatus>;
+
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
 }
 
-/* ========================= Helpers ======================================= */
+/* ========================= Helpers / DB lookups ========================== */
 
+// Small helper: SHA-256 hex (browser SubtleCrypto). If you also run this in Node, ensure globalThis.crypto.subtle exists.
 async function sha256Hex(s: string): Promise<string> {
+  if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available for hashing');
   const enc = new TextEncoder().encode(s);
   const buf = await crypto.subtle.digest('SHA-256', enc);
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Map friendly role to profile_id (keep in sync with your catalog)
 const PROFILE_ID_MAP: Record<UserType, string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
   Club:          'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
@@ -67,6 +76,7 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
+// Player is created by DB trigger; fallback handles Club/Organizer/Admin on client
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
@@ -118,6 +128,7 @@ async function createRoleRowForUser(
 }
 
 async function loadUserProfile(user: User): Promise<UserProfile | null> {
+  // auth_user_profiles: view resolving user_id -> profile_id, profile_type, etc.
   const { data: profileRow, error: profileErr } = await supabase
     .from('auth_user_profiles')
     .select('*')
@@ -127,7 +138,7 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   if (profileErr) throw profileErr;
   if (!profileRow) return null;
 
-  const pType = profileRow.profile_type as UserProfile['type'];
+  const pType = profileRow.profile_type as UserType;
   let roleTable = '';
   let nameField = '';
 
@@ -174,13 +185,14 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
 
 /* =============================== Store =================================== */
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>(() => ({
   user: null,
   userProfile: null,
   loading: true,
 
   /* ----------------------------- PASSWORD SIGN-IN ------------------------- */
-  signIn: async (email, password) => {
+  signIn: async (rawEmail, password) => {
+    const email = (rawEmail ?? '').trim().toLowerCase();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
@@ -211,15 +223,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
-    set({ user, userProfile: profile ?? null, loading: false });
+    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 
   /* --------------------------------- OTP SEND ---------------------------- */
-  sendEmailOtp: async (email, userData) => {
-    set({ loading: true });
+  sendEmailOtp: async (rawEmail, userData) => {
+    useAuthStore.setState({ loading: true });
+    const email = (rawEmail ?? '').trim().toLowerCase();
     dbg('otp:send:start', { email, meta: userData });
 
-    // 1) Send OTP via Supabase
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -228,7 +240,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           name: userData?.name ?? null,
           phone_number: userData?.phone_number ?? null,
           country_id: userData?.country_id ?? null,
-          profile_type: userData?.userType ?? 'Player',
+          profile_type: userData?.userType ?? 'Player', // your trigger/view uses this
           address: userData?.address ?? null,
           website: userData?.website ?? null,
           company_name: userData?.company_name ?? null,
@@ -238,147 +250,126 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     if (error) {
-      set({ loading: false });
+      useAuthStore.setState({ loading: false });
       throw error;
     }
 
-    // 2) AUDIT: create a "sent" row (no token yet)
-    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || null;
+    // Audit "sent" (no token; Supabase never exposes it)
     await supabase.from('email_otp_audit').insert({
       email,
       context: 'email_otp',
-      ip: null,            // optionally capture on server via Edge Function
-      user_agent: ua,
       status: 'sent',
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
     });
 
-    set({ loading: false });
+    useAuthStore.setState({ loading: false });
   },
 
   /* ------------------------------- OTP VERIFY ---------------------------- */
-  verifyEmailOtp: async (email, token, newPassword) => {
-    set({ loading: true });
-    dbg('otp:verify:start', { email });
+  verifyEmailOtp: async (rawEmail, rawToken, newPassword) => {
+    useAuthStore.setState({ loading: true });
+    const email = (rawEmail ?? '').trim().toLowerCase();
+    const token = (rawToken ?? '').toString().replace(/\D/g, '').trim(); // digits only
 
-    // Hash token before any storage
-    const tokenHash = await sha256Hex(token);
-    const tokenLast4 = token.slice(-4);
+    dbg('otp:verify:start', { email, token_len: token.length });
 
-    // Find the most recent "sent" audit row for this email (no SELECT needed; just update latest)
-    // Here we update the latest row by sent_at desc using a Postgres RPC or filter + order.
-    // Since we can't order in update, we do: fetch id of latest row, then update it.
-    const { data: lastRows } = await supabase
-      .from('email_otp_audit')
-      .select('id')
-      .eq('email', email)
-      .order('sent_at', { ascending: false })
-      .limit(1);
-
-    const lastId = lastRows?.[0]?.id ?? null;
-
-    if (lastId) {
-      // record the attempt before verifying
-      await supabase
+    try {
+      // 1) Audit attempt (store only hash + last4)
+      const tokenHash = await sha256Hex(token);
+      const tokenLast4 = token.slice(-4);
+      const { data: auditRow } = await supabase
         .from('email_otp_audit')
-        .update({
+        .insert({
+          email,
+          context: 'email_otp',
           token_hash: tokenHash,
           token_last4: tokenLast4,
-          attempts: supabase.rpc as any, // dummy to preserve type; we do a separate increment below
+          attempts: 1,
+          status: 'sent',
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
         })
-        .eq('id', lastId);
+        .select('id')
+        .single();
 
-      // do a proper attempts++ via RPC to avoid race:
-      // create this SQL function once if you like, else ignore and rely on the next update below.
-      // For simplicity, we’ll do a second update without RPC:
-      await supabase.from('email_otp_audit').update({ attempts: 1 }).eq('id', lastId).lte('attempts', 0);
-    } else {
-      // If no prior row (edge case), create one with the attempt
-      await supabase.from('email_otp_audit').insert({
+      // 2) Verify with Supabase (source of truth) — IMPORTANT: type 'email'
+      const { data, error } = await supabase.auth.verifyOtp({
         email,
-        context: 'email_otp',
-        token_hash: tokenHash,
-        token_last4: tokenLast4,
-        attempts: 1,
-        status: 'sent',
+        token,
+        type: 'email',
       });
-    }
 
-    // Now verify with Supabase (source of truth)
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
-
-    if (error) {
-      // mark failed
-      if (lastId) {
-        await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', lastId);
-      }
-      set({ loading: false });
-      throw error;
-    }
-
-    const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
-    if (!user) {
-      if (lastId) {
-        await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', lastId);
-      }
-      set({ loading: false });
-      throw new Error('Verification succeeded but no user session');
-    }
-
-    // Optional password set post-OTP
-    if (newPassword) {
-      const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
-      if (pwErr) {
-        if (lastId) {
-          await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', lastId);
+      if (error) {
+        dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
+        if (auditRow?.id) {
+          await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditRow.id);
         }
-        set({ loading: false });
-        throw pwErr;
+        throw error;
       }
-    }
 
-    // Load or provision profile
-    let profile = await loadUserProfile(user);
-    if (!profile) {
-      const meta = (user.user_metadata ?? {}) as SignupMeta & { userType?: UserType };
-      if (meta.userType && meta.name && meta.userType !== 'Player') {
-        const profile_id = await getProfileIdByName(meta.userType);
-        await createRoleRowForUser(user, profile_id, {
-          userType: meta.userType,
-          name: meta.name!,
-          phone_number: meta.phone_number ?? null,
-          country_id: meta.country_id ?? null,
-          address: meta.address ?? null,
-          website: meta.website ?? null,
-          company_name: meta.company_name ?? null,
-          skill_level: meta.skill_level ?? null,
-        });
-        profile = await loadUserProfile(user);
+      const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
+      if (!user) {
+        if (auditRow?.id) {
+          await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditRow.id);
+        }
+        throw new Error('Verification succeeded but no user session');
       }
-    }
 
-    // mark validated
-    if (lastId) {
-      await supabase
-        .from('email_otp_audit')
-        .update({
-          status: 'validated',
-          validated_at: new Date().toISOString(),
-          user_id: user.id,
-        })
-        .eq('id', lastId);
-    }
+      // Optional: set password post-OTP to allow password sign-in later
+      if (newPassword) {
+        const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
+        if (pwErr) {
+          if (auditRow?.id) {
+            await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditRow.id);
+          }
+          throw pwErr;
+        }
+      }
 
-    set({ user, userProfile: profile ?? null, loading: false });
+      // 3) Load/provision profile
+      let profile = await loadUserProfile(user);
+      if (!profile) {
+        const meta = (user.user_metadata ?? {}) as SignupMeta & { userType?: UserType };
+        if (meta.userType && meta.name && meta.userType !== 'Player') {
+          const profile_id = await getProfileIdByName(meta.userType);
+          await createRoleRowForUser(user, profile_id, {
+            userType: meta.userType,
+            name: meta.name!,
+            phone_number: meta.phone_number ?? null,
+            country_id: meta.country_id ?? null,
+            address: meta.address ?? null,
+            website: meta.website ?? null,
+            company_name: meta.company_name ?? null,
+            skill_level: meta.skill_level ?? null,
+          });
+          profile = await loadUserProfile(user);
+        }
+      }
+
+      // 4) Mark validated
+      if (auditRow?.id) {
+        await supabase
+          .from('email_otp_audit')
+          .update({
+            status: 'validated',
+            validated_at: new Date().toISOString(),
+            user_id: user.id,
+          })
+          .eq('id', auditRow.id);
+      }
+
+      useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
+    } catch (err: any) {
+      dbg('otp:verify:catch', { name: err?.name, message: err?.message, status: err?.status, err });
+      useAuthStore.setState({ loading: false });
+      throw err;
+    }
   },
 
   /* ------------------------------ PASSWORD SIGN-UP (optional) ------------ */
-  signUp: async (email, password, userData) => {
+  signUp: async (rawEmail, password, userData) => {
     try {
-      set({ loading: true });
+      useAuthStore.setState({ loading: true });
+      const email = (rawEmail ?? '').trim().toLowerCase();
       dbg('signup:start', { email, meta: userData });
 
       const { data, error } = await supabase.auth.signUp({
@@ -399,22 +390,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       if (error) {
-        set({ loading: false });
+        useAuthStore.setState({ loading: false });
         throw error;
       }
 
       const sessionUser = data.user ?? null;
 
+      // With email confirmations ON, there is no session yet
       if (!sessionUser) {
-        set({ loading: false });
+        useAuthStore.setState({ loading: false });
         return 'needs_verification';
       }
 
+      // If confirmations OFF, there may be a session now
       const profile = await loadUserProfile(sessionUser);
-      set({ user: sessionUser, userProfile: profile ?? null, loading: false });
+      useAuthStore.setState({ user: sessionUser, userProfile: profile ?? null, loading: false });
       return 'signed_in';
     } catch (err) {
-      set({ loading: false });
+      useAuthStore.setState({ loading: false });
       throw err;
     }
   },
@@ -422,7 +415,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   /* --------------------------------- SIGN OUT ---------------------------- */
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ user: null, userProfile: null, loading: false });
+    useAuthStore.setState({ user: null, userProfile: null, loading: false });
   },
 
   /* --------------------------- FETCH USER PROFILE ------------------------ */
@@ -431,12 +424,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = sessionData.session?.user ?? null;
 
     if (!user) {
-      set({ user: null, userProfile: null, loading: false });
+      useAuthStore.setState({ user: null, userProfile: null, loading: false });
       return;
     }
 
     const profile = await loadUserProfile(user);
-    set({ user, userProfile: profile ?? null, loading: false });
+    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 }));
 
