@@ -104,7 +104,7 @@ export const ManageBookings: React.FC = () => {
     // 1) club memberships for this user
     const { data: clubRows, error: clubErr } = await supabase
       .from('club_users')
-      .select('club_id')
+      .select('id')
       .eq('user_id', userProfile.user_id);
 
     if (clubErr) {
