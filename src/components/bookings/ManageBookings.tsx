@@ -1,10 +1,10 @@
 // src/pages/club/ManageBookings.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Clock, Plus, Search } from 'lucide-react';
+import { format, addDays } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
-import { format, addDays } from 'date-fns';
 
 /* ========================== Types ========================== */
 
@@ -48,9 +48,6 @@ type SlotRow = {
   custom_price?: number | null;
   courts?: {
     hourly_rate: number;
-    club_users?: {
-      countries?: { currency_code: string } | null;
-    } | null;
   } | null;
   bookings?: Booking[]; // joined array
 };
@@ -71,29 +68,26 @@ export const ManageBookings: React.FC = () => {
   const [selectedCourt, setSelectedCourt] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<EnrichedSlot[]>([]);
-  const [bookingDetails, setBookingDetails] = useState<any>(null);
-  const [showBookingModal, setShowBookingModal] = useState(false);
 
-  // Player lists
-  const [players, setPlayers] = useState<PlayerUser[]>([]); // optional: initial list (country-scoped by RLS)
-  const [playerOptions, setPlayerOptions] = useState<PlayerUser[]>([]); // options shown in modal search
-  const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
+  const [players, setPlayers] = useState<PlayerUser[]>([]);
+  const [playerSearch, setPlayerSearch] = useState('');
 
-  // UI state
-  const [loading, setLoading] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<EnrichedSlot | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string>('');
-  const [playerSearch, setPlayerSearch] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [bookingDetails, setBookingDetails] = useState<any>(null);
+
+  const [loading, setLoading] = useState(false);
 
   /* -------------------- Effects -------------------- */
 
   useEffect(() => {
     if (userProfile) {
       fetchCourts();
-      // Optional baseline list (RLS should scope to club country if you enabled the policy)
-      fetchPlayers();
+      fetchPlayers(); // RLS will scope visibility to club/country
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile]);
@@ -105,18 +99,9 @@ export const ManageBookings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourt, selectedDate]);
 
-  // Debounced player search when create modal is open
-  useEffect(() => {
-    if (!showCreateModal) return;
-    const t = setTimeout(() => {
-      fetchPlayersByQuery(playerSearch);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [playerSearch, showCreateModal]); // eslint-disable-line react-hooks/exhaustive-deps
-
   /* -------------------- Data loaders -------------------- */
 
-  // ✅ Membership pattern: get club_users.id for this user, then courts.club_id = that id
+  // Get club_users.id for this user, then courts.club_id = that id
   const fetchCourts = async () => {
     if (!userProfile) return;
 
@@ -158,80 +143,35 @@ export const ManageBookings: React.FC = () => {
     }
   };
 
-  // Baseline players list (country-scoped by RLS)
   const fetchPlayers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('player_users')
-        .select('id, full_name, email, phone_number, countries(name, currency_code)')
-        .order('full_name');
+    const { data, error } = await supabase
+      .from('player_users')
+      .select('id, full_name, email, phone_number, countries(name, currency_code)')
+      .order('full_name');
 
-      if (error) {
-        console.error('[ManageBookings] fetchPlayers error:', error);
-        return;
-      }
-      const rows = (data ?? []) as PlayerUser[];
-      setPlayers(rows);
-
-      // Also seed into playerOptions if none yet (e.g., first open)
-      if (playerOptions.length === 0) {
-        setPlayerOptions(rows.slice(0, 25)); // keep it light initially
-      }
-    } catch (e) {
-      console.error('[ManageBookings] fetchPlayers exception:', e);
+    if (error) {
+      console.error('Error fetching players:', error);
+      setPlayers([]);
+      return;
     }
+    setPlayers((data ?? []) as PlayerUser[]);
   };
-
-  // Debounced RPC search (no top-level await)
-  const fetchPlayersByQuery = useCallback(
-    async (q: string) => {
-      setPlayerSearchLoading(true);
-      try {
-        const { data, error } = await supabase.rpc('search_players', { q });
-        if (error) {
-          console.error('[ManageBookings] search_players RPC error:', error);
-          setPlayerOptions([]);
-        } else {
-          setPlayerOptions((data ?? []) as PlayerUser[]);
-        }
-      } catch (e) {
-        console.error('[ManageBookings] search_players exception:', e);
-        setPlayerOptions([]);
-      } finally {
-        setPlayerSearchLoading(false);
-      }
-    },
-    []
-  );
 
   const fetchAvailableSlots = async () => {
     if (!selectedCourt || !selectedDate) return;
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
+
+    // Keep the join minimal to avoid RLS recursion issues.
     const { data, error } = await supabase
       .from('court_slots')
       .select(
         `
-        *,
-        courts (
-          *,
-          club_users (
-            *,
-            countries (currency_code)
-          )
-        ),
+        id, court_id, date, start_time, end_time, is_booked, custom_price,
+        courts ( hourly_rate ),
         bookings (
-          id,
-          total_amount,
-          status,
-          payment_status,
-          notes,
-          player_id,
-          player_users (
-            full_name,
-            email,
-            phone_number
-          )
+          id, total_amount, status, payment_status, notes, player_id,
+          player_users ( full_name, email, phone_number )
         )
       `
       )
@@ -241,32 +181,39 @@ export const ManageBookings: React.FC = () => {
 
     if (error) {
       console.error('Error fetching slots:', error);
+      setAvailableSlots([]);
       return;
     }
 
     const rows = (data ?? []) as SlotRow[];
+
+    // Compute price per slot (prefer server RPC if present, otherwise base rate)
     const slotsWithPricing: EnrichedSlot[] = await Promise.all(
       rows.map(async (slot) => {
-        const { data: priceData } = await supabase.rpc('calculate_slot_price', {
-          p_court_id: slot.court_id,
-          p_date: dateStr,
-          p_start_time: slot.start_time,
-          p_end_time: slot.end_time,
-        });
+        let calcPrice: number | null = null;
+
+        try {
+          const { data: priceData, error: priceErr } = await supabase.rpc('calculate_slot_price', {
+            p_court_id: slot.court_id,
+            p_date: dateStr,
+            p_start_time: slot.start_time,
+            p_end_time: slot.end_time
+          });
+          if (!priceErr && typeof priceData === 'number') {
+            calcPrice = priceData;
+          }
+        } catch {
+          // fall back below
+        }
 
         const activeBooking =
-          (slot.bookings ?? []).find(
-            (b) => b.status !== 'cancelled' && b.status !== 'rejected'
-          ) ?? null;
+          (slot.bookings ?? []).find((b) => b.status !== 'cancelled' && b.status !== 'rejected') ?? null;
 
         return {
           ...slot,
-          calculated_price:
-            (typeof priceData === 'number' ? priceData : undefined) ??
-            slot.courts?.hourly_rate ??
-            0,
+          calculated_price: (slot.custom_price ?? calcPrice ?? slot.courts?.hourly_rate ?? 0),
           booking: activeBooking,
-          isBookedComputed: !!activeBooking,
+          isBookedComputed: !!activeBooking
         };
       })
     );
@@ -276,6 +223,18 @@ export const ManageBookings: React.FC = () => {
 
   /* -------------------- UI actions -------------------- */
 
+  const openCreateBookingModal = async (slot: EnrichedSlot) => {
+    if (slot.isBookedComputed) {
+      await fetchBookingDetails(slot.id);
+    } else {
+      setSelectedSlot(slot);
+      setSelectedPlayer('');
+      setBookingNotes('');
+      setPlayerSearch('');
+      setShowCreateModal(true);
+    }
+  };
+
   const fetchBookingDetails = async (slotId: string) => {
     try {
       const { data, error } = await supabase
@@ -283,15 +242,8 @@ export const ManageBookings: React.FC = () => {
         .select(
           `
           *,
-          player_users (
-            full_name,
-            email,
-            phone_number
-          ),
-          court_slots (
-            start_time,
-            end_time
-          )
+          player_users ( full_name, email, phone_number ),
+          court_slots ( start_time, end_time )
         `
         )
         .eq('slot_id', slotId)
@@ -304,15 +256,17 @@ export const ManageBookings: React.FC = () => {
 
       if (data) {
         setBookingDetails(data);
-        setSelectedSlot((prev) => ({
-          ...(prev || ({} as any)),
-          id: slotId,
-          start_time: data.court_slots?.start_time,
-          end_time: data.court_slots?.end_time,
-          calculated_price: data.total_amount,
-          isBookedComputed: true,
-          booking: data,
-        }) as EnrichedSlot);
+        setSelectedSlot((prev) =>
+          ({
+            ...(prev || {}),
+            id: slotId,
+            start_time: data.court_slots?.start_time,
+            end_time: data.court_slots?.end_time,
+            calculated_price: data.total_amount,
+            isBookedComputed: true,
+            booking: data
+          } as EnrichedSlot)
+        );
         setShowBookingModal(true);
       }
     } catch (err) {
@@ -326,11 +280,7 @@ export const ManageBookings: React.FC = () => {
   ) => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ status: newStatus })
-        .eq('id', bookingId);
-
+      const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', bookingId);
       if (error) throw error;
 
       if (newStatus === 'cancelled' && selectedSlot?.id) {
@@ -353,21 +303,6 @@ export const ManageBookings: React.FC = () => {
     }
   };
 
-  const openCreateBookingModal = async (slot: EnrichedSlot) => {
-    if (slot.isBookedComputed) {
-      await fetchBookingDetails(slot.id);
-    } else {
-      setSelectedSlot(slot);
-      setSelectedPlayer('');
-      setBookingNotes('');
-      setPlayerSearch('');
-      setPlayerOptions(players.slice(0, 25)); // seed options list
-      setShowCreateModal(true);
-      // Optional: prime the list with empty query
-      fetchPlayersByQuery('');
-    }
-  };
-
   const createBooking = async () => {
     if (!selectedSlot || !selectedPlayer) {
       alert('Please select a player');
@@ -376,8 +311,7 @@ export const ManageBookings: React.FC = () => {
 
     setLoading(true);
     try {
-      const bookingAmount =
-        selectedSlot.custom_price ?? selectedSlot.calculated_price ?? 0;
+      const bookingAmount = selectedSlot.custom_price ?? selectedSlot.calculated_price ?? 0;
 
       const { error: bookingError } = await supabase.from('bookings').insert({
         player_id: selectedPlayer,
@@ -385,7 +319,7 @@ export const ManageBookings: React.FC = () => {
         total_amount: bookingAmount,
         status: 'pending',
         payment_status: 'pending',
-        notes: bookingNotes || null,
+        notes: bookingNotes || null
       });
 
       if (bookingError) throw bookingError;
@@ -402,7 +336,6 @@ export const ManageBookings: React.FC = () => {
       setSelectedSlot(null);
       setSelectedPlayer('');
       setBookingNotes('');
-      setPlayerSearch('');
       fetchAvailableSlots();
     } catch (err) {
       console.error('Error creating booking:', err);
@@ -416,10 +349,11 @@ export const ManageBookings: React.FC = () => {
 
   const getSelectedCourtInfo = () => courts.find((c) => c.id === selectedCourt);
 
-  const filteredPlayers =
-    playerSearch.trim() === ''
-      ? playerOptions // already RPC-seeded
-      : playerOptions; // options already reflect RPC results per playerSearch
+  const filteredPlayers = players.filter((p) => {
+    const q = playerSearch.trim().toLowerCase();
+    if (!q) return true;
+    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q);
+  });
 
   /* -------------------- Render -------------------- */
 
@@ -433,9 +367,7 @@ export const ManageBookings: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Court
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Court</label>
             <select
               value={selectedCourt}
               onChange={(e) => setSelectedCourt(e.target.value)}
@@ -456,9 +388,7 @@ export const ManageBookings: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Date
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
             <input
               type="date"
               value={format(selectedDate, 'yyyy-MM-dd')}
@@ -474,12 +404,8 @@ export const ManageBookings: React.FC = () => {
           <div className="mt-4 p-4 bg-green-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium text-green-900">
-                  {getSelectedCourtInfo()?.name}
-                </h3>
-                <p className="text-sm text-green-700">
-                  {getSelectedCourtInfo()?.surface_type ?? '—'} Surface
-                </p>
+                <h3 className="font-medium text-green-900">{getSelectedCourtInfo()?.name}</h3>
+                <p className="text-sm text-green-700">{getSelectedCourtInfo()?.surface_type ?? '—'} Surface</p>
               </div>
               <div className="text-right">
                 <p className="text-lg font-semibold text-green-900">
@@ -515,32 +441,20 @@ export const ManageBookings: React.FC = () => {
                   >
                     <div className="p-4 space-y-2">
                       <div className="text-center">
-                        <p className="font-semibold text-gray-900 text-sm">
-                          {slot.start_time}
-                        </p>
+                        <p className="font-semibold text-gray-900 text-sm">{slot.start_time}</p>
                         <p className="text-xs text-gray-500">to</p>
-                        <p className="font-semibold text-gray-900 text-sm">
-                          {slot.end_time}
-                        </p>
+                        <p className="font-semibold text-gray-900 text-sm">{slot.end_time}</p>
                       </div>
-                      <div
-                        className={`pt-2 border-t ${
-                          booked ? 'border-red-200' : 'border-green-200'
-                        }`}
-                      >
+                      <div className={`pt-2 border-t ${booked ? 'border-red-200' : 'border-green-200'}`}>
                         <p
                           className={`text-center font-bold text-base ${
                             booked ? 'text-red-700' : 'text-green-700'
                           }`}
                         >
-                          {formatPrice(
-                            slot.custom_price ?? slot.calculated_price
-                          )}
+                          {formatPrice(slot.custom_price ?? slot.calculated_price)}
                         </p>
                         {booked && slot.booking && (
-                          <p className="text-xs text-center text-red-600 mt-1 font-medium">
-                            Booked
-                          </p>
+                          <p className="text-xs text-center text-red-600 mt-1 font-medium">Booked</p>
                         )}
                       </div>
                     </div>
@@ -555,16 +469,12 @@ export const ManageBookings: React.FC = () => {
                         {booked ? (
                           <>
                             <Clock className="h-8 w-8 text-white" />
-                            <span className="text-white font-medium text-sm">
-                              View Details
-                            </span>
+                            <span className="text-white font-medium text-sm">View Details</span>
                           </>
                         ) : (
                           <>
                             <Plus className="h-8 w-8 text-white" />
-                            <span className="text-white font-medium text-sm">
-                              Book
-                            </span>
+                            <span className="text-white font-medium text-sm">Book</span>
                           </>
                         )}
                       </div>
@@ -576,12 +486,8 @@ export const ManageBookings: React.FC = () => {
           ) : (
             <div className="text-center py-12">
               <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No Available Slots
-              </h3>
-              <p className="text-gray-600">
-                All slots are booked or no slots have been created for this date.
-              </p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Available Slots</h3>
+              <p className="text-gray-600">All slots are booked or no slots have been created for this date.</p>
             </div>
           )}
         </div>
@@ -592,64 +498,41 @@ export const ManageBookings: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Booking Details
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Details</h3>
 
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">
-                      Time Slot
-                    </label>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Time Slot</label>
                     <p className="text-gray-900 font-medium">
-                      {bookingDetails.court_slots?.start_time ||
-                        selectedSlot.start_time}{' '}
-                      -{' '}
-                      {bookingDetails.court_slots?.end_time ||
-                        selectedSlot.end_time}
+                      {bookingDetails.court_slots?.start_time || selectedSlot.start_time} -{' '}
+                      {bookingDetails.court_slots?.end_time || selectedSlot.end_time}
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">
-                      Player
-                    </label>
-                    <p className="text-gray-900 font-medium">
-                      {bookingDetails.player_users?.full_name}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {bookingDetails.player_users?.email}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Player</label>
+                    <p className="text-gray-900 font-medium">{bookingDetails.player_users?.full_name}</p>
+                    <p className="text-sm text-gray-600">{bookingDetails.player_users?.email}</p>
                     {bookingDetails.player_users?.phone_number && (
-                      <p className="text-sm text-gray-600">
-                        {bookingDetails.player_users.phone_number}
-                      </p>
+                      <p className="text-sm text-gray-600">{bookingDetails.player_users.phone_number}</p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">
-                      Amount
-                    </label>
-                    <p className="text-gray-900 font-medium">
-                      {formatPrice(bookingDetails.total_amount)}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Amount</label>
+                    <p className="text-gray-900 font-medium">{formatPrice(bookingDetails.total_amount)}</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Status
-                      </label>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Status</label>
                       <span
                         className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
                           bookingDetails.status === 'approved'
                             ? 'bg-green-100 text-green-800'
                             : bookingDetails.status === 'pending'
                             ? 'bg-yellow-100 text-yellow-800'
-                            : bookingDetails.status === 'rejected'
-                            ? 'bg-red-100 text-red-800'
                             : 'bg-red-100 text-red-800'
                         }`}
                       >
@@ -657,13 +540,10 @@ export const ManageBookings: React.FC = () => {
                       </span>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Payment
-                      </label>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Payment</label>
                       <span
                         className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          bookingDetails.payment_status === 'completed' ||
-                          bookingDetails.payment_status === 'paid'
+                          bookingDetails.payment_status === 'completed' || bookingDetails.payment_status === 'paid'
                             ? 'bg-green-100 text-green-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}
@@ -675,12 +555,8 @@ export const ManageBookings: React.FC = () => {
 
                   {bookingDetails.notes && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 mb-1">
-                        Notes
-                      </label>
-                      <p className="text-gray-900 text-sm">
-                        {bookingDetails.notes}
-                      </p>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Notes</label>
+                      <p className="text-gray-900 text-sm">{bookingDetails.notes}</p>
                     </div>
                   )}
                 </div>
@@ -726,31 +602,23 @@ export const ManageBookings: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Create Booking
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Booking</h3>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Time Slot
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Time Slot</label>
                   <p className="text-gray-900 font-medium">
                     {selectedSlot.start_time} - {selectedSlot.end_time}
                   </p>
                   <p className="text-sm text-gray-600">
-                    {formatPrice(
-                      selectedSlot.custom_price ?? selectedSlot.calculated_price
-                    )}
+                    {formatPrice(selectedSlot.custom_price ?? selectedSlot.calculated_price)}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Search Player
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Player</label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type="text"
                       value={playerSearch}
@@ -759,15 +627,10 @@ export const ManageBookings: React.FC = () => {
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  {playerSearchLoading && (
-                    <p className="text-xs text-gray-500 mt-1">Searching…</p>
-                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Player
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Player</label>
                   <select
                     value={selectedPlayer}
                     onChange={(e) => setSelectedPlayer(e.target.value)}
@@ -780,15 +643,13 @@ export const ManageBookings: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  {!playerSearchLoading && filteredPlayers.length === 0 && (
+                  {filteredPlayers.length === 0 && (
                     <p className="text-xs text-gray-500 mt-1">No players found.</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (Optional)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
                   <textarea
                     value={bookingNotes}
                     onChange={(e) => setBookingNotes(e.target.value)}
@@ -813,7 +674,6 @@ export const ManageBookings: React.FC = () => {
                       setSelectedPlayer('');
                       setBookingNotes('');
                       setPlayerSearch('');
-                      setPlayerOptions([]);
                     }}
                     className="flex-1 px-4 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
                   >
