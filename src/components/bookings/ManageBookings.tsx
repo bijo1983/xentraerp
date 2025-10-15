@@ -1,5 +1,5 @@
 // src/pages/club/ManageBookings.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Plus, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -73,7 +73,13 @@ export const ManageBookings: React.FC = () => {
   const [availableSlots, setAvailableSlots] = useState<EnrichedSlot[]>([]);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [players, setPlayers] = useState<PlayerUser[]>([]);
+
+  // Player lists
+  const [players, setPlayers] = useState<PlayerUser[]>([]); // optional: initial list (country-scoped by RLS)
+  const [playerOptions, setPlayerOptions] = useState<PlayerUser[]>([]); // options shown in modal search
+  const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
+
+  // UI state
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<EnrichedSlot | null>(null);
@@ -86,6 +92,7 @@ export const ManageBookings: React.FC = () => {
   useEffect(() => {
     if (userProfile) {
       fetchCourts();
+      // Optional baseline list (RLS should scope to club country if you enabled the policy)
       fetchPlayers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,6 +104,15 @@ export const ManageBookings: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourt, selectedDate]);
+
+  // Debounced player search when create modal is open
+  useEffect(() => {
+    if (!showCreateModal) return;
+    const t = setTimeout(() => {
+      fetchPlayersByQuery(playerSearch);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [playerSearch, showCreateModal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* -------------------- Data loaders -------------------- */
 
@@ -133,7 +149,7 @@ export const ManageBookings: React.FC = () => {
 
       const list = (courtRows ?? []) as Court[];
       setCourts(list);
-      if (list.length > 0 && !list.some(c => c.id === selectedCourt)) {
+      if (list.length > 0 && !list.some((c) => c.id === selectedCourt)) {
         setSelectedCourt(list[0].id);
       }
     } catch (e) {
@@ -142,18 +158,51 @@ export const ManageBookings: React.FC = () => {
     }
   };
 
+  // Baseline players list (country-scoped by RLS)
   const fetchPlayers = async () => {
-    const { data, error } = await supabase
-      .from('player_users')
-      .select('id, full_name, email, phone_number, countries(name, currency_code)')
-      .order('full_name');
+    try {
+      const { data, error } = await supabase
+        .from('player_users')
+        .select('id, full_name, email, phone_number, countries(name, currency_code)')
+        .order('full_name');
 
-    if (error) {
-      console.error('Error fetching players:', error);
-      return;
+      if (error) {
+        console.error('[ManageBookings] fetchPlayers error:', error);
+        return;
+      }
+      const rows = (data ?? []) as PlayerUser[];
+      setPlayers(rows);
+
+      // Also seed into playerOptions if none yet (e.g., first open)
+      if (playerOptions.length === 0) {
+        setPlayerOptions(rows.slice(0, 25)); // keep it light initially
+      }
+    } catch (e) {
+      console.error('[ManageBookings] fetchPlayers exception:', e);
     }
-    setPlayers((data ?? []) as PlayerUser[]);
   };
+
+  // Debounced RPC search (no top-level await)
+  const fetchPlayersByQuery = useCallback(
+    async (q: string) => {
+      setPlayerSearchLoading(true);
+      try {
+        const { data, error } = await supabase.rpc('search_players', { q });
+        if (error) {
+          console.error('[ManageBookings] search_players RPC error:', error);
+          setPlayerOptions([]);
+        } else {
+          setPlayerOptions((data ?? []) as PlayerUser[]);
+        }
+      } catch (e) {
+        console.error('[ManageBookings] search_players exception:', e);
+        setPlayerOptions([]);
+      } finally {
+        setPlayerSearchLoading(false);
+      }
+    },
+    []
+  );
 
   const fetchAvailableSlots = async () => {
     if (!selectedCourt || !selectedDate) return;
@@ -161,7 +210,8 @@ export const ManageBookings: React.FC = () => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const { data, error } = await supabase
       .from('court_slots')
-      .select(`
+      .select(
+        `
         *,
         courts (
           *,
@@ -183,7 +233,8 @@ export const ManageBookings: React.FC = () => {
             phone_number
           )
         )
-      `)
+      `
+      )
       .eq('court_id', selectedCourt)
       .eq('date', dateStr)
       .order('start_time');
@@ -204,7 +255,9 @@ export const ManageBookings: React.FC = () => {
         });
 
         const activeBooking =
-          (slot.bookings ?? []).find((b) => b.status !== 'cancelled' && b.status !== 'rejected') ?? null;
+          (slot.bookings ?? []).find(
+            (b) => b.status !== 'cancelled' && b.status !== 'rejected'
+          ) ?? null;
 
         return {
           ...slot,
@@ -223,13 +276,12 @@ export const ManageBookings: React.FC = () => {
 
   /* -------------------- UI actions -------------------- */
 
-const { data, error } = await supabase.rpc('search_players', { q: playerSearch });
-
   const fetchBookingDetails = async (slotId: string) => {
     try {
       const { data, error } = await supabase
         .from('bookings')
-        .select(`
+        .select(
+          `
           *,
           player_users (
             full_name,
@@ -240,7 +292,8 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
             start_time,
             end_time
           )
-        `)
+        `
+        )
         .eq('slot_id', slotId)
         .maybeSingle();
 
@@ -259,7 +312,7 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
           calculated_price: data.total_amount,
           isBookedComputed: true,
           booking: data,
-        } as EnrichedSlot));
+        }) as EnrichedSlot);
         setShowBookingModal(true);
       }
     } catch (err) {
@@ -267,7 +320,10 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
     }
   };
 
-  const updateBookingStatus = async (bookingId: string, newStatus: 'approved' | 'cancelled' | 'rejected' | 'pending') => {
+  const updateBookingStatus = async (
+    bookingId: string,
+    newStatus: 'approved' | 'cancelled' | 'rejected' | 'pending'
+  ) => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -294,6 +350,21 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
       alert('Error updating booking. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openCreateBookingModal = async (slot: EnrichedSlot) => {
+    if (slot.isBookedComputed) {
+      await fetchBookingDetails(slot.id);
+    } else {
+      setSelectedSlot(slot);
+      setSelectedPlayer('');
+      setBookingNotes('');
+      setPlayerSearch('');
+      setPlayerOptions(players.slice(0, 25)); // seed options list
+      setShowCreateModal(true);
+      // Optional: prime the list with empty query
+      fetchPlayersByQuery('');
     }
   };
 
@@ -331,6 +402,7 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
       setSelectedSlot(null);
       setSelectedPlayer('');
       setBookingNotes('');
+      setPlayerSearch('');
       fetchAvailableSlots();
     } catch (err) {
       console.error('Error creating booking:', err);
@@ -344,13 +416,10 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
 
   const getSelectedCourtInfo = () => courts.find((c) => c.id === selectedCourt);
 
-  const filteredPlayers = players.filter((p) => {
-    const q = playerSearch.toLowerCase();
-    return (
-      p.full_name.toLowerCase().includes(q) ||
-      p.email.toLowerCase().includes(q)
-    );
-  });
+  const filteredPlayers =
+    playerSearch.trim() === ''
+      ? playerOptions // already RPC-seeded
+      : playerOptions; // options already reflect RPC results per playerSearch
 
   /* -------------------- Render -------------------- */
 
@@ -464,7 +533,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                             booked ? 'text-red-700' : 'text-green-700'
                           }`}
                         >
-                          {formatPrice(slot.custom_price ?? slot.calculated_price)}
+                          {formatPrice(
+                            slot.custom_price ?? slot.calculated_price
+                          )}
                         </p>
                         {booked && slot.booking && (
                           <p className="text-xs text-center text-red-600 mt-1 font-medium">
@@ -491,7 +562,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                         ) : (
                           <>
                             <Plus className="h-8 w-8 text-white" />
-                            <span className="text-white font-medium text-sm">Book</span>
+                            <span className="text-white font-medium text-sm">
+                              Book
+                            </span>
                           </>
                         )}
                       </div>
@@ -503,7 +576,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
           ) : (
             <div className="text-center py-12">
               <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Available Slots</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No Available Slots
+              </h3>
               <p className="text-gray-600">
                 All slots are booked or no slots have been created for this date.
               </p>
@@ -517,7 +592,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Details</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Booking Details
+              </h3>
 
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-4 space-y-3">
@@ -526,8 +603,11 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                       Time Slot
                     </label>
                     <p className="text-gray-900 font-medium">
-                      {bookingDetails.court_slots?.start_time || selectedSlot.start_time} -{' '}
-                      {bookingDetails.court_slots?.end_time || selectedSlot.end_time}
+                      {bookingDetails.court_slots?.start_time ||
+                        selectedSlot.start_time}{' '}
+                      -{' '}
+                      {bookingDetails.court_slots?.end_time ||
+                        selectedSlot.end_time}
                     </p>
                   </div>
 
@@ -582,7 +662,8 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                       </label>
                       <span
                         className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          bookingDetails.payment_status === 'completed' || bookingDetails.payment_status === 'paid'
+                          bookingDetails.payment_status === 'completed' ||
+                          bookingDetails.payment_status === 'paid'
                             ? 'bg-green-100 text-green-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}
@@ -597,7 +678,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                       <label className="block text-sm font-medium text-gray-500 mb-1">
                         Notes
                       </label>
-                      <p className="text-gray-900 text-sm">{bookingDetails.notes}</p>
+                      <p className="text-gray-900 text-sm">
+                        {bookingDetails.notes}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -643,7 +726,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Booking</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Create Booking
+              </h3>
 
               <div className="space-y-4">
                 <div>
@@ -654,7 +739,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                     {selectedSlot.start_time} - {selectedSlot.end_time}
                   </p>
                   <p className="text-sm text-gray-600">
-                    {formatPrice(selectedSlot.custom_price ?? selectedSlot.calculated_price)}
+                    {formatPrice(
+                      selectedSlot.custom_price ?? selectedSlot.calculated_price
+                    )}
                   </p>
                 </div>
 
@@ -672,6 +759,9 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
+                  {playerSearchLoading && (
+                    <p className="text-xs text-gray-500 mt-1">Searching…</p>
+                  )}
                 </div>
 
                 <div>
@@ -690,19 +780,22 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                       </option>
                     ))}
                   </select>
+                  {!playerSearchLoading && filteredPlayers.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">No players found.</p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes (Optional)
                   </label>
-                    <textarea
-                      value={bookingNotes}
-                      onChange={(e) => setBookingNotes(e.target.value)}
-                      rows={3}
-                      placeholder="Add any special notes or requirements"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
+                  <textarea
+                    value={bookingNotes}
+                    onChange={(e) => setBookingNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Add any special notes or requirements"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
                 </div>
 
                 <div className="flex space-x-3 pt-4">
@@ -720,6 +813,7 @@ const { data, error } = await supabase.rpc('search_players', { q: playerSearch }
                       setSelectedPlayer('');
                       setBookingNotes('');
                       setPlayerSearch('');
+                      setPlayerOptions([]);
                     }}
                     className="flex-1 px-4 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
                   >
