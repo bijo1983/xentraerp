@@ -303,12 +303,12 @@ export const useAuthStore = create<AuthState>(() => ({
 
     // Audit "sent" (non-blocking, no select=id)
     try {
-      await supabase.from('email_otp_audit').insert({
-        email,
-        context: 'email_otp',
-        status: 'sent',
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      });
+     await supabase.from('email_otp_audit').insert({
+  email,
+  context: 'email_otp',
+  status: 'sent',
+  user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+}).catch(e => console.warn('[AUTH] audit insert (send) failed', e));
     } catch (e) {
       console.warn('[AUTH] audit insert failed (send)', e);
     }
@@ -329,14 +329,12 @@ export const useAuthStore = create<AuthState>(() => ({
       const tokenHash = await sha256Hex(token);
       const tokenLast4 = token.slice(-4);
       await supabase.from('email_otp_audit').insert({
-        email,
-        context: 'email_otp',
-        token_hash: tokenHash,
-        token_last4: tokenLast4,
-        attempts: 1,
-        status: 'sent',
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      });
+  email,
+  context: 'email_otp',
+  status: 'validated',
+  user_id: user.id,
+  user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+}).catch(e => console.warn('[AUTH] audit insert (validated) failed', e));
     } catch (e) {
       console.warn('[AUTH] audit insert failed (verify)', e);
     }
