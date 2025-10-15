@@ -38,23 +38,17 @@ interface AuthState {
   userProfile: UserProfile | null;
   loading: boolean;
 
-  // Password auth
   signIn: (email: string, password: string) => Promise<void>;
-
-  // OTP auth (email magic code)
   sendEmailOtp: (email: string, userData?: SignupMeta) => Promise<void>;
   verifyEmailOtp: (email: string, token: string, newPassword?: string) => Promise<void>;
-
-  // Optional classic signup
   signUp: (email: string, password: string, userData?: SignupMeta) => Promise<SignUpStatus>;
-
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
 }
 
 /* ========================= Helpers / DB lookups ========================== */
 
-// SHA-256 hex using WebCrypto
+// SHA-256 hex (WebCrypto)
 async function sha256Hex(s: string): Promise<string> {
   if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available for hashing');
   const enc = new TextEncoder().encode(s);
@@ -76,7 +70,7 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-// Upsert the row for the user's role (idempotent by user_id)
+// Create/ensure role row (idempotent) — upserts on user_id
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
@@ -91,6 +85,7 @@ async function createRoleRowForUser(
   };
 
   if (userData.userType === 'Player') {
+    dbg('provision:player:start', { user_id: user.id });
     const { error } = await supabase
       .from('player_users')
       .upsert(
@@ -102,10 +97,12 @@ async function createRoleRowForUser(
         { onConflict: 'user_id' }
       );
     if (error) throw error;
+    dbg('provision:player:done', { user_id: user.id });
     return;
   }
 
   if (userData.userType === 'Club') {
+    dbg('provision:club:start', { user_id: user.id });
     const { error } = await supabase
       .from('club_users')
       .upsert(
@@ -118,10 +115,12 @@ async function createRoleRowForUser(
         { onConflict: 'user_id' }
       );
     if (error) throw error;
+    dbg('provision:club:done', { user_id: user.id });
     return;
   }
 
   if (userData.userType === 'Organizer') {
+    dbg('provision:organizer:start', { user_id: user.id });
     const { error } = await supabase
       .from('organizer_users')
       .upsert(
@@ -134,10 +133,12 @@ async function createRoleRowForUser(
         { onConflict: 'user_id' }
       );
     if (error) throw error;
+    dbg('provision:organizer:done', { user_id: user.id });
     return;
   }
 
   if (userData.userType === 'Administrator') {
+    dbg('provision:admin:start', { user_id: user.id });
     const { error } = await supabase
       .from('admin_users')
       .upsert(
@@ -149,6 +150,7 @@ async function createRoleRowForUser(
         { onConflict: 'user_id' }
       );
     if (error) throw error;
+    dbg('provision:admin:done', { user_id: user.id });
     return;
   }
 
@@ -156,7 +158,6 @@ async function createRoleRowForUser(
 }
 
 async function loadUserProfile(user: User): Promise<UserProfile | null> {
-  // auth_user_profiles: view resolving user_id -> profile_id, profile_type, etc.
   const { data: profileRow, error: profileErr } = await supabase
     .from('auth_user_profiles')
     .select('*')
@@ -211,11 +212,13 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   };
 }
 
-// Ensure the correct role row exists; return the joined profile
+// Ensure a role row exists, then read the aggregated profile
 async function ensureProvisioned(user: User): Promise<UserProfile | null> {
+  // try load first
   let profile = await loadUserProfile(user);
   if (profile) return profile;
 
+  // derive desired role from metadata; default to Player
   const meta = (user.user_metadata ?? {}) as {
     userType?: UserType; name?: string; phone_number?: string | null;
     country_id?: string | null; address?: string | null;
@@ -225,6 +228,8 @@ async function ensureProvisioned(user: User): Promise<UserProfile | null> {
 
   const type: UserType = (meta.userType as UserType) ?? 'Player';
   const profile_id = await getProfileIdByName(type);
+
+  dbg('provision:start', { user_id: user.id, type });
 
   await createRoleRowForUser(user, profile_id, {
     userType: type,
@@ -237,7 +242,10 @@ async function ensureProvisioned(user: User): Promise<UserProfile | null> {
     skill_level: meta.skill_level ?? null,
   });
 
-  return await loadUserProfile(user);
+  profile = await loadUserProfile(user);
+  dbg('provision:end', { user_id: user.id, ok: !!profile });
+
+  return profile;
 }
 
 /* =============================== Store =================================== */
@@ -293,7 +301,7 @@ export const useAuthStore = create<AuthState>(() => ({
       throw error;
     }
 
-    // Audit "sent" (non-blocking)
+    // Audit "sent" (non-blocking, no select=id)
     try {
       await supabase.from('email_otp_audit').insert({
         email,
@@ -316,94 +324,67 @@ export const useAuthStore = create<AuthState>(() => ({
 
     dbg('otp:verify:start', { email, token_len: token.length });
 
-    let auditId: string | null = null;
-
+    // 1) Audit attempt (non-blocking; insert only, no select=id)
     try {
-      // 1) Audit attempt (hash + last4) — non-blocking
-      try {
-        const tokenHash = await sha256Hex(token);
-        const tokenLast4 = token.slice(-4);
-        const { data } = await supabase
-          .from('email_otp_audit')
-          .insert({
-            email,
-            context: 'email_otp',
-            token_hash: tokenHash,
-            token_last4: tokenLast4,
-            attempts: 1,
-            status: 'sent',
-            user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-          })
-          .select('id')
-          .single();
-        auditId = data?.id ?? null;
-      } catch (e) {
-        console.warn('[AUTH] audit insert failed (verify)', e);
-      }
-
-      // 2) Verify with Supabase — type 'email'
-      const { data, error } = await supabase.auth.verifyOtp({
+      const tokenHash = await sha256Hex(token);
+      const tokenLast4 = token.slice(-4);
+      await supabase.from('email_otp_audit').insert({
         email,
-        token,
-        type: 'email',
+        context: 'email_otp',
+        token_hash: tokenHash,
+        token_last4: tokenLast4,
+        attempts: 1,
+        status: 'sent',
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
       });
-
-      if (error) {
-        dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
-        try {
-          if (auditId) {
-            await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditId);
-          }
-        } catch {}
-        throw error;
-      }
-
-      const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
-      if (!user) {
-        try {
-          if (auditId) {
-            await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditId);
-          }
-        } catch {}
-        throw new Error('Verification succeeded but no user session');
-      }
-
-      // Optional: set password post-OTP
-      if (newPassword) {
-        const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
-        if (pwErr) {
-          try {
-            if (auditId) {
-              await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditId);
-            }
-          } catch {}
-          throw pwErr;
-        }
-      }
-
-      // 3) Provision/load profile (creates player/club/organizer/admin rows as needed)
-      const profile = await ensureProvisioned(user);
-
-      // 4) Mark validated (non-blocking)
-      try {
-        if (auditId) {
-          await supabase
-            .from('email_otp_audit')
-            .update({
-              status: 'validated',
-              validated_at: new Date().toISOString(),
-              user_id: user.id,
-            })
-            .eq('id', auditId);
-        }
-      } catch {}
-
-      useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
-    } catch (err: any) {
-      dbg('otp:verify:catch', { name: err?.name, message: err?.message, status: err?.status, err });
-      useAuthStore.setState({ loading: false });
-      throw err;
+    } catch (e) {
+      console.warn('[AUTH] audit insert failed (verify)', e);
     }
+
+    // 2) Verify with Supabase — type 'email'
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    });
+    if (error) {
+      dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
+      useAuthStore.setState({ loading: false });
+      throw error;
+    }
+
+    const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
+    if (!user) {
+      useAuthStore.setState({ loading: false });
+      throw new Error('Verification succeeded but no user session');
+    }
+
+    // Optional: set password post-OTP
+    if (newPassword) {
+      const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (pwErr) {
+        useAuthStore.setState({ loading: false });
+        throw pwErr;
+      }
+    }
+
+    // 3) Provision/load profile
+    const profile = await ensureProvisioned(user);
+
+    // 4) Audit validated (just insert a second row; avoid updates/selects)
+    try {
+      await supabase.from('email_otp_audit').insert({
+        email,
+        context: 'email_otp',
+        status: 'validated',
+        user_id: user.id,
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      });
+    } catch (e) {
+      console.warn('[AUTH] audit insert failed (validated)', e);
+    }
+
+    useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 
   /* ------------------------------ PASSWORD SIGN-UP (optional) ------------ */
@@ -437,13 +418,11 @@ export const useAuthStore = create<AuthState>(() => ({
 
       const sessionUser = data.user ?? null;
 
-      // With email confirmations ON, there is no session yet
       if (!sessionUser) {
         useAuthStore.setState({ loading: false });
         return 'needs_verification';
       }
 
-      // If confirmations OFF, there may be a session now
       const profile = await ensureProvisioned(sessionUser);
       useAuthStore.setState({ user: sessionUser, userProfile: profile ?? null, loading: false });
       return 'signed_in';
