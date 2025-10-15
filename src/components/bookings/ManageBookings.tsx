@@ -113,7 +113,7 @@ export const ManageBookings: React.FC = () => {
       return;
     }
 
-    const clubIds = (clubRows ?? []).map((r: any) => r.club_id).filter(Boolean);
+    const clubIds = (clubRows ?? []).map((r: any) => r.id).filter(Boolean);
     if (clubIds.length === 0) {
       console.warn('[ManageBookings] user has no club memberships');
       setCourts([]);
