@@ -18,10 +18,12 @@ type Court = {
   name: string;
   hourly_rate: number;
   surface_type?: string | null;
+  club_id: string;
 };
 
 type Booking = {
   id: string;
+  slot_id?: string;
   total_amount: number;
   status: 'pending' | 'approved' | 'cancelled';
   payment_status: 'pending' | 'completed';
@@ -37,18 +39,16 @@ type Booking = {
 type SlotRow = {
   id: string;
   court_id: string;
-  date: string;
-  start_time: string;
-  end_time: string;
+  date: string;       // 'yyyy-MM-dd'
+  start_time: string; // e.g. '09:00'
+  end_time: string;   // e.g. '10:00'
   is_booked: boolean;
   custom_price?: number | null;
   courts?: {
     hourly_rate: number;
-    club_users?: {
-      countries?: { currency_code: string } | null;
-    } | null;
+    surface_type?: string | null;
   } | null;
-  bookings?: Booking[]; // joined array
+  bookings?: Booking[] | null; // joined array (may need FK)
 };
 
 type EnrichedSlot = SlotRow & {
@@ -65,7 +65,7 @@ export const ManageBookings: React.FC = () => {
   const [selectedCourt, setSelectedCourt] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<EnrichedSlot[]>([]);
-  const [bookingDetails, setBookingDetails] = useState<any>(null);
+  const [bookingDetails, setBookingDetails] = useState<Booking | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [players, setPlayers] = useState<PlayerUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,12 +76,12 @@ export const ManageBookings: React.FC = () => {
   const [bookingNotes, setBookingNotes] = useState('');
 
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile?.type === 'Club') {
       fetchCourts();
       fetchPlayers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile]);
+  }, [userProfile?.user_id, userProfile?.type]);
 
   useEffect(() => {
     if (selectedCourt && selectedDate) {
@@ -91,36 +91,22 @@ export const ManageBookings: React.FC = () => {
   }, [selectedCourt, selectedDate]);
 
   const fetchCourts = async () => {
-    if (!userProfile) return;
+    if (!userProfile?.user_id) return;
 
-    // FIX #1: get club_id for the logged-in club user
-    const { data: clubUser, error: clubError } = await supabase
-      .from('club_users')
-      .select('club_id')
-      .eq('user_id', userProfile.user_id)
-      .single();
-
-    if (clubError || !clubUser) {
-      console.error('Error fetching club user:', clubError);
-      return;
-    }
-
+    // Courts owned by this club (assuming courts.club_id references auth uid of club)
     const { data, error } = await supabase
       .from('courts')
-      .select('*')
-      .eq('club_id', clubUser.club_id)
-      .order('name');
+      .select('id, name, hourly_rate, surface_type, club_id')
+      .eq('club_id', userProfile.user_id)
+      .order('name', { ascending: true });
 
     if (error) {
       console.error('Error fetching courts:', error);
       return;
     }
-
-    if (data) {
-      setCourts(data as Court[]);
-      if (data.length > 0 && !selectedCourt) {
-        setSelectedCourt(data[0].id);
-      }
+    setCourts((data || []) as Court[]);
+    if ((data || []).length > 0 && !selectedCourt) {
+      setSelectedCourt((data as Court[])[0].id);
     }
   };
 
@@ -128,87 +114,86 @@ export const ManageBookings: React.FC = () => {
     const { data, error } = await supabase
       .from('player_users')
       .select('id, full_name, email, phone_number, countries(name, currency_code)')
-      .order('full_name');
+      .order('full_name', { ascending: true });
 
     if (error) {
       console.error('Error fetching players:', error);
       return;
     }
-
-    if (data) setPlayers(data as PlayerUser[]);
+    setPlayers((data || []) as PlayerUser[]);
   };
 
   const fetchAvailableSlots = async () => {
     if (!selectedCourt || !selectedDate) return;
-
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
+
+    // Pull slots for the day + basic court info.
+    // If your schema doesn’t have FK relationships named exactly,
+    // consider removing nested selects and doing a second query for pricing.
     const { data, error } = await supabase
       .from('court_slots')
       .select(`
-        *,
-        courts (
-          *,
-          club_users (
-            *,
-            countries (currency_code)
-          )
-        ),
+        id, court_id, date, start_time, end_time, is_booked, custom_price,
+        courts (hourly_rate, surface_type),
         bookings (
-          id,
-          total_amount,
-          status,
-          payment_status,
-          notes,
-          player_id,
-          player_users (
-            full_name,
-            email,
-            phone_number
-          )
+          id, slot_id, total_amount, status, payment_status, notes, player_id,
+          player_users (full_name, email, phone_number)
         )
       `)
       .eq('court_id', selectedCourt)
       .eq('date', dateStr)
-      .order('start_time');
+      .order('start_time', { ascending: true });
 
     if (error) {
       console.error('Error fetching slots:', error);
       return;
     }
 
-    if (data) {
-      // FIX #2: compute booked state from active booking (pending/approved)
-      const slotsWithPricing: EnrichedSlot[] = await Promise.all(
-        (data as SlotRow[]).map(async (slot) => {
-          const { data: priceData } = await supabase.rpc('calculate_slot_price', {
+    const baseSlots = (data || []) as SlotRow[];
+
+    // Compute price per slot using RPC if available, else fall back to hourly_rate/custom_price
+    const enriched: EnrichedSlot[] = await Promise.all(
+      baseSlots.map(async (slot) => {
+        // If you DO have calculate_slot_price RPC:
+        let rpcPrice: number | null = null;
+        try {
+          const { data: priceData, error: priceErr } = await supabase.rpc('calculate_slot_price', {
             p_court_id: slot.court_id,
-            p_date: dateStr,
+            p_date: slot.date,
             p_start_time: slot.start_time,
-            p_end_time: slot.end_time
+            p_end_time: slot.end_time,
           });
+          if (!priceErr && typeof priceData === 'number') {
+            rpcPrice = priceData;
+          }
+        } catch {
+          // ignore RPC errors; use fallback price
+        }
 
-          const activeBooking =
-            (slot.bookings ?? []).find((b) => b.status !== 'cancelled') ?? null;
+        const nonCancelled = (slot.bookings || []).find(b => b.status !== 'cancelled') || null;
 
-          return {
-            ...slot,
-            calculated_price:
-              (typeof priceData === 'number' ? priceData : undefined) ??
-              slot.courts?.hourly_rate ??
-              0,
-            booking: activeBooking,
-            isBookedComputed: !!activeBooking
-          };
-        })
-      );
+        const calculated_price =
+          slot.custom_price ??
+          rpcPrice ??
+          (slot.courts?.hourly_rate ?? 0);
 
-      setAvailableSlots(slotsWithPricing);
-    }
+        return {
+          ...slot,
+          calculated_price,
+          booking: nonCancelled,
+          isBookedComputed: !!nonCancelled || !!slot.is_booked,
+        };
+      })
+    );
+
+    setAvailableSlots(enriched);
   };
 
   const openCreateBookingModal = async (slot: EnrichedSlot) => {
     if (slot.isBookedComputed) {
-      await fetchBookingDetails(slot.id);
+      // Set the slot immediately so the modal time display is correct
+      setSelectedSlot(slot);
+      await fetchBookingDetails(slot.id, slot);
     } else {
       setSelectedSlot(slot);
       setSelectedPlayer('');
@@ -218,59 +203,57 @@ export const ManageBookings: React.FC = () => {
     }
   };
 
-  const fetchBookingDetails = async (slotId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          player_users (
-            full_name,
-            email,
-            phone_number
-          ),
-          court_slots (
-            start_time,
-            end_time
-          )
-        `)
-        .eq('slot_id', slotId)
-        .maybeSingle();
+  const fetchBookingDetails = async (slotId: string, slotForDisplay?: EnrichedSlot) => {
+    // If multiple bookings exist for a slot, we show the non-cancelled one.
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        id, slot_id, total_amount, status, payment_status, notes, player_id,
+        player_users (full_name, email, phone_number),
+        court_slots (start_time, end_time)
+      `)
+      .eq('slot_id', slotId)
+      .order('created_at', { ascending: false })
+      .limit(5);
 
-      if (error) {
-        console.error('Error fetching booking details:', error);
-        return;
-      }
+    if (error) {
+      console.error('Error fetching booking details:', error);
+      return;
+    }
 
-      if (data) {
-        setBookingDetails(data);
-        setSelectedSlot({
-          // minimal shape for time display
-          ...(selectedSlot as any),
-          id: slotId,
-          start_time: data.court_slots?.start_time,
-          end_time: data.court_slots?.end_time,
-          calculated_price: data.total_amount,
-          isBookedComputed: true,
-          booking: data
-        } as EnrichedSlot);
-        setShowBookingModal(true);
-      }
-    } catch (err) {
-      console.error('Error fetching booking details:', err);
+    const bookings = (data || []) as Booking[];
+    const active = bookings.find(b => b.status !== 'cancelled') || bookings[0] || null;
+
+    if (active) {
+      setBookingDetails(active);
+      // Make sure the selectedSlot has a consistent shape for time/price display
+      const start = (active as any)?.court_slots?.start_time || slotForDisplay?.start_time;
+      const end = (active as any)?.court_slots?.end_time || slotForDisplay?.end_time;
+      const price = active.total_amount ?? slotForDisplay?.calculated_price ?? 0;
+
+      setSelectedSlot(prev => ({
+        ...(slotForDisplay || prev!),
+        id: slotId,
+        start_time: start,
+        end_time: end,
+        calculated_price: price,
+        booking: active,
+        isBookedComputed: true,
+      } as EnrichedSlot));
+      setShowBookingModal(true);
     }
   };
 
-  const updateBookingStatus = async (bookingId: string, newStatus: string) => {
+  const updateBookingStatus = async (bookingId: string, newStatus: Booking['status']) => {
     setLoading(true);
     try {
       const { error } = await supabase
         .from('bookings')
         .update({ status: newStatus })
         .eq('id', bookingId);
-
       if (error) throw error;
 
+      // If cancelled, free up the slot
       if (newStatus === 'cancelled' && selectedSlot?.id) {
         const { error: slotError } = await supabase
           .from('court_slots')
@@ -282,7 +265,7 @@ export const ManageBookings: React.FC = () => {
       alert('Booking updated successfully!');
       setShowBookingModal(false);
       setBookingDetails(null);
-      fetchAvailableSlots();
+      await fetchAvailableSlots();
     } catch (err) {
       console.error('Error updating booking:', err);
       alert('Error updating booking. Please try again.');
@@ -299,26 +282,22 @@ export const ManageBookings: React.FC = () => {
 
     setLoading(true);
     try {
-      const bookingAmount =
-        selectedSlot.custom_price ?? selectedSlot.calculated_price ?? 0;
+      const bookingAmount = selectedSlot.custom_price ?? selectedSlot.calculated_price ?? 0;
 
-      // default to 'pending' to match your earlier requirement
       const { error: bookingError } = await supabase.from('bookings').insert({
         player_id: selectedPlayer,
         slot_id: selectedSlot.id,
         total_amount: bookingAmount,
         status: 'pending',
         payment_status: 'pending',
-        notes: bookingNotes || null
+        notes: bookingNotes || null,
       });
-
       if (bookingError) throw bookingError;
 
       const { error: slotError } = await supabase
         .from('court_slots')
         .update({ is_booked: true })
         .eq('id', selectedSlot.id);
-
       if (slotError) throw slotError;
 
       alert('Booking created successfully!');
@@ -326,7 +305,8 @@ export const ManageBookings: React.FC = () => {
       setSelectedSlot(null);
       setSelectedPlayer('');
       setBookingNotes('');
-      fetchAvailableSlots();
+      setPlayerSearch('');
+      await fetchAvailableSlots();
     } catch (err) {
       console.error('Error creating booking:', err);
       alert('Error creating booking. Please try again.');
@@ -339,10 +319,7 @@ export const ManageBookings: React.FC = () => {
 
   const filteredPlayers = players.filter((p) => {
     const q = playerSearch.toLowerCase();
-    return (
-      p.full_name.toLowerCase().includes(q) ||
-      p.email.toLowerCase().includes(q)
-    );
+    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q);
   });
 
   return (
@@ -511,8 +488,7 @@ export const ManageBookings: React.FC = () => {
                       Time Slot
                     </label>
                     <p className="text-gray-900 font-medium">
-                      {bookingDetails.court_slots?.start_time || selectedSlot.start_time} -{' '}
-                      {bookingDetails.court_slots?.end_time || selectedSlot.end_time}
+                      {selectedSlot.start_time} - {selectedSlot.end_time}
                     </p>
                   </div>
 
@@ -595,8 +571,9 @@ export const ManageBookings: React.FC = () => {
                   >
                     Close
                   </button>
-                  {/* Example action buttons (uncomment if you want inline status updates) */}
-                  {/* {bookingDetails?.id && (
+
+                  {/* If you want inline actions, uncomment:
+                  {bookingDetails?.id && (
                     <>
                       <button
                         onClick={() => updateBookingStatus(bookingDetails.id, 'approved')}
@@ -613,7 +590,8 @@ export const ManageBookings: React.FC = () => {
                         Cancel
                       </button>
                     </>
-                  )} */}
+                  )}
+                  */}
                 </div>
               </div>
             </div>
