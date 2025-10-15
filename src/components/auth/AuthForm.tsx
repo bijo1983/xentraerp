@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase';
 type AuthFormProps = {
   /** Force starting mode. If omitted, defaults to 'login'. */
   initialMode?: 'login' | 'signup';
-  /** Where to go after sign-in/sign-up succeeds (defaults to '/dashboard'). */
+  /** Where to go after password sign-in succeeds (defaults to '/dashboard'). */
   afterAuthRedirectTo?: string;
 };
 
@@ -25,7 +25,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     onLoginRoute ? true : onRegisterRoute ? false : initialMode !== 'signup'
   );
 
-  // 🔹 OTP stage handling (for signup only)
+  // OTP stage handling (for signup only)
   const [stage, setStage] = useState<'form' | 'otp'>('form');
   const [otpCode, setOtpCode] = useState('');
 
@@ -33,7 +33,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [countriesLoading, setCountriesLoading] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string>('');
 
   const [formData, setFormData] = useState({
     email: '',
@@ -46,18 +46,35 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
   const [countries, setCountries] = useState<any[]>([]);
 
-  // ⬇️ Pull in store actions (includes OTP methods)
-  const { signIn, sendEmailOtp, verifyEmailOtp } = useAuthStore();
+  // store actions + status message
+  const { signIn, sendEmailOtp, verifyEmailOtp, status, message } = useAuthStore();
 
-  // Keep local mode in sync if initialMode prop changes (embedded usage)
+  // Keep local mode in sync if initialMode prop changes
   useEffect(() => {
     if (!onLoginRoute && !onRegisterRoute) {
       setIsLogin(initialMode !== 'signup');
-      setStage('form'); // reset stage when switching mode
+      setStage('form');
       setOtpCode('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMode]);
+
+  // If store says verification is done → redirect to /login with banner
+  useEffect(() => {
+    if (status === 'verified_required_login') {
+      navigate('/login', {
+        replace: true,
+        state: {
+          verifiedMessage:
+            message || 'Verification successful. Please sign in with your email and password.',
+        },
+      });
+    }
+  }, [status, message, navigate]);
+
+  // Show "verified" banner on login page if redirected
+  const verifiedMessage =
+    (location.state as any)?.verifiedMessage && isLogin ? (location.state as any).verifiedMessage : null;
 
   // Load countries only for signup mode
   useEffect(() => {
@@ -68,18 +85,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           .from('countries')
           .select('id, name, code')
           .order('name');
-        if (error || !data) {
-          setCountries([]);
-        } else {
-          setCountries(data);
-        }
+        if (error || !data) setCountries([]);
+        else setCountries(data);
       } catch {
         setCountries([]);
       } finally {
         setCountriesLoading(false);
       }
     };
-
     if (!isLogin) fetchCountries();
   }, [isLogin]);
 
@@ -96,30 +109,34 @@ export const AuthForm: React.FC<AuthFormProps> = ({
       } else {
         // ---- SIGNUP (OTP flow) ----
         if (stage === 'form') {
-          // 1) Send OTP and switch UI to OTP screen
-          await sendEmailOtp(formData.email, {
-            userType: formData.userType as 'Player' | 'Club' | 'Organizer',
+          // Require password before OTP (min length enforced in UI & store)
+          if (!formData.password || formData.password.length < 8) {
+            setError('Password is required (min 8 characters).');
+            setLoading(false);
+            return;
+          }
+
+          await sendEmailOtp(formData.email, formData.password, {
+            userType: formData.userType as 'Player' | 'Club' | 'Organizer' | 'Administrator',
+            profile_type: formData.userType as any,
             name: formData.name,
             phone_number: formData.phone || null,
             country_id: formData.country || null,
-            // (address/website/company_name/skill_level not collected here)
           });
+
           setStage('otp');
           setLoading(false);
           return;
         }
 
         if (stage === 'otp') {
-          // 2) Verify the entered 6-digit code (optional: set password after OTP)
-          await verifyEmailOtp(formData.email, otpCode, formData.password || undefined);
-
-          // success → go to app
-          navigate(afterAuthRedirectTo, { replace: true });
+          // Verify code (store signs user out and flips status → useEffect will redirect)
+          await verifyEmailOtp(formData.email, otpCode);
+          // We don't navigate here; we let the status effect above redirect to /login
           return;
         }
       }
     } catch (err: any) {
-      // Handle store’s EmailNotVerifiedError specially (mainly for password flow)
       if (err?.code === 'EMAIL_NOT_VERIFIED') {
         navigate('/check-email', { replace: true });
         setLoading(false);
@@ -134,9 +151,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         msg.includes('NetworkError') ||
         msg.includes('Network connection failed')
       ) {
-        setError(
-          'Unable to connect to the server. Please ensure Supabase is configured and try again.'
-        );
+        setError('Unable to connect to the server. Please ensure Supabase is configured and try again.');
       } else if (msg.includes('Invalid login credentials')) {
         setError('Invalid email or password.');
       } else if (msg.includes('Missing Supabase environment variables')) {
@@ -185,20 +200,26 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     setError('');
   };
 
-  // For OTP screen, let user fix email/name etc.
   const goBackToForm = () => {
     setStage('form');
     setOtpCode('');
     setError('');
   };
 
-  // Resend OTP
+  // Resend OTP — requires the same password again (enforced)
   const handleResendOtp = async () => {
     try {
       setLoading(true);
       setError('');
-      await sendEmailOtp(formData.email, {
-        userType: formData.userType as 'Player' | 'Club' | 'Organizer',
+
+      if (!formData.password || formData.password.length < 8) {
+        setError('Password is required (min 8 characters) to resend the code.');
+        return;
+      }
+
+      await sendEmailOtp(formData.email, formData.password, {
+        userType: formData.userType as 'Player' | 'Club' | 'Organizer' | 'Administrator',
+        profile_type: formData.userType as any,
         name: formData.name,
         phone_number: formData.phone || null,
         country_id: formData.country || null,
@@ -209,6 +230,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({
       setLoading(false);
     }
   };
+
+  const canSubmitSignupForm =
+    !isLogin &&
+    stage === 'form' &&
+    formData.email &&
+    formData.name &&
+    formData.password.length >= 8;
+
+  const canSubmitOtp =
+    !isLogin && stage === 'otp' && otpCode && otpCode.length === 6;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 flex items-center justify-center p-4">
@@ -224,6 +255,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             {isLogin ? 'Welcome back!' : stage === 'form' ? 'Join the community' : 'Check your email and enter the code'}
           </p>
         </div>
+
+        {/* Success banner after redirect from verification */}
+        {verifiedMessage && isLogin && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-700 text-sm">{verifiedMessage}</p>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -314,15 +352,17 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password (optional — can set after OTP)
+                  Password
                 </label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                    placeholder="Choose a password (optional)"
+                    placeholder="At least 8 characters"
                   />
                   <button
                     type="button"
@@ -332,9 +372,6 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  You can set a password now or later after verifying your email.
-                </p>
               </div>
 
               <div>
@@ -343,14 +380,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                 </label>
                 <select
                   value={formData.userType}
-                  onChange={(e) =>
-                    setFormData({ ...formData, userType: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, userType: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 >
                   <option value="Player">Player</option>
                   <option value="Club">Club</option>
                   <option value="Organizer">Organizer</option>
+                  <option value="Administrator">Administrator</option>
                 </select>
               </div>
 
@@ -360,7 +396,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                     ? 'Full Name'
                     : formData.userType === 'Club'
                     ? 'Club Name'
-                    : 'Organization Name'}
+                    : formData.userType === 'Organizer'
+                    ? 'Organization Name'
+                    : 'Full Name'}
                 </label>
                 <input
                   type="text"
@@ -445,7 +483,6 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                 </p>
               </div>
 
-              {/* Optional: allow editing email/name if user mistyped */}
               <div className="flex justify-between">
                 <button
                   type="button"
@@ -461,7 +498,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={
+              loading ||
+              (isLogin ? false : stage === 'form' ? !canSubmitSignupForm : !canSubmitOtp)
+            }
             className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
@@ -479,7 +519,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             onClick={switchAuthMode}
             className="text-emerald-600 hover:text-emerald-700 font-medium"
           >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
         </div>
       </div>
