@@ -54,7 +54,7 @@ interface AuthState {
 
 /* ========================= Helpers / DB lookups ========================== */
 
-// Small helper: SHA-256 hex (browser SubtleCrypto). If you also run this in Node, ensure globalThis.crypto.subtle exists.
+// SHA-256 hex using WebCrypto
 async function sha256Hex(s: string): Promise<string> {
   if (!globalThis.crypto?.subtle) throw new Error('WebCrypto not available for hashing');
   const enc = new TextEncoder().encode(s);
@@ -62,7 +62,7 @@ async function sha256Hex(s: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Map friendly role to profile_id (keep in sync with your catalog)
+// Map friendly role -> profile_id (keep in sync with your catalog)
 const PROFILE_ID_MAP: Record<UserType, string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
   Club:          'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
@@ -254,13 +254,17 @@ export const useAuthStore = create<AuthState>(() => ({
       throw error;
     }
 
-    // Audit "sent" (no token; Supabase never exposes it)
-    await supabase.from('email_otp_audit').insert({
-      email,
-      context: 'email_otp',
-      status: 'sent',
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-    });
+    // Audit "sent" (non-blocking)
+    try {
+      await supabase.from('email_otp_audit').insert({
+        email,
+        context: 'email_otp',
+        status: 'sent',
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      });
+    } catch (e) {
+      console.warn('[AUTH] audit insert failed (send)', e);
+    }
 
     useAuthStore.setState({ loading: false });
   },
@@ -273,25 +277,32 @@ export const useAuthStore = create<AuthState>(() => ({
 
     dbg('otp:verify:start', { email, token_len: token.length });
 
-    try {
-      // 1) Audit attempt (store only hash + last4)
-      const tokenHash = await sha256Hex(token);
-      const tokenLast4 = token.slice(-4);
-      const { data: auditRow } = await supabase
-        .from('email_otp_audit')
-        .insert({
-          email,
-          context: 'email_otp',
-          token_hash: tokenHash,
-          token_last4: tokenLast4,
-          attempts: 1,
-          status: 'sent',
-          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-        })
-        .select('id')
-        .single();
+    let auditId: string | null = null;
 
-      // 2) Verify with Supabase (source of truth) — IMPORTANT: type 'email'
+    try {
+      // 1) Audit attempt (hash + last4) — non-blocking
+      try {
+        const tokenHash = await sha256Hex(token);
+        const tokenLast4 = token.slice(-4);
+        const { data } = await supabase
+          .from('email_otp_audit')
+          .insert({
+            email,
+            context: 'email_otp',
+            token_hash: tokenHash,
+            token_last4: tokenLast4,
+            attempts: 1,
+            status: 'sent',
+            user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+          })
+          .select('id')
+          .single();
+        auditId = data?.id ?? null;
+      } catch (e) {
+        console.warn('[AUTH] audit insert failed (verify)', e);
+      }
+
+      // 2) Verify with Supabase — IMPORTANT: type 'email'
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token,
@@ -300,27 +311,33 @@ export const useAuthStore = create<AuthState>(() => ({
 
       if (error) {
         dbg('otp:verify:error', { name: error.name, message: error.message, status: (error as any)?.status });
-        if (auditRow?.id) {
-          await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditRow.id);
-        }
+        try {
+          if (auditId) {
+            await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditId);
+          }
+        } catch {}
         throw error;
       }
 
       const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
       if (!user) {
-        if (auditRow?.id) {
-          await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditRow.id);
-        }
+        try {
+          if (auditId) {
+            await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditId);
+          }
+        } catch {}
         throw new Error('Verification succeeded but no user session');
       }
 
-      // Optional: set password post-OTP to allow password sign-in later
+      // Optional: set password post-OTP
       if (newPassword) {
         const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
         if (pwErr) {
-          if (auditRow?.id) {
-            await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditRow.id);
-          }
+          try {
+            if (auditId) {
+              await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', auditId);
+            }
+          } catch {}
           throw pwErr;
         }
       }
@@ -345,17 +362,19 @@ export const useAuthStore = create<AuthState>(() => ({
         }
       }
 
-      // 4) Mark validated
-      if (auditRow?.id) {
-        await supabase
-          .from('email_otp_audit')
-          .update({
-            status: 'validated',
-            validated_at: new Date().toISOString(),
-            user_id: user.id,
-          })
-          .eq('id', auditRow.id);
-      }
+      // 4) Mark validated (non-blocking)
+      try {
+        if (auditId) {
+          await supabase
+            .from('email_otp_audit')
+            .update({
+              status: 'validated',
+              validated_at: new Date().toISOString(),
+              user_id: user.id,
+            })
+            .eq('id', auditId);
+        }
+      } catch {}
 
       useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
     } catch (err: any) {
