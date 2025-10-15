@@ -91,25 +91,53 @@ export const ManageBookings: React.FC = () => {
   }, [selectedCourt, selectedDate]);
 
   const fetchCourts = async () => {
-    if (!userProfile?.user_id) return;
+  if (!userProfile) return;
 
-    // Courts owned by this club (assuming courts.club_id references auth uid of club)
-    const { data, error } = await supabase
-      .from('courts')
-      .select('id, name, hourly_rate, surface_type, club_id')
-      .eq('club_id', userProfile.user_id)
-      .order('name', { ascending: true });
+  try {
+    // 1) find all clubs this user belongs to
+    const { data: memberships, error: mErr } = await supabase
+      .from('club_users')
+      .select('club_id')
+      .eq('user_id', userProfile.user_id);
 
-    if (error) {
-      console.error('Error fetching courts:', error);
+    if (mErr) {
+      console.error('[manageBookings] club_users select failed:', mErr);
+      setCourts([]);
       return;
     }
-    setCourts((data || []) as Court[]);
-    if ((data || []).length > 0 && !selectedCourt) {
-      setSelectedCourt((data as Court[])[0].id);
-    }
-  };
 
+    if (!memberships || memberships.length === 0) {
+      console.warn('[manageBookings] no club membership for user', userProfile.user_id);
+      setCourts([]);
+      return;
+    }
+
+    const clubIds = memberships.map(m => m.club_id).filter(Boolean);
+    // 2) fetch courts for those clubs
+    const { data: courtRows, error: cErr } = await supabase
+      .from('courts')
+      .select('id, name, hourly_rate, surface_type, club_id')
+      .in('club_id', clubIds)
+      .order('name');
+
+    if (cErr) {
+      console.error('[manageBookings] courts select failed:', cErr);
+      setCourts([]);
+      return;
+    }
+
+    const list = (courtRows ?? []) as Court[];
+    setCourts(list);
+
+    // pick first court if none selected or selected no longer exists
+    if (list.length > 0 && !list.some(c => c.id === selectedCourt)) {
+      setSelectedCourt(list[0].id);
+    }
+  } catch (e) {
+    console.error('[manageBookings] fetchCourts exception:', e);
+    setCourts([]);
+  }
+};
   const fetchPlayers = async () => {
     const { data, error } = await supabase
       .from('player_users')
