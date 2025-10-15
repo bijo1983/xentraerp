@@ -106,38 +106,61 @@ export const ManageBookings: React.FC = () => {
   /* -------------------- Data loaders -------------------- */
 
   // ⚠️ Robust loader: tries several schema shapes and logs what succeeds
-  const fetchCourts = async () => {
-    if (!userProfile) return;
+  // Replace your fetchCourts with this:
+const fetchCourts = async () => {
+  if (!userProfile) return;
 
-    try {
-      const uid = userProfile.user_id;
-      console.log('[manageBookings] fetchCourts start for uid:', uid);
+  try {
+    const uid = userProfile.user_id;
+    console.log('[manageBookings] fetchCourts -> uid:', uid);
 
-      // 1) Try to read memberships with a club_id column
-      let clubIds: string[] | null = null;
-      let membershipIds: string[] | null = null;
+    // 1) find the club(s) this user belongs to
+    const { data: clubRows, error: clubErr } = await supabase
+      .from('club_users')
+      .select('club_id')
+      .eq('user_id', uid);
 
-      const r1 = await supabase
-        .from('club_users')
-        .select('club_id')
-        .eq('user_id', uid);
+    if (clubErr) {
+      console.error('[manageBookings] club_users lookup failed:', clubErr);
+      setCourts([]);
+      return;
+    }
 
-      if (r1.error) {
-        console.warn('[manageBookings] club_users.select(club_id) failed → fallback to id:', r1.error);
-        const r2 = await supabase
-          .from('club_users')
-          .select('id')
-          .eq('user_id', uid);
+    const clubIds = (clubRows ?? [])
+      .map((r: any) => r.club_id)
+      .filter(Boolean);
 
-        if (r2.error) {
-          console.error('[manageBookings] club_users.select(id) also failed:', r2.error);
-          setCourts([]);
-          return;
-        }
-        membershipIds = (r2.data ?? []).map((x: any) => x.id);
-      } else {
-        clubIds = (r1.data ?? []).map((x: any) => x.club_id).filter(Boolean);
-      }
+    if (clubIds.length === 0) {
+      console.warn('[manageBookings] user has no club memberships');
+      setCourts([]);
+      return;
+    }
+
+    // 2) load courts for those club(s)
+    const { data: courtRows, error: courtErr } = await supabase
+      .from('courts')
+      .select('id, name, hourly_rate, surface_type, club_id')
+      .in('club_id', clubIds)     // <-- the only relationship we use
+      .order('name');
+
+    if (courtErr) {
+      console.error('[manageBookings] courts load failed:', courtErr);
+      setCourts([]);
+      return;
+    }
+
+    const list = (courtRows ?? []) as Court[];
+    setCourts(list);
+    if (list.length > 0 && !list.some(c => c.id === selectedCourt)) {
+      setSelectedCourt(list[0].id);
+    }
+
+    console.log('[manageBookings] courts loaded:', list.length);
+  } catch (e) {
+    console.error('[manageBookings] fetchCourts exception:', e);
+    setCourts([]);
+  }
+};
 
       // 2) Try various court ownership shapes until one returns rows successfully
       const tryCourtsBy = async (
