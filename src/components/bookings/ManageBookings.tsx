@@ -223,17 +223,7 @@ export const ManageBookings: React.FC = () => {
 
   /* -------------------- UI actions -------------------- */
 
-  const openCreateBookingModal = async (slot: EnrichedSlot) => {
-    if (slot.isBookedComputed) {
-      await fetchBookingDetails(slot.id);
-    } else {
-      setSelectedSlot(slot);
-      setSelectedPlayer('');
-      setBookingNotes('');
-      setPlayerSearch('');
-      setShowCreateModal(true);
-    }
-  };
+const { data, error } = await supabase.rpc('search_players', { q: playerSearch });
 
   const fetchBookingDetails = async (slotId: string) => {
     try {
