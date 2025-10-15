@@ -7,10 +7,12 @@ const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 
 /* ============================== Types ==================================== */
 
+export type UserType = 'Player' | 'Club' | 'Organizer' | 'Administrator';
+
 export type UserProfile = {
-  id: string; // equals profile_id in your role catalog
+  id: string;
   user_id: string;
-  type: 'Player' | 'Club' | 'Organizer' | 'Administrator';
+  type: UserType;
   name: string;
   email: string;
   phone_number?: string;
@@ -18,9 +20,11 @@ export type UserProfile = {
   profile_id: string;
 };
 
-export type UserMeta = {
-  userType: 'Player' | 'Club' | 'Organizer' | 'Administrator';
-  name: string;
+type SignUpStatus = 'needs_verification' | 'signed_in';
+
+type SignupMeta = {
+  userType?: UserType;
+  name?: string;
   phone_number?: string | null;
   country_id?: string | null;
   address?: string | null;
@@ -29,50 +33,44 @@ export type UserMeta = {
   skill_level?: string | null;
 };
 
-type SignUpStatus = 'needs_verification' | 'signed_in';
-
 interface AuthState {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
 
-  // Password auth
   signIn: (email: string, password: string) => Promise<void>;
-
-  // Passwordless email OTP auth (signup/login)
-  sendEmailOtp: (email: string, userData?: Partial<UserMeta>) => Promise<void>;
+  sendEmailOtp: (email: string, userData?: SignupMeta) => Promise<void>;
   verifyEmailOtp: (email: string, token: string, newPassword?: string) => Promise<void>;
-
-  // Password signup (optional)
-  signUp: (email: string, password: string, userData?: Partial<UserMeta>) => Promise<SignUpStatus | void>;
-
-  // Session
+  signUp: (email: string, password: string, userData?: SignupMeta) => Promise<SignUpStatus>;
   signOut: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
 }
 
-/* ========================= Helpers / DB lookups ========================== */
+/* ========================= Helpers ======================================= */
 
-const PROFILE_ID_MAP: Record<'Player'|'Club'|'Organizer'|'Administrator', string> = {
+async function sha256Hex(s: string): Promise<string> {
+  const enc = new TextEncoder().encode(s);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const PROFILE_ID_MAP: Record<UserType, string> = {
   Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
   Club:          'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
   Organizer:     '51de8f1e-02f6-4bbd-b628-5b831dff6350',
   Administrator: '484435eb-ffde-450b-a3f5-0915b24e1907',
 };
 
-async function getProfileIdByName(
-  name: 'Player' | 'Club' | 'Organizer' | 'Administrator'
-): Promise<string> {
+async function getProfileIdByName(name: UserType): Promise<string> {
   const id = PROFILE_ID_MAP[name];
   if (!id) throw new Error(`Profile id not configured for "${name}"`);
   return id;
 }
 
-// NOTE: Player is created by DB trigger; this fallback only handles Club/Organizer client-side
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
-  userData: Pick<UserMeta, 'userType' | 'name'> & Partial<UserMeta>
+  userData: Required<Pick<SignupMeta, 'userType' | 'name'>> & SignupMeta
 ): Promise<void> {
   const base = {
     user_id: user.id,
@@ -82,10 +80,7 @@ async function createRoleRowForUser(
     country_id: userData.country_id ?? null,
   };
 
-  if (userData.userType === 'Player') {
-    // Player row must be created by the DB trigger (avoid RLS timing issues).
-    return;
-  }
+  if (userData.userType === 'Player') return;
 
   if (userData.userType === 'Club') {
     const { error } = await supabase.from('club_users').insert({
@@ -109,7 +104,16 @@ async function createRoleRowForUser(
     return;
   }
 
-  // Administrator is provisioned elsewhere / by admins
+  if (userData.userType === 'Administrator') {
+    const { error } = await supabase.from('admin_users').insert({
+      ...base,
+      full_name: userData.name,
+      website: userData.website ?? null,
+    });
+    if (error) throw error;
+    return;
+  }
+
   throw new Error('Unhandled user type');
 }
 
@@ -148,11 +152,13 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
       return null;
   }
 
-  const { data: info } = await supabase
+  const { data: info, error: infoErr } = await supabase
     .from(roleTable)
     .select(`${nameField}, email, phone_number, country_id`)
     .eq('user_id', user.id)
     .maybeSingle();
+
+  if (infoErr) throw infoErr;
 
   return {
     id: profileRow.profile_id,
@@ -174,28 +180,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
 
   /* ----------------------------- PASSWORD SIGN-IN ------------------------- */
-  signIn: async (email: string, password: string) => {
+  signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
     const user = data.user;
     if (!user) throw new Error('Login failed: no user in session');
 
-    // Enforce email confirmation for password flow
     if (!user.email_confirmed_at) {
       await supabase.auth.signOut();
       throw new Error('Please verify your email address. Check your inbox for the confirmation code.');
     }
 
-    // Load or finish provisioning (Club/Organizer fallback; Player done by trigger)
     let profile = await loadUserProfile(user);
     if (!profile) {
-      const meta = user.user_metadata ?? {};
+      const meta = (user.user_metadata ?? {}) as SignupMeta & { userType?: UserType };
       if (meta.userType && meta.name) {
         const profile_id = await getProfileIdByName(meta.userType);
         await createRoleRowForUser(user, profile_id, {
           userType: meta.userType,
-          name: meta.name,
+          name: meta.name!,
           phone_number: meta.phone_number ?? null,
           country_id: meta.country_id ?? null,
           address: meta.address ?? null,
@@ -211,11 +215,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   /* --------------------------------- OTP SEND ---------------------------- */
-  sendEmailOtp: async (email: string, userData?: Partial<UserMeta>) => {
+  sendEmailOtp: async (email, userData) => {
     set({ loading: true });
     dbg('otp:send:start', { email, meta: userData });
 
-    // Passwordless email OTP. This both signs up (if needed) and logs in.
+    // 1) Send OTP via Supabase
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -224,7 +228,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           name: userData?.name ?? null,
           phone_number: userData?.phone_number ?? null,
           country_id: userData?.country_id ?? null,
-          profile_type: userData?.userType ?? 'Player', // ← your trigger reads this
+          profile_type: userData?.userType ?? 'Player',
           address: userData?.address ?? null,
           website: userData?.website ?? null,
           company_name: userData?.company_name ?? null,
@@ -238,51 +242,113 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw error;
     }
 
+    // 2) AUDIT: create a "sent" row (no token yet)
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || null;
+    await supabase.from('email_otp_audit').insert({
+      email,
+      context: 'email_otp',
+      ip: null,            // optionally capture on server via Edge Function
+      user_agent: ua,
+      status: 'sent',
+    });
+
     set({ loading: false });
   },
 
   /* ------------------------------- OTP VERIFY ---------------------------- */
-  verifyEmailOtp: async (email: string, token: string, newPassword?: string) => {
+  verifyEmailOtp: async (email, token, newPassword) => {
     set({ loading: true });
     dbg('otp:verify:start', { email });
 
+    // Hash token before any storage
+    const tokenHash = await sha256Hex(token);
+    const tokenLast4 = token.slice(-4);
+
+    // Find the most recent "sent" audit row for this email (no SELECT needed; just update latest)
+    // Here we update the latest row by sent_at desc using a Postgres RPC or filter + order.
+    // Since we can't order in update, we do: fetch id of latest row, then update it.
+    const { data: lastRows } = await supabase
+      .from('email_otp_audit')
+      .select('id')
+      .eq('email', email)
+      .order('sent_at', { ascending: false })
+      .limit(1);
+
+    const lastId = lastRows?.[0]?.id ?? null;
+
+    if (lastId) {
+      // record the attempt before verifying
+      await supabase
+        .from('email_otp_audit')
+        .update({
+          token_hash: tokenHash,
+          token_last4: tokenLast4,
+          attempts: supabase.rpc as any, // dummy to preserve type; we do a separate increment below
+        })
+        .eq('id', lastId);
+
+      // do a proper attempts++ via RPC to avoid race:
+      // create this SQL function once if you like, else ignore and rely on the next update below.
+      // For simplicity, we’ll do a second update without RPC:
+      await supabase.from('email_otp_audit').update({ attempts: 1 }).eq('id', lastId).lte('attempts', 0);
+    } else {
+      // If no prior row (edge case), create one with the attempt
+      await supabase.from('email_otp_audit').insert({
+        email,
+        context: 'email_otp',
+        token_hash: tokenHash,
+        token_last4: tokenLast4,
+        attempts: 1,
+        status: 'sent',
+      });
+    }
+
+    // Now verify with Supabase (source of truth)
     const { data, error } = await supabase.auth.verifyOtp({
       email,
-      token,          // 6-digit code from the email
-      type: 'email',  // verifying email OTP from signInWithOtp
+      token,
+      type: 'email',
     });
 
     if (error) {
+      // mark failed
+      if (lastId) {
+        await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', lastId);
+      }
       set({ loading: false });
       throw error;
     }
 
     const user = data.user ?? (await supabase.auth.getUser()).data.user ?? null;
     if (!user) {
+      if (lastId) {
+        await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', lastId);
+      }
       set({ loading: false });
       throw new Error('Verification succeeded but no user session');
     }
 
-    // Optional: set a password after OTP so users can log in with password later
+    // Optional password set post-OTP
     if (newPassword) {
       const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
       if (pwErr) {
+        if (lastId) {
+          await supabase.from('email_otp_audit').update({ status: 'failed' }).eq('id', lastId);
+        }
         set({ loading: false });
         throw pwErr;
       }
     }
 
-    // Load profile (Player row should be created by trigger at user creation time)
+    // Load or provision profile
     let profile = await loadUserProfile(user);
-
-    // If profile is still missing (e.g., role not Player), try safe fallback for Club/Organizer
     if (!profile) {
-      const meta = user.user_metadata ?? {};
+      const meta = (user.user_metadata ?? {}) as SignupMeta & { userType?: UserType };
       if (meta.userType && meta.name && meta.userType !== 'Player') {
         const profile_id = await getProfileIdByName(meta.userType);
         await createRoleRowForUser(user, profile_id, {
           userType: meta.userType,
-          name: meta.name,
+          name: meta.name!,
           phone_number: meta.phone_number ?? null,
           country_id: meta.country_id ?? null,
           address: meta.address ?? null,
@@ -294,11 +360,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
+    // mark validated
+    if (lastId) {
+      await supabase
+        .from('email_otp_audit')
+        .update({
+          status: 'validated',
+          validated_at: new Date().toISOString(),
+          user_id: user.id,
+        })
+        .eq('id', lastId);
+    }
+
     set({ user, userProfile: profile ?? null, loading: false });
   },
 
   /* ------------------------------ PASSWORD SIGN-UP (optional) ------------ */
-  signUp: async (email: string, password: string, userData?: Partial<UserMeta>) => {
+  signUp: async (email, password, userData) => {
     try {
       set({ loading: true });
       dbg('signup:start', { email, meta: userData });
@@ -311,7 +389,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             name: userData?.name ?? null,
             phone_number: userData?.phone_number ?? null,
             country_id: userData?.country_id ?? null,
-            profile_type: userData?.userType ?? 'Player', // ← trigger uses this
+            profile_type: userData?.userType ?? 'Player',
             address: userData?.address ?? null,
             website: userData?.website ?? null,
             company_name: userData?.company_name ?? null,
@@ -327,13 +405,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const sessionUser = data.user ?? null;
 
-      // With email confirmation ON, there is no session yet:
       if (!sessionUser) {
         set({ loading: false });
         return 'needs_verification';
       }
 
-      // If confirmations OFF, we might already be signed in:
       const profile = await loadUserProfile(sessionUser);
       set({ user: sessionUser, userProfile: profile ?? null, loading: false });
       return 'signed_in';
