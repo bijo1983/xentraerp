@@ -1,4 +1,4 @@
-// src/components/bookings/ManageBookings.tsx (or your path)
+// src/pages/club/ManageBookings.tsx
 import React, { useState, useEffect } from 'react';
 import { Clock, Plus, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -21,14 +21,14 @@ type Court = {
   name: string;
   hourly_rate: number;
   surface_type?: string | null;
-  club_id?: string | null;
+  club_id?: string | null; // FK -> club_users.id
 };
 
 type Booking = {
   id: string;
   total_amount: number;
   status: 'pending' | 'approved' | 'cancelled' | 'rejected';
-  payment_status: 'pending' | 'completed' | 'paid';
+  payment_status: 'pending' | 'paid' | 'completed';
   notes?: string | null;
   player_id: string;
   player_users?: {
@@ -48,8 +48,11 @@ type SlotRow = {
   custom_price?: number | null;
   courts?: {
     hourly_rate: number;
+    club_users?: {
+      countries?: { currency_code: string } | null;
+    } | null;
   } | null;
-  bookings?: Booking[];
+  bookings?: Booking[]; // joined array
 };
 
 type EnrichedSlot = SlotRow & {
@@ -97,46 +100,45 @@ export const ManageBookings: React.FC = () => {
 
   /* -------------------- Data loaders -------------------- */
 
-  // ⬇️ SAME PATTERN AS ViewBookings: find club_ids, then courts by club_id
+  // ✅ Membership pattern: get club_users.id for this user, then courts.club_id = that id
   const fetchCourts = async () => {
     if (!userProfile) return;
 
-    // 1) club memberships for this user
-    const { data: clubRows, error: clubErr } = await supabase
-      .from('club_users')
-      .select('id')
-      .eq('user_id', userProfile.user_id);
+    try {
+      const { data: clubUser, error: clubErr } = await supabase
+        .from('club_users')
+        .select('id')
+        .eq('user_id', userProfile.user_id)
+        .single();
 
-    if (clubErr) {
-      console.error('[ManageBookings] club_users lookup failed:', clubErr);
+      if (clubErr || !clubUser) {
+        console.error('[ManageBookings] club_users lookup failed:', clubErr);
+        setCourts([]);
+        return;
+      }
+
+      const clubId = clubUser.id;
+
+      const { data: courtRows, error: courtErr } = await supabase
+        .from('courts')
+        .select('id, name, hourly_rate, surface_type, club_id')
+        .eq('club_id', clubId)
+        .order('name');
+
+      if (courtErr) {
+        console.error('[ManageBookings] courts load failed:', courtErr);
+        setCourts([]);
+        return;
+      }
+
+      const list = (courtRows ?? []) as Court[];
+      setCourts(list);
+      if (list.length > 0 && !list.some(c => c.id === selectedCourt)) {
+        setSelectedCourt(list[0].id);
+      }
+    } catch (e) {
+      console.error('[ManageBookings] fetchCourts exception:', e);
       setCourts([]);
-      return;
-    }
-
-    const clubIds = (clubRows ?? []).map((r: any) => r.id).filter(Boolean);
-    if (clubIds.length === 0) {
-      console.warn('[ManageBookings] user has no club memberships');
-      setCourts([]);
-      return;
-    }
-
-    // 2) courts owned by those clubs
-    const { data: courtRows, error: courtErr } = await supabase
-      .from('courts')
-      .select('id, name, hourly_rate, surface_type, club_id')
-      .in('club_id', clubIds)
-      .order('name');
-
-    if (courtErr) {
-      console.error('[ManageBookings] courts load failed:', courtErr);
-      setCourts([]);
-      return;
-    }
-
-    const list = (courtRows ?? []) as Court[];
-    setCourts(list);
-    if (list.length > 0 && !list.some((c) => c.id === selectedCourt)) {
-      setSelectedCourt(list[0].id);
     }
   };
 
@@ -147,7 +149,7 @@ export const ManageBookings: React.FC = () => {
       .order('full_name');
 
     if (error) {
-      console.error('[ManageBookings] fetch players failed:', error);
+      console.error('Error fetching players:', error);
       return;
     }
     setPlayers((data ?? []) as PlayerUser[]);
@@ -157,12 +159,17 @@ export const ManageBookings: React.FC = () => {
     if (!selectedCourt || !selectedDate) return;
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-
     const { data, error } = await supabase
       .from('court_slots')
       .select(`
         *,
-        courts (hourly_rate),
+        courts (
+          *,
+          club_users (
+            *,
+            countries (currency_code)
+          )
+        ),
         bookings (
           id,
           total_amount,
@@ -170,7 +177,11 @@ export const ManageBookings: React.FC = () => {
           payment_status,
           notes,
           player_id,
-          player_users (full_name, email, phone_number)
+          player_users (
+            full_name,
+            email,
+            phone_number
+          )
         )
       `)
       .eq('court_id', selectedCourt)
@@ -178,14 +189,13 @@ export const ManageBookings: React.FC = () => {
       .order('start_time');
 
     if (error) {
-      console.error('[ManageBookings] fetch slots failed:', error);
+      console.error('Error fetching slots:', error);
       return;
     }
 
     const rows = (data ?? []) as SlotRow[];
     const slotsWithPricing: EnrichedSlot[] = await Promise.all(
       rows.map(async (slot) => {
-        // (Optional) if you have a pricing function
         const { data: priceData } = await supabase.rpc('calculate_slot_price', {
           p_court_id: slot.court_id,
           p_date: dateStr,
@@ -231,14 +241,21 @@ export const ManageBookings: React.FC = () => {
         .from('bookings')
         .select(`
           *,
-          player_users (full_name, email, phone_number),
-          court_slots (start_time, end_time)
+          player_users (
+            full_name,
+            email,
+            phone_number
+          ),
+          court_slots (
+            start_time,
+            end_time
+          )
         `)
         .eq('slot_id', slotId)
         .maybeSingle();
 
       if (error) {
-        console.error('[ManageBookings] fetch booking details failed:', error);
+        console.error('Error fetching booking details:', error);
         return;
       }
 
@@ -256,11 +273,11 @@ export const ManageBookings: React.FC = () => {
         setShowBookingModal(true);
       }
     } catch (err) {
-      console.error('[ManageBookings] fetch booking details exception:', err);
+      console.error('Error fetching booking details:', err);
     }
   };
 
-  const updateBookingStatus = async (bookingId: string, newStatus: Booking['status']) => {
+  const updateBookingStatus = async (bookingId: string, newStatus: 'approved' | 'cancelled' | 'rejected' | 'pending') => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -283,7 +300,7 @@ export const ManageBookings: React.FC = () => {
       setBookingDetails(null);
       fetchAvailableSlots();
     } catch (err) {
-      console.error('[ManageBookings] update booking failed:', err);
+      console.error('Error updating booking:', err);
       alert('Error updating booking. Please try again.');
     } finally {
       setLoading(false);
@@ -326,7 +343,7 @@ export const ManageBookings: React.FC = () => {
       setBookingNotes('');
       fetchAvailableSlots();
     } catch (err) {
-      console.error('[ManageBookings] create booking failed:', err);
+      console.error('Error creating booking:', err);
       alert('Error creating booking. Please try again.');
     } finally {
       setLoading(false);
@@ -420,7 +437,7 @@ export const ManageBookings: React.FC = () => {
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center">
             <Clock className="h-5 w-5 text-green-600 mr-2" />
-            Available Slots — {format(selectedDate, 'EEEE, MMM d, yyyy')}
+            Available Slots - {format(selectedDate, 'EEEE, MMM d, yyyy')}
           </h2>
         </div>
         <div className="p-6">
@@ -561,6 +578,8 @@ export const ManageBookings: React.FC = () => {
                             ? 'bg-green-100 text-green-800'
                             : bookingDetails.status === 'pending'
                             ? 'bg-yellow-100 text-yellow-800'
+                            : bookingDetails.status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
                             : 'bg-red-100 text-red-800'
                         }`}
                       >
@@ -687,13 +706,13 @@ export const ManageBookings: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Notes (Optional)
                   </label>
-                  <textarea
-                    value={bookingNotes}
-                    onChange={(e) => setBookingNotes(e.target.value)}
-                    rows={3}
-                    placeholder="Add any special notes or requirements"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  />
+                    <textarea
+                      value={bookingNotes}
+                      onChange={(e) => setBookingNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Add any special notes or requirements"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
                 </div>
 
                 <div className="flex space-x-3 pt-4">
