@@ -15,6 +15,7 @@ import { PlayerDashboard } from './components/dashboard/PlayerDashboard';
 import { ClubDashboard } from './components/dashboard/ClubDashboard';
 import { OrganizerDashboard } from './components/dashboard/OrganizerDashboard';
 import { BookCourt } from './components/courts/BookCourt';
+import QueryProvider from './components/ui/QueryProvider';
 import { ManageCourts } from './components/courts/ManageCourts';
 import { ManageSlots } from './components/courts/ManageSlots';
 import { ManageBookings } from './components/bookings/ManageBookings';
@@ -66,7 +67,12 @@ function AppContent() {
       </div>
     </div>
   );
-
+  root.render(
+  <QueryProvider>
+    <App />
+  </QueryProvider>
+);
+  
   React.useEffect(() => {
     console.log('🔎 AppContent state:', { user, userProfile, loading });
   }, [user, userProfile, loading]);
