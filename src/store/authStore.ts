@@ -76,7 +76,7 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-// Player is created by DB trigger; fallback handles Club/Organizer/Admin on client
+// Upsert the row for the user's role (idempotent by user_id)
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
@@ -90,36 +90,64 @@ async function createRoleRowForUser(
     country_id: userData.country_id ?? null,
   };
 
-  if (userData.userType === 'Player') return;
+  if (userData.userType === 'Player') {
+    const { error } = await supabase
+      .from('player_users')
+      .upsert(
+        {
+          ...base,
+          full_name: userData.name ?? (user.user_metadata as any)?.name ?? null,
+          skill_level: userData.skill_level ?? null,
+        },
+        { onConflict: 'user_id' }
+      );
+    if (error) throw error;
+    return;
+  }
 
   if (userData.userType === 'Club') {
-    const { error } = await supabase.from('club_users').insert({
-      ...base,
-      club_name: userData.name,
-      address: userData.address ?? null,
-      website: userData.website ?? null,
-    });
+    const { error } = await supabase
+      .from('club_users')
+      .upsert(
+        {
+          ...base,
+          club_name: userData.name,
+          address: userData.address ?? null,
+          website: userData.website ?? null,
+        },
+        { onConflict: 'user_id' }
+      );
     if (error) throw error;
     return;
   }
 
   if (userData.userType === 'Organizer') {
-    const { error } = await supabase.from('organizer_users').insert({
-      ...base,
-      organizer_name: userData.name,
-      company_name: userData.company_name ?? null,
-      website: userData.website ?? null,
-    });
+    const { error } = await supabase
+      .from('organizer_users')
+      .upsert(
+        {
+          ...base,
+          organizer_name: userData.name,
+          company_name: userData.company_name ?? null,
+          website: userData.website ?? null,
+        },
+        { onConflict: 'user_id' }
+      );
     if (error) throw error;
     return;
   }
 
   if (userData.userType === 'Administrator') {
-    const { error } = await supabase.from('admin_users').insert({
-      ...base,
-      full_name: userData.name,
-      website: userData.website ?? null,
-    });
+    const { error } = await supabase
+      .from('admin_users')
+      .upsert(
+        {
+          ...base,
+          full_name: userData.name,
+          website: userData.website ?? null,
+        },
+        { onConflict: 'user_id' }
+      );
     if (error) throw error;
     return;
   }
@@ -183,6 +211,35 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
   };
 }
 
+// Ensure the correct role row exists; return the joined profile
+async function ensureProvisioned(user: User): Promise<UserProfile | null> {
+  let profile = await loadUserProfile(user);
+  if (profile) return profile;
+
+  const meta = (user.user_metadata ?? {}) as {
+    userType?: UserType; name?: string; phone_number?: string | null;
+    country_id?: string | null; address?: string | null;
+    website?: string | null; company_name?: string | null;
+    skill_level?: string | null;
+  };
+
+  const type: UserType = (meta.userType as UserType) ?? 'Player';
+  const profile_id = await getProfileIdByName(type);
+
+  await createRoleRowForUser(user, profile_id, {
+    userType: type,
+    name: meta.name ?? (user.email ?? 'User'),
+    phone_number: meta.phone_number ?? null,
+    country_id: meta.country_id ?? null,
+    address: meta.address ?? null,
+    website: meta.website ?? null,
+    company_name: meta.company_name ?? null,
+    skill_level: meta.skill_level ?? null,
+  });
+
+  return await loadUserProfile(user);
+}
+
 /* =============================== Store =================================== */
 
 export const useAuthStore = create<AuthState>(() => ({
@@ -204,25 +261,7 @@ export const useAuthStore = create<AuthState>(() => ({
       throw new Error('Please verify your email address. Check your inbox for the confirmation code.');
     }
 
-    let profile = await loadUserProfile(user);
-    if (!profile) {
-      const meta = (user.user_metadata ?? {}) as SignupMeta & { userType?: UserType };
-      if (meta.userType && meta.name) {
-        const profile_id = await getProfileIdByName(meta.userType);
-        await createRoleRowForUser(user, profile_id, {
-          userType: meta.userType,
-          name: meta.name!,
-          phone_number: meta.phone_number ?? null,
-          country_id: meta.country_id ?? null,
-          address: meta.address ?? null,
-          website: meta.website ?? null,
-          company_name: meta.company_name ?? null,
-          skill_level: meta.skill_level ?? null,
-        });
-        profile = await loadUserProfile(user);
-      }
-    }
-
+    const profile = await ensureProvisioned(user);
     useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 
@@ -240,7 +279,7 @@ export const useAuthStore = create<AuthState>(() => ({
           name: userData?.name ?? null,
           phone_number: userData?.phone_number ?? null,
           country_id: userData?.country_id ?? null,
-          profile_type: userData?.userType ?? 'Player', // your trigger/view uses this
+          profile_type: userData?.userType ?? 'Player', // your view uses this
           address: userData?.address ?? null,
           website: userData?.website ?? null,
           company_name: userData?.company_name ?? null,
@@ -302,7 +341,7 @@ export const useAuthStore = create<AuthState>(() => ({
         console.warn('[AUTH] audit insert failed (verify)', e);
       }
 
-      // 2) Verify with Supabase — IMPORTANT: type 'email'
+      // 2) Verify with Supabase — type 'email'
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token,
@@ -342,25 +381,8 @@ export const useAuthStore = create<AuthState>(() => ({
         }
       }
 
-      // 3) Load/provision profile
-      let profile = await loadUserProfile(user);
-      if (!profile) {
-        const meta = (user.user_metadata ?? {}) as SignupMeta & { userType?: UserType };
-        if (meta.userType && meta.name && meta.userType !== 'Player') {
-          const profile_id = await getProfileIdByName(meta.userType);
-          await createRoleRowForUser(user, profile_id, {
-            userType: meta.userType,
-            name: meta.name!,
-            phone_number: meta.phone_number ?? null,
-            country_id: meta.country_id ?? null,
-            address: meta.address ?? null,
-            website: meta.website ?? null,
-            company_name: meta.company_name ?? null,
-            skill_level: meta.skill_level ?? null,
-          });
-          profile = await loadUserProfile(user);
-        }
-      }
+      // 3) Provision/load profile (creates player/club/organizer/admin rows as needed)
+      const profile = await ensureProvisioned(user);
 
       // 4) Mark validated (non-blocking)
       try {
@@ -422,7 +444,7 @@ export const useAuthStore = create<AuthState>(() => ({
       }
 
       // If confirmations OFF, there may be a session now
-      const profile = await loadUserProfile(sessionUser);
+      const profile = await ensureProvisioned(sessionUser);
       useAuthStore.setState({ user: sessionUser, userProfile: profile ?? null, loading: false });
       return 'signed_in';
     } catch (err) {
@@ -447,7 +469,7 @@ export const useAuthStore = create<AuthState>(() => ({
       return;
     }
 
-    const profile = await loadUserProfile(user);
+    const profile = await ensureProvisioned(user);
     useAuthStore.setState({ user, userProfile: profile ?? null, loading: false });
   },
 }));
