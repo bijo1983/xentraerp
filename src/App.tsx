@@ -1,3 +1,4 @@
+// src/App.tsx
 import React from 'react';
 import {
   BrowserRouter,
@@ -23,7 +24,7 @@ import { ApproveRequests } from './components/bookings/ApproveRequests';
 import { TournamentsList } from './components/tournaments/TournamentsList';
 import { CreateTournament } from './components/tournaments/CreateTournament';
 import TournamentDetails from './components/tournaments/tournamentdetails';
-import EditTournament from './components/tournaments/EditTournament'; 
+import EditTournament from './components/tournaments/EditTournament';
 import { ProfileSettings } from './components/profile/ProfileSettings';
 import { FindClubs } from './components/clubs/FindClubs';
 import { Analytics } from './components/analytics/Analytics';
@@ -35,8 +36,36 @@ import { Login } from './components/auth/Login';
 
 function AppContent() {
   const { user, userProfile, loading } = useAuthStore();
+
   const [activeView, setActiveView] = React.useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+
+  // NEW: track document visibility to pause redirects while hidden
+  const [isDocVisible, setIsDocVisible] = React.useState(
+    typeof document !== 'undefined' ? document.visibilityState === 'visible' : true
+  );
+  React.useEffect(() => {
+    const onVis = () => setIsDocVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  // NEW: remember the last known authenticated user to guard against
+  // short-lived auth gaps that happen on tab switches/focus changes.
+  const lastUserRef = React.useRef<typeof user>(null);
+  React.useEffect(() => {
+    if (user) lastUserRef.current = user;
+  }, [user]);
+
+  // NEW: simple spinner component (used in multiple guarded branches)
+  const Spinner = (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">🔄 Loading Badminton Booking...</p>
+      </div>
+    </div>
+  );
 
   React.useEffect(() => {
     console.log('🔎 AppContent state:', { user, userProfile, loading });
@@ -51,29 +80,35 @@ function AppContent() {
     return <SupabaseSetup />;
   }
 
+  // While the store is loading, render spinner
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">🔄 Loading Badminton Booking...</p>
-        </div>
-      </div>
-    );
+    return Spinner;
   }
 
+  // NEW: If user is momentarily null (e.g., tab switch) but we had a user before,
+  // or the tab is hidden, do NOT redirect yet — show spinner instead.
+  const transientAuthGap = !user && !!lastUserRef.current;
+
   if (!user) {
+    if (transientAuthGap || !isDocVisible) {
+      return Spinner; // hold state; avoid Navigate while hidden/unstable
+    }
+    // Safe to redirect only when visible AND not in a transient gap
     return <Navigate to="/login" replace />;
   }
 
+  // If we have a user but no profile (maybe still initializing or RLS catching up),
+  // keep a gentle holding state instead of rendering the error immediately.
   if (user && !userProfile) {
     return (
       <div className="p-6 text-center">
-        ❌ No profile found for your account.
+        ⏳ Setting up your profile…
         <br />
-        Please contact support or re-register.
+        If this takes longer than expected, please refresh.
         <br />
-        <pre className="text-left mt-4 bg-gray-100 p-4 rounded text-sm">{JSON.stringify(user, null, 2)}</pre>
+        <pre className="text-left mt-4 bg-gray-100 p-4 rounded text-sm">
+          {JSON.stringify({ id: user.id, email: (user as any)?.email }, null, 2)}
+        </pre>
       </div>
     );
   }
@@ -158,10 +193,11 @@ function App() {
         {/* Tournament Routes */}
         <Route path="/tournaments" element={<TournamentsList />} />
         <Route path="/tournaments/:id" element={<TournamentDetails />} />
-        <Route path="/tournaments/edit/:id" element={<EditTournament />} /> {/* ✅ NEW */}
+        <Route path="/tournaments/edit/:id" element={<EditTournament />} />
 
         {/* Main entry point */}
         <Route path="/*" element={<AppContent />} />
+
         {/* Register */}
         <Route path="/register" element={<Register />} />
       </Routes>
