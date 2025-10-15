@@ -23,7 +23,8 @@ export type UserProfile = {
 type SignUpStatus = 'needs_verification' | 'signed_in';
 
 type SignupMeta = {
-  userType?: UserType;
+  userType?: UserType;          // our app-friendly key
+  profile_type?: UserType;      // Supabase metadata key you've stored
   name?: string;
   phone_number?: string | null;
   country_id?: string | null;
@@ -70,14 +71,11 @@ async function getProfileIdByName(name: UserType): Promise<string> {
   return id;
 }
 
-/**
- * Create/ensure role row (idempotent) — upserts on user_id.
- * Adjust payload keys if your table schemas differ.
- */
+/** Upsert role row (idempotent) — adjust payload fields to your schema if needed */
 async function createRoleRowForUser(
   user: User,
   profile_id: string,
-  userData: Required<Pick<SignupMeta, 'userType' | 'name'>> & SignupMeta
+  userData: Required<Pick<SignupMeta, 'name'>> & { userType: UserType } & SignupMeta
 ): Promise<void> {
   const base = {
     user_id: user.id,
@@ -179,19 +177,14 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
 
 /** Ensure a role row exists, then read the aggregated profile */
 async function ensureProvisioned(user: User): Promise<UserProfile | null> {
-  // Try to load first
+  // Try to load first (in case it already exists)
   let profile = await loadUserProfile(user);
   if (profile) return profile;
 
-  // Derive desired role from metadata; default to Player
-  const meta = (user.user_metadata ?? {}) as {
-    userType?: UserType; name?: string; phone_number?: string | null;
-    country_id?: string | null; address?: string | null;
-    website?: string | null; company_name?: string | null;
-    skill_level?: string | null;
-  };
+  // Derive desired role from metadata; prefer profile_type (your metadata), then userType
+  const meta = (user.user_metadata ?? {}) as SignupMeta;
+  const type: UserType = ((meta.profile_type as UserType) || (meta.userType as UserType) || 'Player');
 
-  const type: UserType = (meta.userType as UserType) ?? 'Player';
   const profile_id = await getProfileIdByName(type);
 
   console.log('[AUTH] provision:start', { user_id: user.id, type, meta });
@@ -252,7 +245,7 @@ export const useAuthStore = create<AuthState>(() => ({
           name: userData?.name ?? null,
           phone_number: userData?.phone_number ?? null,
           country_id: userData?.country_id ?? null,
-          profile_type: userData?.userType ?? 'Player', // your view uses this
+          profile_type: userData?.profile_type ?? userData?.userType ?? 'Player', // store profile_type
           address: userData?.address ?? null,
           website: userData?.website ?? null,
           company_name: userData?.company_name ?? null,
@@ -266,7 +259,7 @@ export const useAuthStore = create<AuthState>(() => ({
       throw error;
     }
 
-    // Audit "sent" (non-blocking, no ?select)
+    // Audit "sent" (no ?select)
     supabase.from('email_otp_audit').insert({
       email,
       context: 'email_otp',
@@ -285,7 +278,7 @@ export const useAuthStore = create<AuthState>(() => ({
 
     dbg('otp:verify:start', { email, token_len: token.length });
 
-    // Audit attempt (non-blocking; insert only)
+    // Audit attempt (insert only; no ?select)
     (async () => {
       try {
         const tokenHash = await sha256Hex(token);
@@ -329,7 +322,7 @@ export const useAuthStore = create<AuthState>(() => ({
     // Provision/load profile
     const profile = await ensureProvisioned(user);
 
-    // Audit validated (separate insert; avoid updates/selects)
+    // Audit validated (second insert; no ?select)
     supabase.from('email_otp_audit').insert({
       email,
       context: 'email_otp',
@@ -356,7 +349,7 @@ export const useAuthStore = create<AuthState>(() => ({
             name: userData?.name ?? null,
             phone_number: userData?.phone_number ?? null,
             country_id: userData?.country_id ?? null,
-            profile_type: userData?.userType ?? 'Player',
+            profile_type: userData?.profile_type ?? userData?.userType ?? 'Player',
             address: userData?.address ?? null,
             website: userData?.website ?? null,
             company_name: userData?.company_name ?? null,
@@ -388,7 +381,8 @@ export const useAuthStore = create<AuthState>(() => ({
 
   /* --------------------------------- SIGN OUT ---------------------------- */
   signOut: async () => {
-    await supabase.auth.signOut();
+    // Best-effort: ignore 403 "user_not_found" from stale JWT
+    try { await supabase.auth.signOut(); } catch (e) { console.warn('[AUTH] signOut ignored', e); }
     useAuthStore.setState({ user: null, userProfile: null, loading: false });
   },
 
