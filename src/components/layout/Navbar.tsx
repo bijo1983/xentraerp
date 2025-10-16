@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, LogOut, Settings, Menu } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import badmintonLogo from '../../assets/logos/badmintonbooking-logo.svg';
+import badmintonLogo from '../../assets/logo/badminton-booking-logo.svg';
 
 interface NavbarProps {
   onMenuClick?: () => void;
@@ -34,11 +34,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
             <div className="flex-shrink-0 flex items-center space-x-2">
               <img
                 src={badmintonLogo}
-                alt="BadmintonBooking logo"
+                alt="Badminton Booking logo"
                 className="h-8 w-auto sm:h-10"
               />
               <span className="text-lg sm:text-xl font-bold text-gray-900">
-                BadmintonBooking
+                Badminton Booking
               </span>
             </div>
           </div>

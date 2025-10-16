@@ -143,8 +143,6 @@ function AppContent() {
     }
   };
 
-  const currentYear = new Date().getFullYear();
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar onMenuClick={() => setIsSidebarOpen(true)} />
@@ -160,25 +158,18 @@ function AppContent() {
         </main>
       </div>
       <footer className="bg-white border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 text-sm text-gray-600 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            © {currentYear} Innovegic Consultancy and IT Services Co W.L.L. All rights reserved.
-          </span>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 text-sm text-gray-600 space-y-2">
+          <p className="font-medium text-gray-700">© 2025 Badminton Booking. All rights reserved.</p>
+          <p>Powered by Innovegic Consultancy and IT Services Co W.L.L.</p>
+          <p>
+            Contact:{' '}
             <a
-              href="mailto:info@innovegicit.com"
+              href="mailto:info@innovegict.com"
               className="text-emerald-600 hover:text-emerald-700 transition-colors"
             >
-              info@innovegicit.com
+              info@innovegict.com
             </a>
-            <span className="hidden sm:inline text-gray-300">|</span>
-            <a
-              href="tel:+97338991983"
-              className="text-emerald-600 hover:text-emerald-700 transition-colors"
-            >
-              +973-38991983
-            </a>
-          </div>
+          </p>
         </div>
       </footer>
     </div>

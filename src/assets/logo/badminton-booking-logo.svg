@@ -1,0 +1,34 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Badminton Booking Logo</title>
+  <desc id="desc">Colorful overlapping circles with a stylised badminton shuttlecock.</desc>
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <linearGradient id="pinkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+    <linearGradient id="orangeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fcd34d" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="rgba(15, 23, 42, 0.18)" />
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <circle cx="220" cy="210" r="140" fill="url(#blueGradient)" opacity="0.95" />
+    <circle cx="310" cy="220" r="130" fill="url(#pinkGradient)" opacity="0.82" />
+    <circle cx="200" cy="320" r="115" fill="url(#orangeGradient)" opacity="0.72" />
+  </g>
+  <g transform="translate(130 130) scale(1.05)" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M80 160 L192 76" />
+    <path d="M104 182 L204 104" />
+    <path d="M128 198 L212 132" />
+    <path d="M152 206 L216 162" />
+    <path d="M72 146 C70 136 74 122 86 114 L182 50 C212 30 248 36 264 66 C274 84 274 108 262 124 L188 220 C174 238 150 244 132 234 C110 222 86 190 80 168" />
+    <path d="M66 150 L126 214" />
+  </g>
+</svg>
