@@ -36,16 +36,6 @@ function AppContent() {
   const [activeView, setActiveView] = React.useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
-  // Track document visibility to avoid redirects while hidden
-  const [isDocVisible, setIsDocVisible] = React.useState(
-    typeof document !== 'undefined' ? document.visibilityState === 'visible' : true
-  );
-  React.useEffect(() => {
-    const onVis = () => setIsDocVisible(document.visibilityState === 'visible');
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, []);
-
   // Remember last known user to guard against short-lived auth gaps
   const lastUserRef = React.useRef<typeof user>(null);
   React.useEffect(() => {
@@ -79,10 +69,10 @@ function AppContent() {
     return Spinner;
   }
 
-  // Avoid redirect while hidden or during transient auth gap
+  // Avoid redirect during transient auth gap
   const transientAuthGap = !user && !!lastUserRef.current;
   if (!user) {
-    if (transientAuthGap || !isDocVisible) {
+    if (transientAuthGap) {
       return Spinner;
     }
     return <Navigate to="/login" replace />;
