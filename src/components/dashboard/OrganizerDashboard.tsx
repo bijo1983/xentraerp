@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Trophy, MapPin, Users, DollarSign, Clock, Plus } from 'lucide-react';
+import { Calendar, Trophy, MapPin, Users, DollarSign, Clock, Plus, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 
@@ -13,6 +13,13 @@ export const OrganizerDashboard: React.FC = () => {
   });
 
   const [recentTournaments, setRecentTournaments] = useState<any[]>([]);
+  type LifecycleState = {
+    approval_status: 'pending' | 'approved' | 'rejected';
+    payment_status: 'unpaid' | 'paid' | 'overdue';
+    is_visible: boolean;
+  };
+
+  const [lifecycle, setLifecycle] = useState<LifecycleState | null>(null);
 
   useEffect(() => {
     if (userProfile) {
@@ -22,6 +29,12 @@ export const OrganizerDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     if (!userProfile) return;
+
+    const lifecyclePromise = supabase
+      .from('organizer_users')
+      .select('approval_status, payment_status, is_visible')
+      .eq('id', userProfile.id)
+      .maybeSingle();
 
     // Fetch dashboard stats using stored procedure
     const { data: statsData, error: statsError } = await supabase
@@ -35,6 +48,13 @@ export const OrganizerDashboard: React.FC = () => {
         upcomingEvents: stat.upcoming_events || 0,
         totalRevenue: stat.total_revenue || 0,
       });
+    }
+
+    const { data: lifecycleData, error: lifecycleError } = await lifecyclePromise;
+    if (lifecycleError) {
+      console.error('Organizer lifecycle fetch error:', lifecycleError);
+    } else if (lifecycleData) {
+      setLifecycle(lifecycleData as LifecycleState);
     }
 
     // Fetch tournaments organized by this organizer for display
@@ -87,6 +107,61 @@ export const OrganizerDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {lifecycle && (
+        (() => {
+          const alerts: { message: string; tone: 'warning' | 'danger' }[] = [];
+
+          if (lifecycle.approval_status === 'pending') {
+            alerts.push({
+              message: 'Your organizer profile is pending administrator approval. Event listings remain hidden until approval is granted.',
+              tone: 'warning',
+            });
+          }
+
+          if (lifecycle.approval_status === 'rejected') {
+            alerts.push({
+              message: 'Your organizer profile was rejected. Please contact the platform administrator for assistance.',
+              tone: 'danger',
+            });
+          }
+
+          if (lifecycle.approval_status === 'approved' && !lifecycle.is_visible) {
+            alerts.push({
+              message: 'Your organizer profile is currently hidden from public view. Coordinate with the administrator to publish it.',
+              tone: 'warning',
+            });
+          }
+
+          if (lifecycle.payment_status !== 'paid') {
+            alerts.push({
+              message: `Your subscription payment is marked as ${lifecycle.payment_status}. Please work with the administrator to update your payment status.`,
+              tone: lifecycle.payment_status === 'overdue' ? 'danger' : 'warning',
+            });
+          }
+
+          if (alerts.length === 0) return null;
+
+          const severity = alerts.some(alert => alert.tone === 'danger') ? 'danger' : 'warning';
+          const wrapperClasses =
+            severity === 'danger'
+              ? 'bg-rose-50 border-rose-200 text-rose-700'
+              : 'bg-amber-50 border-amber-200 text-amber-800';
+
+          return (
+            <div className={`border rounded-xl p-4 sm:p-5 shadow-sm ${wrapperClasses}`}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 mt-1 flex-shrink-0" />
+                <div className="space-y-2 text-sm">
+                  {alerts.map((alert, index) => (
+                    <p key={index}>{alert.message}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

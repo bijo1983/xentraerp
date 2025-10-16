@@ -13,7 +13,8 @@ import {
   List,
   CheckSquare,
   BookOpen,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { Link } from "react-router-dom";
@@ -76,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
       case 'Administrator':
         return [
           ...baseItems,
-          { id: 'users', label: 'Users', icon: Users },
+          { id: 'admin-console', label: 'Admin Console', icon: ShieldCheck },
           { id: 'courts', label: 'All Courts', icon: MapPin },
           { id: 'tournaments', label: 'All Tournaments', icon: Trophy },
           { id: 'analytics', label: 'Analytics', icon: BarChart3 },
