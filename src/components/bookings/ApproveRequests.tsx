@@ -112,13 +112,13 @@ export const ApproveRequests: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Approve Booking Requests</h1>
-          <p className="text-gray-600 mt-1">Review and approve pending court bookings</p>
+          <h1 className="text-3xl font-bold text-text-primary">Approve Booking Requests</h1>
+          <p className="text-text-secondary mt-1">Review and approve pending court bookings</p>
         </div>
         {pendingRequests.length > 0 && (
-          <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
-            <AlertCircle className="h-5 w-5 text-yellow-600" />
-            <span className="font-semibold text-yellow-900">
+          <div className="flex items-center gap-2 bg-accent-50 border border-accent-200 rounded-lg px-4 py-2">
+            <AlertCircle className="h-5 w-5 text-accent-500" />
+            <span className="font-semibold text-accent-700">
               {pendingRequests.length} Pending {pendingRequests.length === 1 ? 'Request' : 'Requests'}
             </span>
           </div>
@@ -127,74 +127,74 @@ export const ApproveRequests: React.FC = () => {
 
       {loading ? (
         <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
         </div>
       ) : pendingRequests.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">All caught up!</h3>
-          <p className="text-gray-600">No pending booking requests at the moment.</p>
+        <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-12 text-center">
+          <CheckCircle className="h-12 w-12 text-primary-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-text-primary mb-2">All caught up!</h3>
+          <p className="text-text-secondary">No pending booking requests at the moment.</p>
         </div>
       ) : (
         <div className="grid gap-6">
           {pendingRequests.map((booking) => (
             <div
               key={booking.booking_id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+              className="bg-background rounded-xl shadow-sm border border-background-subtle overflow-hidden hover:shadow-md transition-shadow"
             >
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <User className="h-5 w-5 text-emerald-600" />
+                      <User className="h-5 w-5 text-primary-500" />
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-lg font-semibold text-text-primary">
                           {booking.player_name}
                         </h3>
-                        <p className="text-sm text-gray-600">{booking.player_email}</p>
+                        <p className="text-sm text-text-secondary">{booking.player_email}</p>
                         {booking.player_phone && (
-                          <p className="text-sm text-gray-600">{booking.player_phone}</p>
+                          <p className="text-sm text-text-secondary">{booking.player_phone}</p>
                         )}
                       </div>
                     </div>
                   </div>
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-yellow-100 text-yellow-800">
+                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-accent-100 text-accent-700">
                     Pending Approval
                   </span>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <div className="bg-background-subtle rounded-lg p-4 mb-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center text-gray-700">
-                      <MapPin className="h-5 w-5 text-emerald-600 mr-2" />
+                    <div className="flex items-center text-text-primary">
+                      <MapPin className="h-5 w-5 text-primary-500 mr-2" />
                       <div>
-                        <p className="text-xs text-gray-500">Court</p>
+                        <p className="text-xs text-text-secondary">Court</p>
                         <p className="font-medium">{booking.court_name}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center text-gray-700">
-                      <Calendar className="h-5 w-5 text-emerald-600 mr-2" />
+                    <div className="flex items-center text-text-primary">
+                      <Calendar className="h-5 w-5 text-primary-500 mr-2" />
                       <div>
-                        <p className="text-xs text-gray-500">Date</p>
+                        <p className="text-xs text-text-secondary">Date</p>
                         <p className="font-medium">{booking.slot_date}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center text-gray-700">
-                      <Clock className="h-5 w-5 text-emerald-600 mr-2" />
+                    <div className="flex items-center text-text-primary">
+                      <Clock className="h-5 w-5 text-primary-500 mr-2" />
                       <div>
-                        <p className="text-xs text-gray-500">Time</p>
+                        <p className="text-xs text-text-secondary">Time</p>
                         <p className="font-medium">
                           {booking.slot_start_time} - {booking.slot_end_time}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center text-gray-700">
-                      <DollarSign className="h-5 w-5 text-emerald-600 mr-2" />
+                    <div className="flex items-center text-text-primary">
+                      <DollarSign className="h-5 w-5 text-primary-500 mr-2" />
                       <div>
-                        <p className="text-xs text-gray-500">Amount</p>
+                        <p className="text-xs text-text-secondary">Amount</p>
                         <p className="font-medium">{formatPrice(booking.total_amount)}</p>
                       </div>
                     </div>
@@ -202,8 +202,8 @@ export const ApproveRequests: React.FC = () => {
                 </div>
 
 
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-500">
+                <div className="flex items-center justify-between pt-4 border-t border-background-subtle">
+                  <p className="text-xs text-text-secondary">
                     Requested on {new Date(booking.booking_created_at).toLocaleDateString()} at{' '}
                     {new Date(booking.booking_created_at).toLocaleTimeString()}
                   </p>
@@ -219,7 +219,7 @@ export const ApproveRequests: React.FC = () => {
                     <button
                       onClick={() => approveBooking(booking)}
                       disabled={processingId === booking.booking_id}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CheckCircle className="h-4 w-4" />
                       Approve

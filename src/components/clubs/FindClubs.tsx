@@ -135,25 +135,25 @@ export const FindClubs: React.FC = () => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">{club.club_name}</h3>
-          <div className="flex items-center text-gray-600 mb-2">
+          <h3 className="text-xl font-semibold text-text-primary mb-2">{club.club_name}</h3>
+          <div className="flex items-center text-text-secondary mb-2">
             <MapPin className="h-4 w-4 mr-2" />
             <span>{club.countries?.name || 'Location not specified'}</span>
           </div>
           {club.phone_number && (
-            <div className="flex items-center text-gray-600 mb-2">
+            <div className="flex items-center text-text-secondary mb-2">
               <Phone className="h-4 w-4 mr-2" />
               <span>{club.phone_number}</span>
             </div>
           )}
           {club.website && (
-            <div className="flex items-center text-gray-600">
+            <div className="flex items-center text-text-secondary">
               <Globe className="h-4 w-4 mr-2" />
               <a
                 href={club.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800"
+                className="text-secondary-500 hover:text-secondary-600"
               >
                 Visit Website
               </a>
@@ -163,34 +163,34 @@ export const FindClubs: React.FC = () => {
         <div className="text-right">
           <div className="flex items-center mb-2">
             <Star className="h-4 w-4 text-yellow-500 mr-1" />
-            <span className="text-sm text-gray-600">4.5</span>
+            <span className="text-sm text-text-secondary">4.5</span>
           </div>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-text-secondary">
             {club.courts?.length || 0} courts
           </span>
         </div>
       </div>
 
-      {club.address && <p className="text-gray-600 mb-4">{club.address}</p>}
+      {club.address && <p className="text-text-secondary mb-4">{club.address}</p>}
 
       {club.courts && club.courts.length > 0 && (
         <div className="mb-4">
-          <h4 className="font-medium text-gray-900 mb-2">Available Courts</h4>
+          <h4 className="font-medium text-text-primary mb-2">Available Courts</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {club.courts.slice(0, 4).map((court: any) => (
-              <div key={court.id} className="bg-gray-50 rounded-lg p-3">
+              <div key={court.id} className="bg-background-subtle rounded-lg p-3">
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-sm">{court.name}</span>
-                  <span className="text-sm text-emerald-600">${court.hourly_rate}/hr</span>
+                  <span className="text-sm text-primary-500">${court.hourly_rate}/hr</span>
                 </div>
-                <div className="text-xs text-gray-600 mt-1">
+                <div className="text-xs text-text-secondary mt-1">
                   {court.surface_type} • {court.is_available ? 'Available' : 'Unavailable'}
                 </div>
               </div>
             ))}
           </div>
           {club.courts.length > 4 && (
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-text-secondary mt-2">
               +{club.courts.length - 4} more courts
             </p>
           )}
@@ -203,14 +203,14 @@ export const FindClubs: React.FC = () => {
           disabled={joinRequests.has(club.id)}
           className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
             joinRequests.has(club.id)
-              ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-              : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              ? 'bg-background-subtle text-text-secondary cursor-not-allowed'
+              : 'bg-primary-500 text-white hover:bg-primary-600'
           }`}
         >
           <Send className="h-4 w-4" />
           <span>{joinRequests.has(club.id) ? 'Request Sent' : 'Request to Join'}</span>
         </button>
-        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+        <button className="px-4 py-2 border border-background-subtle text-text-primary rounded-lg hover:bg-background-subtle transition-colors">
           View Details
         </button>
       </div>
@@ -220,34 +220,34 @@ export const FindClubs: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-8 text-white">
+      <div className="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 rounded-xl p-8 text-white">
         <h1 className="text-3xl font-bold mb-2">Find Clubs</h1>
-        <p className="text-blue-100">Discover and join badminton clubs in your area</p>
+        <p className="text-secondary-100">Discover and join badminton clubs in your area</p>
       </div>
 
       {/* Search + Country */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search Clubs</label>
+            <label className="block text-sm font-medium text-text-primary mb-2">Search Clubs</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-text-secondary" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-3 border border-background-subtle rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500"
                 placeholder="Search by club name..."
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+            <label className="block text-sm font-medium text-text-primary mb-2">Country</label>
             <select
               value={selectedCountry}
               onChange={(e) => setSelectedCountry(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-3 border border-background-subtle rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-secondary-500"
             >
               <option value="">All Countries</option>
               {countries.map((country) => (
@@ -264,7 +264,7 @@ export const FindClubs: React.FC = () => {
       {/* Results */}
       <div>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">
+          <h2 className="text-xl font-semibold text-text-primary">
             {loading ? 'Searching...' : `${clubs.length} clubs found`}
           </h2>
         </div>
@@ -273,10 +273,10 @@ export const FindClubs: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
-                <div className="h-6 bg-gray-200 rounded mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded mb-4"></div>
-                <div className="h-10 bg-gray-200 rounded"></div>
+                <div className="h-6 bg-background-subtle rounded mb-4"></div>
+                <div className="h-4 bg-background-subtle rounded mb-2"></div>
+                <div className="h-4 bg-background-subtle rounded mb-4"></div>
+                <div className="h-10 bg-background-subtle rounded"></div>
               </div>
             ))}
           </div>
@@ -288,9 +288,9 @@ export const FindClubs: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12">
-            <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Clubs Found</h3>
-            <p className="text-gray-600">
+            <MapPin className="h-12 w-12 text-text-secondary mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-text-primary mb-2">No Clubs Found</h3>
+            <p className="text-text-secondary">
               Try setting Country to “All Countries”, or check RLS policies / data.
             </p>
           </div>

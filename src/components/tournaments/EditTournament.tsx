@@ -155,7 +155,7 @@ const EditTournament = () => {
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
-        <button type="submit" disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded">
+        <button type="submit" disabled={saving} className="bg-primary-500 text-white px-4 py-2 rounded hover:bg-primary-600 transition-colors">
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </form>

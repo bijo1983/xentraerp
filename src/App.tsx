@@ -43,10 +43,10 @@ function AppContent() {
   }, [user]);
 
   const Spinner = (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">🔄 Loading Badminton Booking...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+        <p className="text-text-secondary">🔄 Loading Badminton Booking...</p>
       </div>
     </div>
   );
@@ -81,12 +81,12 @@ function AppContent() {
   // User exists but profile not ready yet
   if (user && !userProfile) {
     return (
-      <div className="p-6 text-center">
+      <div className="p-6 text-center text-text-secondary">
         ⏳ Setting up your profile…
         <br />
         If this takes longer than expected, please refresh.
         <br />
-        <pre className="text-left mt-4 bg-gray-100 p-4 rounded text-sm">
+        <pre className="text-left mt-4 bg-background-subtle p-4 rounded text-sm text-text-primary">
           {JSON.stringify({ id: user.id, email: (user as any)?.email }, null, 2)}
         </pre>
       </div>
@@ -135,8 +135,8 @@ function AppContent() {
         return (
           <div className="flex items-center justify-center h-96">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Coming Soon</h2>
-              <p className="text-gray-600">This feature is under development.</p>
+              <h2 className="text-2xl font-bold text-text-primary mb-2">Coming Soon</h2>
+              <p className="text-text-secondary">This feature is under development.</p>
             </div>
           </div>
         );
@@ -144,7 +144,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-background-subtle flex flex-col">
       <Navbar onMenuClick={() => setIsSidebarOpen(true)} />
       <div className="flex flex-1">
         <Sidebar
@@ -157,15 +157,15 @@ function AppContent() {
           <div className="max-w-7xl mx-auto">{renderMainContent()}</div>
         </main>
       </div>
-      <footer className="bg-white border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 text-sm text-gray-600 space-y-2">
-          <p className="font-medium text-gray-700">© 2025 Badminton Booking. All rights reserved.</p>
+      <footer className="bg-background border-t border-background-subtle">
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 text-sm text-text-secondary space-y-2">
+          <p className="font-medium text-text-primary">© 2025 Badminton Booking. All rights reserved.</p>
           <p>Powered by Innovegic Consultancy and IT Services Co W.L.L.</p>
           <p>
             Contact:{' '}
             <a
               href="mailto:info@innovegict.com"
-              className="text-emerald-600 hover:text-emerald-700 transition-colors"
+              className="text-primary-500 hover:text-primary-600 transition-colors"
             >
               info@innovegict.com
             </a>

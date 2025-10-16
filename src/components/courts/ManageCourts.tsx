@@ -156,17 +156,17 @@ export const ManageCourts: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-blue-600 rounded-xl p-8 text-white">
+      <div className="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 rounded-xl p-8 text-white">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Manage Courts</h1>
-            <p className="text-emerald-100">Add and manage your club's court facilities</p>
+            <p className="text-secondary-100">Add and manage your club's court facilities</p>
           </div>
           <div className="flex items-center space-x-4">
-            <CurrencySelector compact className="bg-white/10 backdrop-blur-sm rounded-lg p-3" />
+            <CurrencySelector compact className="bg-background/10 backdrop-blur-sm rounded-lg p-3" />
             <button
               onClick={() => setShowAddForm(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white rounded-lg hover:bg-white/30 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-background/20 backdrop-blur-sm text-white rounded-lg hover:bg-background/30 transition-colors"
             >
               <Plus className="h-5 w-5" />
               <span>Add Court</span>
@@ -177,14 +177,14 @@ export const ManageCourts: React.FC = () => {
 
       {/* Add/Edit Form */}
       {showAddForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-text-primary">
               {editingCourt ? 'Edit Court' : 'Add New Court'}
             </h2>
             <button
               onClick={resetForm}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-text-secondary hover:text-text-primary"
             >
               ✕
             </button>
@@ -193,7 +193,7 @@ export const ManageCourts: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Court Name *
                 </label>
                 <input
@@ -201,32 +201,32 @@ export const ManageCourts: React.FC = () => {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder="e.g., Court A"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Location
                 </label>
                 <input
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder="e.g., Building A, Level 2"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Surface Type
                 </label>
                 <select
                   value={formData.surface_type}
                   onChange={(e) => setFormData({ ...formData, surface_type: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   {surfaceTypes.map(type => (
                     <option key={type} value={type}>{type}</option>
@@ -235,7 +235,7 @@ export const ManageCourts: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Hourly Rate (Amount only)
                 </label>
                 <input
@@ -245,17 +245,17 @@ export const ManageCourts: React.FC = () => {
                   required
                   value={formData.hourly_rate}
                   onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder="0.00"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-text-secondary mt-1">
                   Enter amount only. Currency will be displayed based on your settings.
                 </p>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-text-primary mb-3">
                 Amenities
               </label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -265,9 +265,9 @@ export const ManageCourts: React.FC = () => {
                       type="checkbox"
                       checked={formData.amenities.includes(amenity)}
                       onChange={() => toggleAmenity(amenity)}
-                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">{amenity}</span>
+                    <span className="text-sm text-text-primary">{amenity}</span>
                   </label>
                 ))}
               </div>
@@ -279,9 +279,9 @@ export const ManageCourts: React.FC = () => {
                   type="checkbox"
                   checked={formData.is_available}
                   onChange={(e) => setFormData({ ...formData, is_available: e.target.checked })}
-                  className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
                 />
-                <span className="text-sm text-gray-700">Court is available for booking</span>
+                <span className="text-sm text-text-primary">Court is available for booking</span>
               </label>
             </div>
 
@@ -289,14 +289,14 @@ export const ManageCourts: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? 'Saving...' : (editingCourt ? 'Update Court' : 'Add Court')}
               </button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                className="px-6 py-3 border border-background-subtle bg-background-subtle text-text-primary rounded-lg hover:bg-background transition-colors"
               >
                 Cancel
               </button>
@@ -306,10 +306,10 @@ export const ManageCourts: React.FC = () => {
       )}
 
       {/* Courts List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-            <MapPin className="h-5 w-5 text-emerald-600 mr-2" />
+      <div className="bg-background rounded-xl shadow-sm border border-background-subtle">
+        <div className="p-6 border-b border-background-subtle">
+          <h2 className="text-xl font-semibold text-text-primary flex items-center">
+            <MapPin className="h-5 w-5 text-primary-500 mr-2" />
             Your Courts ({courts.length})
           </h2>
         </div>
@@ -317,12 +317,12 @@ export const ManageCourts: React.FC = () => {
           {courts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {courts.map((court) => (
-                <div key={court.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                <div key={court.id} className="border border-background-subtle rounded-lg p-6 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="font-semibold text-gray-900">{court.name}</h3>
+                      <h3 className="font-semibold text-text-primary">{court.name}</h3>
                       {court.location && (
-                        <p className="text-sm text-gray-600">{court.location}</p>
+                        <p className="text-sm text-text-secondary">{court.location}</p>
                       )}
                     </div>
                     <div className="flex space-x-2">
@@ -350,17 +350,17 @@ export const ManageCourts: React.FC = () => {
 
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Surface:</span>
+                      <span className="text-text-secondary">Surface:</span>
                       <span className="font-medium">{court.surface_type}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Rate:</span>
-                      <span className="font-medium text-emerald-600">
+                      <span className="text-text-secondary">Rate:</span>
+                      <span className="font-medium text-primary-500">
                         {formatPrice(court.hourly_rate)}/hr
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Status:</span>
+                      <span className="text-text-secondary">Status:</span>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         court.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
@@ -371,12 +371,12 @@ export const ManageCourts: React.FC = () => {
 
                   {court.amenities && court.amenities.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-gray-700 mb-2">Amenities:</p>
+                      <p className="text-xs font-medium text-text-primary mb-2">Amenities:</p>
                       <div className="flex flex-wrap gap-1">
                         {court.amenities.map((amenity: string, index: number) => (
                           <span
                             key={index}
-                            className="px-2 py-1 bg-gray-100 text-xs text-gray-600 rounded"
+                            className="px-2 py-1 bg-background-subtle text-xs text-text-secondary rounded"
                           >
                             {amenity}
                           </span>
@@ -389,12 +389,12 @@ export const ManageCourts: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-12">
-              <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Courts Added</h3>
-              <p className="text-gray-600 mb-4">Start by adding your first court to begin accepting bookings.</p>
+              <MapPin className="h-12 w-12 text-text-secondary mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-text-primary mb-2">No Courts Added</h3>
+              <p className="text-text-secondary mb-4">Start by adding your first court to begin accepting bookings.</p>
               <button
                 onClick={() => setShowAddForm(true)}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
               >
                 Add Your First Court
               </button>
