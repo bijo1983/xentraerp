@@ -25,6 +25,10 @@ dist-ssr
 .env
 
 # Generated brand assets
+public/assets/logos/*
+!public/assets/logos/.gitkeep
+src/assets/logos/*.png
+src/assets/logos/*.ico
 public/brand/*
 !public/brand/.gitkeep
 src/assets/logos/train-play-compete.png
