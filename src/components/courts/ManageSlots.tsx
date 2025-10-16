@@ -9,11 +9,13 @@ export const ManageSlots: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
   const [courts, setCourts] = useState<any[]>([]);
+  const [clubId, setClubId] = useState<string | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [slotInterval, setSlotInterval] = useState(60); // Default 60 minutes
+  const [slotCreationMode, setSlotCreationMode] = useState<'individual' | 'bulk'>('individual');
 
   const [newSlot, setNewSlot] = useState({
     start_time: '09:00',
@@ -39,10 +41,10 @@ export const ManageSlots: React.FC = () => {
   }, [userProfile]);
 
   useEffect(() => {
-    if (selectedCourt && selectedDate) {
+    if (selectedCourt && selectedDate && clubId) {
       fetchSlots();
     }
-  }, [selectedCourt, selectedDate]);
+  }, [selectedCourt, selectedDate, clubId]);
 
   const fetchCourts = async () => {
     if (!userProfile) return;
@@ -56,8 +58,11 @@ export const ManageSlots: React.FC = () => {
 
     if (clubError || !clubData) {
       console.error('Error fetching club data:', clubError);
+      setClubId(null);
       return;
     }
+
+    setClubId(clubData.id);
 
     const { data, error } = await supabase
       .from('courts')
@@ -74,14 +79,14 @@ export const ManageSlots: React.FC = () => {
   };
 
   const fetchSlots = async () => {
-    if (!selectedCourt || !selectedDate) return;
+    if (!selectedCourt || !selectedDate || !clubId) return;
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const { data, error } = await supabase
       .from('court_slots')
       .select(`
         *,
-        courts (
+        courts!inner(
           *,
           club_users (
             *,
@@ -91,6 +96,7 @@ export const ManageSlots: React.FC = () => {
       `)
       .eq('court_id', selectedCourt)
       .eq('date', dateStr)
+      .eq('courts.club_id', clubId)
       .order('start_time');
 
     if (data) {
@@ -148,11 +154,35 @@ export const ManageSlots: React.FC = () => {
   };
 
   const addSlot = async () => {
-    if (!selectedCourt || !selectedDate) return;
+    if (!selectedCourt || !selectedDate || !clubId) return;
+
+    const courtInfo = courts.find((court) => court.id === selectedCourt);
+    if (!courtInfo || courtInfo.club_id !== clubId) {
+      alert('You can only add slots for courts in your club.');
+      return;
+    }
 
     setLoading(true);
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
+
+      const { data: existingSlot, error: existingError } = await supabase
+        .from('court_slots')
+        .select('id, courts!inner(club_id)')
+        .eq('date', dateStr)
+        .eq('start_time', newSlot.start_time)
+        .eq('end_time', newSlot.end_time)
+        .eq('court_id', selectedCourt)
+        .eq('courts.club_id', clubId)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (existingSlot) {
+        alert('A slot already exists for this court and time.');
+        return;
+      }
+
       const { error } = await supabase
         .from('court_slots')
         .insert({
@@ -169,6 +199,7 @@ export const ManageSlots: React.FC = () => {
       setNewSlot({ start_time: '09:00', end_time: '10:00' });
     } catch (error) {
       console.error('Error adding slot:', error);
+      alert('Unable to add slot. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -191,7 +222,13 @@ export const ManageSlots: React.FC = () => {
   };
 
   const generateBulkSlots = async () => {
-    if (!selectedCourt) return;
+    if (!selectedCourt || !clubId) return;
+
+    const courtInfo = courts.find((court) => court.id === selectedCourt);
+    if (!courtInfo || courtInfo.club_id !== clubId) {
+      alert('You can only generate slots for courts in your club.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -199,7 +236,22 @@ export const ManageSlots: React.FC = () => {
       const toDate = new Date(bulkSlotSettings.to_date);
       const timeSlots = generateTimeSlots(bulkSlotSettings.start_time, bulkSlotSettings.end_time);
 
-      const slotsToInsert = [];
+      const { data: existingSlots, error: existingError } = await supabase
+        .from('court_slots')
+        .select('date, start_time, end_time, courts!inner(club_id)')
+        .eq('court_id', selectedCourt)
+        .eq('courts.club_id', clubId)
+        .gte('date', format(fromDate, 'yyyy-MM-dd'))
+        .lte('date', format(toDate, 'yyyy-MM-dd'));
+
+      if (existingError) throw existingError;
+
+      const existingSlotKeys = new Set(
+        (existingSlots || []).map((slot) => `${slot.date}|${slot.start_time}|${slot.end_time}`)
+      );
+
+      const slotsToInsert = [] as any[];
+      let skippedCount = 0;
 
       for (let date = new Date(fromDate); date <= toDate; date.setDate(date.getDate() + 1)) {
         const dateStr = format(date, 'yyyy-MM-dd');
@@ -209,6 +261,13 @@ export const ManageSlots: React.FC = () => {
         }
 
         for (const slot of timeSlots) {
+          const key = `${dateStr}|${slot.start_time}|${slot.end_time}`;
+          if (existingSlotKeys.has(key)) {
+            skippedCount++;
+            continue;
+          }
+
+          existingSlotKeys.add(key);
           slotsToInsert.push({
             court_id: selectedCourt,
             date: dateStr,
@@ -220,7 +279,10 @@ export const ManageSlots: React.FC = () => {
       }
 
       if (slotsToInsert.length === 0) {
-        alert('No slots to generate. All dates are excluded.');
+        const message = skippedCount > 0
+          ? 'All slots in the selected range already exist.'
+          : 'No slots to generate. All dates are excluded.';
+        alert(message);
         return;
       }
 
@@ -230,7 +292,11 @@ export const ManageSlots: React.FC = () => {
 
       if (error) throw error;
 
-      alert(`Successfully generated ${slotsToInsert.length} slots!`);
+      const successMessage = skippedCount > 0
+        ? `Generated ${slotsToInsert.length} new slots. Skipped ${skippedCount} duplicate slot${skippedCount === 1 ? '' : 's'}.`
+        : `Successfully generated ${slotsToInsert.length} slots!`;
+
+      alert(successMessage);
       fetchSlots();
     } catch (error) {
       console.error('Error generating bulk slots:', error);
@@ -326,9 +392,34 @@ export const ManageSlots: React.FC = () => {
           </div>
         </div>
 
-        {/* Bulk Slot Generation Settings */}
+        {/* Slot Creation Mode Toggle */}
         <div className="border-t pt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Bulk Slot Generation Settings</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Slot Creation Mode</h3>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { value: 'individual' as const, label: 'Single Day & Time' },
+              { value: 'bulk' as const, label: 'Bulk Date Range' }
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSlotCreationMode(option.value)}
+                className={`px-4 py-2 rounded-lg border transition-colors ${
+                  slotCreationMode === option.value
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bulk Slot Generation Settings */}
+        {slotCreationMode === 'bulk' && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Bulk Slot Generation Settings</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
@@ -497,7 +588,8 @@ export const ManageSlots: React.FC = () => {
               </p>
             </div>
           )}
-        </div>
+          </div>
+        )}
 
         {/* Court Info Display */}
         {selectedCourt && (
@@ -524,48 +616,50 @@ export const ManageSlots: React.FC = () => {
 
 
       {/* Add Individual Slot */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Plus className="h-5 w-5 text-green-600 mr-2" />
-          Add Individual Slot
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Start Time
-            </label>
-            <input
-              type="time"
-              value={newSlot.start_time}
-              onChange={(e) => setNewSlot({ ...newSlot, start_time: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+      {slotCreationMode === 'individual' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <Plus className="h-5 w-5 text-green-600 mr-2" />
+            Add Individual Slot
+          </h2>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              End Time
-            </label>
-            <input
-              type="time"
-              value={newSlot.end_time}
-              onChange={(e) => setNewSlot({ ...newSlot, end_time: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Start Time
+              </label>
+              <input
+                type="time"
+                value={newSlot.start_time}
+                onChange={(e) => setNewSlot({ ...newSlot, start_time: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
 
-          <div className="flex items-end">
-            <button
-              onClick={addSlot}
-              disabled={loading || !selectedCourt}
-              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Add Slot
-            </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                End Time
+              </label>
+              <input
+                type="time"
+                value={newSlot.end_time}
+                onChange={(e) => setNewSlot({ ...newSlot, end_time: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={addSlot}
+                disabled={loading || !selectedCourt}
+                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Add Slot
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Existing Slots */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
