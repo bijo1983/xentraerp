@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Activity, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import type { UserType } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 
 type AuthFormProps = {
@@ -10,6 +11,8 @@ type AuthFormProps = {
   /** Where to go after password sign-in succeeds (defaults to '/dashboard'). */
   afterAuthRedirectTo?: string;
 };
+
+type SignupUserType = 'Player' | 'Club' | 'Organizer';
 
 export const AuthForm: React.FC<AuthFormProps> = ({
   initialMode = 'login',
@@ -35,7 +38,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [error, setError] = useState<string>('');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    email: string;
+    password: string;
+    name: string;
+    userType: SignupUserType;
+    phone: string;
+    country: string;
+  }>({
     email: '',
     password: '',
     name: '',
@@ -125,9 +135,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             return;
           }
 
+          const selectedType = formData.userType as UserType;
           await sendEmailOtp(formData.email, formData.password, {
-            userType: formData.userType as 'Player' | 'Club' | 'Organizer' | 'Administrator',
-            profile_type: formData.userType as any,
+            userType: selectedType,
+            profile_type: selectedType,
             name: formData.name,
             phone_number: formData.phone || null,
             country_id: requiresCountry ? formData.country : null,
@@ -231,9 +242,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         return;
       }
 
+      const selectedType = formData.userType as UserType;
       await sendEmailOtp(formData.email, formData.password, {
-        userType: formData.userType as 'Player' | 'Club' | 'Organizer' | 'Administrator',
-        profile_type: formData.userType as any,
+        userType: selectedType,
+        profile_type: selectedType,
         name: formData.name,
         phone_number: formData.phone || null,
         country_id: requiresCountry ? formData.country : null,
@@ -401,7 +413,6 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   <option value="Player">Player</option>
                   <option value="Club">Club</option>
                   <option value="Organizer">Organizer</option>
-                  <option value="Administrator">Administrator</option>
                 </select>
               </div>
 
