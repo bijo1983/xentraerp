@@ -27,3 +27,47 @@ alongside the individual files:
 ```
 python tools/generate_brand_assets.py --archive tools/downloads/brand-assets.zip
 ```
+
+## Admin console status reference
+
+The admin console manages two kinds of partner accounts—clubs and event organizers.
+Both groups share the same lifecycle fields, so the status rules below apply to
+either entity type.
+
+### Approval status
+
+Each profile carries an `approval_status` value. New registrations start in the
+`pending` state and are hidden from public listings. Approving a profile moves it
+to `approved` and automatically makes it visible in search results. Rejected
+profiles switch to `rejected` and remain hidden. If you manually toggle
+visibility on a pending profile, the console upgrades it to `approved` so the
+listing can surface. Changing a profile back to `pending` or `rejected` forces it
+off the public directory.
+
+| Status    | Purpose                                                     |
+|-----------|-------------------------------------------------------------|
+| `pending` | Awaiting manual review. Hidden from club/organizer listings. |
+| `approved`| Cleared for use. Visible unless explicitly hidden.          |
+| `rejected`| Denied access. Always hidden from customer-facing views.    |
+
+The same three states are enforced at the database level for both
+`club_users` and `organizer_users` tables.
+
+### Payment status
+
+The `payment_status` field tracks subscription billing. Admins can switch
+between:
+
+| Status   | Meaning                                             |
+|----------|-----------------------------------------------------|
+| `unpaid` | Default for new sign-ups that have not been charged. |
+| `paid`   | Active subscription in good standing.                |
+| `overdue`| Payment issue that needs follow-up.                  |
+
+### Visibility toggle
+
+Finally, the `is_visible` flag controls whether a profile appears in the
+customer directory. Approving a profile sets it to visible; rejecting or
+reverting to pending forces it off. Admins can hide an approved profile without
+changing its approval status, but revealing a hidden, pending profile will
+promote it to `approved` first to maintain consistent public listings.

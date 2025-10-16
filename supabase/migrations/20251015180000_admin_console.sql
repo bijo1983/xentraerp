@@ -148,7 +148,7 @@ DECLARE
   target_email text := 'bijo.mammen@innovegicit.com';
   admin_user_id uuid;
   admin_account_id uuid;
-  target_profile_uuid uuid := '484435eb-ffde-450b-a3f5-0915b24e1907';
+  admin_profile_id uuid;
   derived_name text;
   has_password_function boolean;
 BEGIN
@@ -163,13 +163,22 @@ BEGIN
     RETURN;
   END IF;
 
-  PERFORM 1 FROM profiles WHERE id = target_profile_uuid;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Administrator profile (id=%) missing in profiles table.', target_profile_uuid;
+  SELECT id
+  INTO admin_profile_id
+  FROM profiles
+  WHERE lower(name) = 'administrator'
+  LIMIT 1;
+
+  IF admin_profile_id IS NULL THEN
+    INSERT INTO profiles (name, description)
+    VALUES ('Administrator', 'Platform administrator with full access')
+    ON CONFLICT (name) DO UPDATE
+      SET description = EXCLUDED.description
+    RETURNING id INTO admin_profile_id;
   END IF;
 
   INSERT INTO admin_users (user_id, full_name, email, profile_id)
-  VALUES (admin_user_id, derived_name, lower(target_email), target_profile_uuid)
+  VALUES (admin_user_id, derived_name, lower(target_email), admin_profile_id)
   ON CONFLICT (user_id) DO UPDATE
     SET full_name = EXCLUDED.full_name,
         email = EXCLUDED.email,
