@@ -46,6 +46,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
   const [countries, setCountries] = useState<any[]>([]);
 
+  const requiresCountry =
+    formData.userType === 'Player' || formData.userType === 'Club' || formData.userType === 'Organizer';
+
   // store actions + status message
   const { signIn, sendEmailOtp, verifyEmailOtp, status, message } = useAuthStore();
 
@@ -116,12 +119,18 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             return;
           }
 
+          if (requiresCountry && !formData.country) {
+            setError('Please select your country.');
+            setLoading(false);
+            return;
+          }
+
           await sendEmailOtp(formData.email, formData.password, {
             userType: formData.userType as 'Player' | 'Club' | 'Organizer' | 'Administrator',
             profile_type: formData.userType as any,
             name: formData.name,
             phone_number: formData.phone || null,
-            country_id: formData.country || null,
+            country_id: requiresCountry ? formData.country : null,
           });
 
           setStage('otp');
@@ -217,12 +226,17 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         return;
       }
 
+      if (requiresCountry && !formData.country) {
+        setError('Please select your country before resending the code.');
+        return;
+      }
+
       await sendEmailOtp(formData.email, formData.password, {
         userType: formData.userType as 'Player' | 'Club' | 'Organizer' | 'Administrator',
         profile_type: formData.userType as any,
         name: formData.name,
         phone_number: formData.phone || null,
-        country_id: formData.country || null,
+        country_id: requiresCountry ? formData.country : null,
       });
     } catch (err: any) {
       setError(err?.message || 'Failed to resend code');
@@ -236,7 +250,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     stage === 'form' &&
     formData.email &&
     formData.name &&
-    formData.password.length >= 8;
+    formData.password.length >= 8 &&
+    (!requiresCountry || !!formData.country);
 
   const canSubmitOtp =
     !isLogin && stage === 'otp' && otpCode && otpCode.length === 6;
@@ -426,15 +441,21 @@ export const AuthForm: React.FC<AuthFormProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Country (Optional)
+                    {requiresCountry ? 'Country *' : 'Country (Optional)'}
                   </label>
                   <select
                     value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, country: e.target.value });
+                      if (error?.toLowerCase().includes('country')) {
+                        setError('');
+                      }
+                    }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     disabled={countriesLoading}
+                    required={requiresCountry}
                   >
-                    <option value="">
+                    <option value="" disabled={requiresCountry}>
                       {countriesLoading ? 'Loading...' : 'Select country'}
                     </option>
                     {countries.map((c) => (

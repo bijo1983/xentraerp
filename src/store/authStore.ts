@@ -101,6 +101,11 @@ async function createRoleRowForUser(
   userType: UserType,
   meta: SignupMeta
 ): Promise<void> {
+  const requiresCountry = userType === 'Player' || userType === 'Club' || userType === 'Organizer';
+  if (requiresCountry && !meta.country_id) {
+    throw new Error('Country is required for player, club, and organizer accounts.');
+  }
+
   const base = {
     user_id: user.id,
     profile_id,
@@ -257,6 +262,10 @@ export const useAuthStore = create<AuthState>(() => ({
 
     const email = (rawEmail ?? '').trim().toLowerCase();
     const password = (rawPassword ?? '').trim();
+    const requiresCountry =
+      userData?.userType === 'Player' ||
+      userData?.userType === 'Club' ||
+      userData?.userType === 'Organizer';
 
     if (!password || password.length < 8) {
       useAuthStore.setState({
@@ -265,6 +274,15 @@ export const useAuthStore = create<AuthState>(() => ({
         message: 'Password is required (min 8 characters) before requesting the OTP.',
       });
       throw new Error('Password required before sending OTP');
+    }
+
+    if (requiresCountry && !userData?.country_id) {
+      useAuthStore.setState({
+        loading: false,
+        status: 'error',
+        message: 'Country is required for player, club, and organizer signups.',
+      });
+      throw new Error('Country is required for player, club, and organizer signups.');
     }
 
     // keep password + meta in memory until verify
