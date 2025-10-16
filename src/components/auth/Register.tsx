@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthForm } from './AuthForm';
+import badmintonLogo from '../../assets/logo/badminton-booking-logo.svg';
 
 const Register: React.FC = () => {
   const AuthFormAny = AuthForm as any;
@@ -10,6 +11,11 @@ const Register: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
+          <img
+            src={badmintonLogo}
+            alt="Badminton Booking logo"
+            className="mx-auto mb-4 h-12 w-auto"
+          />
           <h1 className="text-2xl font-bold text-gray-900">Create your account</h1>
           <p className="text-gray-600">Sign up to continue</p>
         </div>

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { useNavigate, Link } from 'react-router-dom';
 import { Activity, Trophy, Users, Calendar, ArrowRight } from 'lucide-react';
+import badmintonLogo from '../../assets/logo/badminton-booking-logo.svg';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -90,6 +91,11 @@ export const Login = () => {
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center min-h-[calc(100vh-3rem)] sm:min-h-[calc(100vh-4rem)]">
           <div className="space-y-6 sm:space-y-8 order-2 lg:order-1">
             <div className="space-y-3 sm:space-y-4">
+              <img
+                src={badmintonLogo}
+                alt="Badminton Booking logo"
+                className="h-12 w-auto sm:h-16"
+              />
               <div className="flex items-center space-x-2">
                 <Activity className="h-8 w-8 sm:h-10 sm:w-10 text-blue-600" />
                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">
@@ -151,7 +157,12 @@ export const Login = () => {
 
           <div className="lg:pl-8 order-1 lg:order-2">
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8 max-w-md mx-auto">
-              <div className="mb-6 sm:mb-8">
+              <div className="mb-6 sm:mb-8 text-center">
+                <img
+                  src={badmintonLogo}
+                  alt="Badminton Booking logo"
+                  className="mx-auto mb-4 h-12 w-auto sm:h-14"
+                />
                 <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
                 <p className="text-gray-600 text-sm sm:text-base">Sign in to your account to continue</p>
               </div>
