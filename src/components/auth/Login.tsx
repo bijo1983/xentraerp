@@ -24,7 +24,7 @@ export const Login = () => {
   useEffect(() => {
     console.log("🔍 Login state:", { loading, user, userProfile });
     if (user && userProfile) {
-      navigate('/dashboard');
+      navigate('/', { replace: true });
     }
   }, [user, userProfile, navigate]);
 

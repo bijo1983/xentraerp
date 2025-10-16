@@ -1,6 +1,6 @@
 // src/App.tsx
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import { AuthForm } from './components/auth/AuthForm';
 import Register from './components/auth/Register';
@@ -31,17 +31,50 @@ import { useAuthStore } from './store/authStore';
 import { Login } from './components/auth/Login';
 import { AdminConsole } from './components/admin/AdminConsole';
 
+const VIEW_TO_PATH: Record<string, string> = {
+  dashboard: '/',
+  'book-court': '/book-court',
+  'my-bookings': '/my-bookings',
+  'approve-requests': '/approve-requests',
+  courts: '/courts',
+  'manage-slots': '/manage-slots',
+  'manage-bookings': '/manage-bookings',
+  'view-bookings': '/view-bookings',
+  tournaments: '/tournaments',
+  'create-tournament': '/create-tournament',
+  profile: '/profile',
+  'find-clubs': '/find-clubs',
+  analytics: '/analytics',
+  'admin-console': '/admin-console',
+};
+
+const PATH_TO_VIEW: Record<string, string> = Object.entries(VIEW_TO_PATH).reduce(
+  (acc, [view, path]) => {
+    const key = path.replace(/^\/+/, '');
+    acc[key] = view;
+    return acc;
+  },
+  {
+    '': 'dashboard',
+    dashboard: 'dashboard',
+  } as Record<string, string>
+);
+
+const getViewFromPath = (pathname: string): string => {
+  const segment = pathname.replace(/^\/+/, '').split('/')[0];
+  return PATH_TO_VIEW[segment] ?? 'dashboard';
+};
+
+const getPathForView = (view: string): string => VIEW_TO_PATH[view] ?? '/';
+
 function AppContent() {
   const { user, userProfile, loading } = useAuthStore();
 
-  const [activeView, setActiveView] = React.useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Remember last known user to guard against short-lived auth gaps
-  const lastUserRef = React.useRef<typeof user>(null);
-  React.useEffect(() => {
-    if (user) lastUserRef.current = user;
-  }, [user]);
+  const [activeView, setActiveView] = React.useState(() => getViewFromPath(location.pathname));
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   const Spinner = (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50 flex items-center justify-center">
@@ -55,6 +88,24 @@ function AppContent() {
   React.useEffect(() => {
     console.log('🔎 AppContent state:', { user, userProfile, loading });
   }, [user, userProfile, loading]);
+
+  React.useEffect(() => {
+    const viewFromLocation = getViewFromPath(location.pathname);
+    if (viewFromLocation !== activeView) {
+      setActiveView(viewFromLocation);
+    }
+  }, [location.pathname, activeView]);
+
+  const handleViewChange = React.useCallback(
+    (view: string) => {
+      setActiveView(view);
+      const targetPath = getPathForView(view);
+      if (location.pathname !== targetPath) {
+        navigate(targetPath, { replace: true });
+      }
+    },
+    [navigate, location.pathname]
+  );
 
   if (window.location.search.includes('debug=supabase')) {
     return <SupabaseVerification />;
@@ -70,14 +121,7 @@ function AppContent() {
     return Spinner;
   }
 
-  // Avoid redirect during transient auth gap
-  const transientAuthGap = !user && !!lastUserRef.current;
-  if (!user) {
-    if (transientAuthGap) {
-      return Spinner;
-    }
-    return <Navigate to="/login" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
   // User exists but profile not ready yet
   if (user && !userProfile) {
@@ -152,7 +196,7 @@ function AppContent() {
       <div className="flex flex-1">
         <Sidebar
           activeView={activeView}
-          onViewChange={setActiveView}
+          onViewChange={handleViewChange}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />

@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase';
 type AuthFormProps = {
   /** Force starting mode. If omitted, defaults to 'login'. */
   initialMode?: 'login' | 'signup';
-  /** Where to go after password sign-in succeeds (defaults to '/dashboard'). */
+  /** Where to go after password sign-in succeeds (defaults to '/'). */
   afterAuthRedirectTo?: string;
 };
 
@@ -16,7 +16,7 @@ type SignupUserType = 'Player' | 'Club' | 'Organizer';
 
 export const AuthForm: React.FC<AuthFormProps> = ({
   initialMode = 'login',
-  afterAuthRedirectTo = '/dashboard',
+  afterAuthRedirectTo = '/',
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
