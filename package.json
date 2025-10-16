@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:check": "tsc --noEmit && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:pull": "node scripts/fetch_supabase_schema.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
