@@ -47,32 +47,37 @@ export const ProfileSettings: React.FC = () => {
       .from(tableName)
       .select('*')
       .eq('user_id', userProfile.id)
-      .single();
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading profile data:', error);
+    }
+
+    const profileData = data ?? null;
 
     // Use DB data if present, otherwise fall back to userProfile
     setFormData({
-  name:
-    data
-      ? (userProfile.type === 'Player'
-          ? data.full_name
+      name: profileData
+        ? userProfile.type === 'Player'
+          ? profileData.full_name
           : userProfile.type === 'Club'
-          ? data.club_name
-          : data.organizer_name)
-      : userProfile.name || '',
-  email: data ? data.email : userProfile.email || '',
-  phone_number: data
-    ? data.phone_number || userProfile.phone_number || ''
-    : userProfile.phone_number || '',
-  country_id: data
-    ? data.country_id || userProfile.country_id || ''
-    : userProfile.country_id || '',
-  skill_level: data ? data.skill_level || 'Beginner' : 'Beginner',
-  address: data ? data.address || '' : '',
-  website: data ? data.website || '' : '',
-  company_name: data ? data.company_name || '' : '',
-});
+          ? profileData.club_name
+          : profileData.organizer_name
+        : userProfile.name || '',
+      email: profileData ? profileData.email : userProfile.email || '',
+      phone_number: profileData
+        ? profileData.phone_number || userProfile.phone_number || ''
+        : userProfile.phone_number || '',
+      country_id: profileData
+        ? profileData.country_id || userProfile.country_id || ''
+        : userProfile.country_id || '',
+      skill_level: profileData ? profileData.skill_level || 'Beginner' : 'Beginner',
+      address: profileData ? profileData.address || '' : '',
+      website: profileData ? profileData.website || '' : '',
+      company_name: profileData ? profileData.company_name || '' : '',
+    });
 
-    if ((!data || error) && !userProfile.name) {
+    if (!profileData && !userProfile.name) {
       setNotFound(true);
     }
   };
@@ -368,45 +373,52 @@ export const OrganizerUpgrade: React.FC = () => {
       .from('club_users')
       .select('*')
       .eq('user_id', userProfile.id)
-      .single();
+      .maybeSingle();
 
-    if (clubError || !clubUser) {
-      setMessage("Club profile not found.");
-      setLoading(false);
-      return;
+    if (clubError) {
+      console.error('OrganizerUpgrade: failed to load club profile', clubError);
     }
-if (!clubUser) {
-  // Attempt to create the minimal club profile on the fly:
-  const { error: clubInsertError } = await supabase
-    .from('club_users')
-    .insert([{
-      user_id: userProfile.id,
-      club_name: userProfile.name,
-      email: userProfile.email,
-      phone_number: userProfile.phone_number || '',
-      country_id: userProfile.country_id || null,
-      created_at: new Date().toISOString(),
-    }]);
 
-  if (clubInsertError) {
-    setMessage("Failed to auto-create Club profile: " + (clubInsertError.message || clubInsertError));
-    setLoading(false);
-    return;
-  }
-  // Refetch clubUser
-  const { data: clubUser2 } = await supabase
-    .from('club_users')
-    .select('*')
-    .eq('user_id', userProfile.id)
-    .single();
+    let activeClubUser = clubUser;
 
-  if (!clubUser2) {
-    setMessage("Club profile creation failed, contact admin.");
-    setLoading(false);
-    return;
-  }
-  // Continue with clubUser2 for the rest of the logic!
-}
+    if (!activeClubUser) {
+      const { error: clubInsertError } = await supabase
+        .from('club_users')
+        .insert([
+          {
+            user_id: userProfile.id,
+            club_name: userProfile.name,
+            email: userProfile.email,
+            phone_number: userProfile.phone_number || '',
+            country_id: userProfile.country_id || null,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+
+      if (clubInsertError) {
+        setMessage('Failed to auto-create Club profile: ' + (clubInsertError.message || clubInsertError));
+        setLoading(false);
+        return;
+      }
+
+      const { data: refetchedClubUser, error: refetchError } = await supabase
+        .from('club_users')
+        .select('*')
+        .eq('user_id', userProfile.id)
+        .maybeSingle();
+
+      if (refetchError) {
+        console.error('OrganizerUpgrade: failed to refetch club profile', refetchError);
+      }
+
+      if (!refetchedClubUser) {
+        setMessage('Club profile creation failed, contact admin.');
+        setLoading(false);
+        return;
+      }
+
+      activeClubUser = refetchedClubUser;
+    }
 
     // 2. Get the Organizer profile_id
     const { data: profileRow, error: profileError } = await supabase
@@ -425,14 +437,14 @@ if (!clubUser) {
     const { error: insertError } = await supabase
       .from('organizer_users')
       .insert([{
-        user_id: clubUser.user_id,
-        organizer_name: clubUser.club_name,
-        email: clubUser.email,
-        phone_number: clubUser.phone_number,
-        country_id: clubUser.country_id,
+        user_id: activeClubUser.user_id,
+        organizer_name: activeClubUser.club_name,
+        email: activeClubUser.email,
+        phone_number: activeClubUser.phone_number,
+        country_id: activeClubUser.country_id,
         profile_id: profileRow.id,
-        website: clubUser.website,
-        company_name: clubUser.club_name, // or set separately if you prefer
+        website: activeClubUser.website,
+        company_name: activeClubUser.club_name, // or set separately if you prefer
         created_at: new Date().toISOString(),
         // You can add any other fields you want to transfer
       }]);
