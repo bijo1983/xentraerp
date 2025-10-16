@@ -46,7 +46,7 @@ export const ProfileSettings: React.FC = () => {
     const { data, error } = await supabase
       .from(tableName)
       .select('*')
-      .eq('user_id', userProfile.id)
+      .eq('user_id', userProfile.user_id)
       .maybeSingle();
 
     if (error) {
@@ -116,7 +116,7 @@ export const ProfileSettings: React.FC = () => {
       const { error } = await supabase
         .from(tableName)
         .update(updateData)
-        .eq('user_id', userProfile.id);
+        .eq('user_id', userProfile.user_id);
 
       if (error) throw error;
 
@@ -372,7 +372,7 @@ export const OrganizerUpgrade: React.FC = () => {
     const { data: clubUser, error: clubError } = await supabase
       .from('club_users')
       .select('*')
-      .eq('user_id', userProfile.id)
+      .eq('user_id', userProfile.user_id)
       .maybeSingle();
 
     if (clubError) {
@@ -386,7 +386,7 @@ export const OrganizerUpgrade: React.FC = () => {
         .from('club_users')
         .insert([
           {
-            user_id: userProfile.id,
+            user_id: userProfile.user_id,
             club_name: userProfile.name,
             email: userProfile.email,
             phone_number: userProfile.phone_number || '',
@@ -404,7 +404,7 @@ export const OrganizerUpgrade: React.FC = () => {
       const { data: refetchedClubUser, error: refetchError } = await supabase
         .from('club_users')
         .select('*')
-        .eq('user_id', userProfile.id)
+        .eq('user_id', userProfile.user_id)
         .maybeSingle();
 
       if (refetchError) {
