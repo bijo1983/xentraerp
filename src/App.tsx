@@ -153,10 +153,12 @@ function AppContent() {
     }
   };
 
+  const currentYear = new Date().getFullYear();
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Navbar onMenuClick={() => setIsSidebarOpen(true)} />
-      <div className="flex">
+      <div className="flex flex-1">
         <Sidebar
           activeView={activeView}
           onViewChange={setActiveView}
@@ -167,6 +169,28 @@ function AppContent() {
           <div className="max-w-7xl mx-auto">{renderMainContent()}</div>
         </main>
       </div>
+      <footer className="bg-white border-t border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 text-sm text-gray-600 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            © {currentYear} Innovegic Consultancy and IT Services Co W.L.L. All rights reserved.
+          </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <a
+              href="mailto:info@innovegicit.com"
+              className="text-emerald-600 hover:text-emerald-700 transition-colors"
+            >
+              info@innovegicit.com
+            </a>
+            <span className="hidden sm:inline text-gray-300">|</span>
+            <a
+              href="tel:+97338991983"
+              className="text-emerald-600 hover:text-emerald-700 transition-colors"
+            >
+              +973-38991983
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
