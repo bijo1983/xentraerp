@@ -330,8 +330,8 @@ const handleBooking = async () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Booking Request Submitted!</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-2xl font-bold text-text-primary mb-2">Booking Request Submitted!</h2>
+          <p className="text-text-secondary mb-6">
             Your booking request has been sent to the club for approval. You will be notified once the club approves your booking.
           </p>
           <button
@@ -341,7 +341,7 @@ const handleBooking = async () => {
               setClubs([]);
               setSearchPerformed(false);
             }}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            className="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             Book Another Court
           </button>
@@ -353,7 +353,7 @@ const handleBooking = async () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Book a Court</h1>
+        <h1 className="text-3xl font-bold text-text-primary">Book a Court</h1>
         <div className="hidden md:block">
           <CurrencySelector />
         </div>
@@ -365,20 +365,20 @@ const handleBooking = async () => {
 
       {!selectedClub ? (
         <>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-              <Search className="h-5 w-5 text-blue-600 mr-2" />
+          <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-6">
+            <h2 className="text-xl font-semibold text-text-primary mb-4 flex items-center">
+              <Search className="h-5 w-5 text-secondary-500 mr-2" />
               Search Clubs
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Select Country
                 </label>
                 <select
                   value={selectedCountry}
                   onChange={(e) => setSelectedCountry(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-secondary-500 focus:border-transparent"
                 >
                   <option value="">Choose a country...</option>
                   {countries.map((country) => (
@@ -391,7 +391,7 @@ const handleBooking = async () => {
               <button
                 onClick={handleSearch}
                 disabled={!selectedCountry || loading}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full px-6 py-3 bg-secondary-500 text-white rounded-lg hover:bg-secondary-600 transition-colors disabled:bg-background-subtle disabled:text-text-secondary disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {loading ? (
                   <>
@@ -409,10 +409,10 @@ const handleBooking = async () => {
           </div>
 
           {searchPerformed && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                  <Building2 className="h-5 w-5 text-emerald-600 mr-2" />
+            <div className="bg-background rounded-xl shadow-sm border border-background-subtle">
+              <div className="p-6 border-b border-background-subtle">
+                <h2 className="text-xl font-semibold text-text-primary flex items-center">
+                  <Building2 className="h-5 w-5 text-primary-500 mr-2" />
                   Available Clubs ({clubs.length})
                 </h2>
               </div>
@@ -423,31 +423,31 @@ const handleBooking = async () => {
                       <div
                         key={club.id}
                         onClick={() => handleClubSelect(club)}
-                        className="border-2 border-gray-200 rounded-xl p-6 hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer"
+                        className="border-2 border-background-subtle rounded-xl p-6 hover:border-secondary-500 hover:shadow-lg transition-all cursor-pointer"
                       >
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        <h3 className="text-lg font-semibold text-text-primary mb-2">
                           {club.club_name}
                         </h3>
                         {club.address && (
-                          <div className="flex items-start text-sm text-gray-600 mb-2">
+                          <div className="flex items-start text-sm text-text-secondary mb-2">
                             <MapPin className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
                             <span>{club.address}</span>
                           </div>
                         )}
                         {club.phone_number && (
-                          <div className="flex items-center text-sm text-gray-600 mb-2">
+                          <div className="flex items-center text-sm text-text-secondary mb-2">
                             <Phone className="h-4 w-4 mr-2" />
                             <span>{club.phone_number}</span>
                           </div>
                         )}
                         {club.website && (
-                          <div className="flex items-center text-sm text-gray-600 mb-2">
+                          <div className="flex items-center text-sm text-text-secondary mb-2">
                             <Globe className="h-4 w-4 mr-2" />
                             <a
                               href={club.website}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
+                              className="text-secondary-500 hover:underline"
                               onClick={(e) => e.stopPropagation()}
                             >
                               Visit Website
@@ -455,7 +455,7 @@ const handleBooking = async () => {
                           </div>
                         )}
                         <div className="mt-4">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-secondary-100 text-secondary-700">
                             <Globe className="h-3 w-3 mr-1" />
                             {club.countries?.name}
                           </span>
@@ -465,8 +465,8 @@ const handleBooking = async () => {
                   </div>
                 ) : (
                   <div className="text-center py-12">
-                    <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">No clubs found in the selected country.</p>
+                    <Building2 className="h-12 w-12 text-text-secondary mx-auto mb-4" />
+                    <p className="text-text-secondary">No clubs found in the selected country.</p>
                   </div>
                 )}
               </div>
@@ -475,15 +475,15 @@ const handleBooking = async () => {
         </>
       ) : (
         <>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                  <Building2 className="h-5 w-5 text-emerald-600 mr-2" />
+                <h2 className="text-xl font-semibold text-text-primary flex items-center">
+                  <Building2 className="h-5 w-5 text-primary-500 mr-2" />
                   {selectedClub.club_name}
                 </h2>
                 {selectedClub.address && (
-                  <p className="text-sm text-gray-600 mt-1 flex items-center">
+                  <p className="text-sm text-text-secondary mt-1 flex items-center">
                     <MapPin className="h-4 w-4 mr-1" />
                     {selectedClub.address}
                   </p>
@@ -495,36 +495,36 @@ const handleBooking = async () => {
                   setSelectedSlot(null);
                   setAvailableSlots([]);
                 }}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-background-subtle rounded-lg transition-colors"
               >
                 Change Club
               </button>
             </div>
           </div>
 
-           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+           <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-4 sm:p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
-                <Calendar className="h-5 w-5 text-emerald-600 mr-2" />
+              <h2 className="text-lg sm:text-xl font-semibold text-text-primary flex items-center">
+                <Calendar className="h-5 w-5 text-primary-500 mr-2" />
                 Select Date
               </h2>
               <div className="flex items-center gap-2">
                 <button
                   onClick={goToPreviousMonth}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-background-subtle rounded-lg transition-colors"
                 >
-                  <svg className="h-5 w-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <span className="text-sm sm:text-base font-semibold text-gray-900 min-w-[140px] text-center">
+                <span className="text-sm sm:text-base font-semibold text-text-primary min-w-[140px] text-center">
                   {format(currentMonth, 'MMMM yyyy')}
                 </span>
                 <button
                   onClick={goToNextMonth}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-background-subtle rounded-lg transition-colors"
                 >
-                  <svg className="h-5 w-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -533,7 +533,7 @@ const handleBooking = async () => {
 
             <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <div key={day} className="text-center text-xs sm:text-sm font-medium text-gray-500 py-2">
+                <div key={day} className="text-center text-xs sm:text-sm font-medium text-text-secondary py-2">
                   {day}
                 </div>
               ))}
@@ -555,12 +555,12 @@ const handleBooking = async () => {
                       aspect-square p-1 sm:p-2 rounded-lg text-xs sm:text-sm font-medium transition-all
                       ${
                         isSelected
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-500 ring-offset-2'
+                          ? 'bg-primary-500 text-white ring-2 ring-primary-500 ring-offset-2'
                           : isAvailable && !isDisabled
-                          ? 'bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          ? 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100 cursor-pointer'
+                          : 'bg-background-subtle text-text-secondary cursor-not-allowed'
                       }
-                      ${isTodayDate && !isSelected ? 'ring-1 ring-blue-500' : ''}
+                      ${isTodayDate && !isSelected ? 'ring-1 ring-secondary-500' : ''}
                     `}
                   >
                     <div className="flex flex-col items-center justify-center h-full">
@@ -571,34 +571,34 @@ const handleBooking = async () => {
               })}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap gap-4 text-xs sm:text-sm">
+            <div className="mt-4 pt-4 border-t border-background-subtle flex flex-wrap gap-4 text-xs sm:text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div>
-                <span className="text-gray-600">Available</span>
+                <div className="w-4 h-4 rounded bg-secondary-50 border border-secondary-200"></div>
+                <span className="text-text-secondary">Available</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-emerald-600"></div>
-                <span className="text-gray-600">Selected</span>
+                <div className="w-4 h-4 rounded bg-primary-500"></div>
+                <span className="text-text-secondary">Selected</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gray-100 border border-gray-200"></div>
-                <span className="text-gray-600">Not Available</span>
+                <div className="w-4 h-4 rounded bg-background-subtle border border-background-subtle"></div>
+                <span className="text-text-secondary">Not Available</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                <Clock className="h-5 w-5 text-blue-600 mr-2" />
+          <div className="bg-background rounded-xl shadow-sm border border-background-subtle">
+            <div className="p-6 border-b border-background-subtle">
+              <h2 className="text-xl font-semibold text-text-primary flex items-center">
+                <Clock className="h-5 w-5 text-secondary-500 mr-2" />
                 Available Courts - {format(selectedDate, 'EEEE, MMMM d, yyyy')}
               </h2>
             </div>
             <div className="p-6">
               {loading ? (
                 <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading available courts...</p>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-secondary-500 mx-auto mb-4"></div>
+                  <p className="text-text-secondary">Loading available courts...</p>
                 </div>
               ) : availableSlots.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -607,30 +607,30 @@ const handleBooking = async () => {
                       key={slot.id}
                       className={`border-2 rounded-xl p-6 transition-all cursor-pointer ${
                         selectedSlot?.id === slot.id
-                          ? 'border-emerald-500 bg-emerald-50'
-                          : 'border-gray-200 hover:border-emerald-300 hover:shadow-md'
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-background-subtle hover:border-primary-300 hover:shadow-md'
                       }`}
                       onClick={() => setSelectedSlot(slot)}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="font-semibold text-gray-900">{slot.courts?.name || 'Court'}</h3>
-                          <p className="text-sm text-gray-600">{slot.courts?.club_users?.club_name || selectedClub.club_name}</p>
+                          <h3 className="font-semibold text-text-primary">{slot.courts?.name || 'Court'}</h3>
+                          <p className="text-sm text-text-secondary">{slot.courts?.club_users?.club_name || selectedClub.club_name}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-emerald-600">
+                          <p className="text-lg font-bold text-primary-500">
                             {formatPrice(slot.effective_price || slot.custom_price || slot.courts?.hourly_rate || 0)}
                           </p>
-                          <p className="text-xs text-gray-500">per hour</p>
+                          <p className="text-xs text-text-secondary">per hour</p>
                         </div>
                       </div>
 
                       <div className="space-y-2 mb-4">
-                        <div className="flex items-center text-sm text-gray-600">
+                        <div className="flex items-center text-sm text-text-secondary">
                           <Clock className="h-4 w-4 mr-2" />
                           {slot.start_time} - {slot.end_time}
                         </div>
-                        <div className="flex items-center text-sm text-gray-600">
+                        <div className="flex items-center text-sm text-text-secondary">
                           <MapPin className="h-4 w-4 mr-2" />
                           {slot.courts?.surface_type || 'Synthetic'} Surface
                         </div>
@@ -638,12 +638,12 @@ const handleBooking = async () => {
 
                       {slot.courts?.amenities && slot.courts.amenities.length > 0 && (
                         <div className="mb-4">
-                          <p className="text-xs font-medium text-gray-700 mb-1">Amenities:</p>
+                          <p className="text-xs font-medium text-text-primary mb-1">Amenities:</p>
                           <div className="flex flex-wrap gap-1">
                             {slot.courts.amenities.slice(0, 3).map((amenity: string, index: number) => (
                               <span
                                 key={index}
-                                className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full"
+                                className="px-2 py-1 bg-secondary-50 text-secondary-600 text-xs rounded-full"
                               >
                                 {amenity}
                               </span>
@@ -653,14 +653,14 @@ const handleBooking = async () => {
                       )}
 
                       {selectedSlot?.id === slot.id && (
-                        <div className="mt-4 pt-4 border-t border-emerald-200">
+                        <div className="mt-4 pt-4 border-t border-primary-200">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleBooking();
                             }}
                             disabled={loading}
-                            className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300"
+                            className="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:bg-background-subtle disabled:text-text-secondary"
                           >
                             {loading ? 'Booking...' : 'Confirm Booking'}
                           </button>
@@ -671,40 +671,40 @@ const handleBooking = async () => {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No available courts for this date.</p>
-                  <p className="text-sm text-gray-500 mt-2">Try selecting a different date.</p>
+                  <Clock className="h-12 w-12 text-text-secondary mx-auto mb-4" />
+                  <p className="text-text-secondary">No available courts for this date.</p>
+                  <p className="text-sm text-text-secondary mt-2">Try selecting a different date.</p>
                 </div>
               )}
             </div>
           </div>
 
           {selectedSlot && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-6">
+              <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center">
                 <DollarSign className="h-5 w-5 text-green-600 mr-2" />
                 Booking Summary
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Club:</span>
+                  <span className="text-text-secondary">Club:</span>
                   <span className="font-medium">{selectedClub.club_name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Court:</span>
+                  <span className="text-text-secondary">Court:</span>
                   <span className="font-medium">{selectedSlot.courts?.name || 'Court'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Date:</span>
+                  <span className="text-text-secondary">Date:</span>
                   <span className="font-medium">{format(selectedDate, 'MMMM d, yyyy')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Time:</span>
+                  <span className="text-text-secondary">Time:</span>
                   <span className="font-medium">{selectedSlot.start_time} - {selectedSlot.end_time}</span>
                 </div>
                 <div className="border-t pt-3 flex justify-between text-lg font-semibold">
                   <span>Total:</span>
-                  <span className="text-emerald-600">
+                  <span className="text-primary-500">
                     {formatPrice(selectedSlot.effective_price || selectedSlot.custom_price || selectedSlot.courts?.hourly_rate || 0)}
                   </span>
                 </div>

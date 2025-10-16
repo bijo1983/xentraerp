@@ -257,16 +257,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     !isLogin && stage === 'otp' && otpCode && otpCode.length === 6;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-emerald-100 rounded-full">
-              <Activity className="h-8 w-8 text-emerald-600" />
+            <div className="p-3 bg-primary-50 rounded-full">
+              <Activity className="h-8 w-8 text-primary-500" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Badminton Booking</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-2xl font-bold text-text-primary">Badminton Booking</h1>
+          <p className="text-text-secondary mt-2">
             {isLogin ? 'Welcome back!' : stage === 'form' ? 'Join the community' : 'Check your email and enter the code'}
           </p>
         </div>
@@ -297,7 +297,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             <button
               type="button"
               onClick={handleForgotPassword}
-              className="text-emerald-600 hover:text-emerald-700 text-sm"
+              className="text-primary-500 hover:text-primary-600 text-sm"
             >
               Forgot your password?
             </button>
@@ -310,7 +310,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           {isLogin && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Email Address
                 </label>
                 <input
@@ -318,13 +318,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                   placeholder="Enter your email"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Password
                 </label>
                 <div className="relative">
@@ -333,13 +333,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                     required
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                     placeholder="Enter your password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -352,7 +352,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           {!isLogin && stage === 'form' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Email Address
                 </label>
                 <input
@@ -360,13 +360,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                   placeholder="Enter your email"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   Password
                 </label>
                 <div className="relative">
@@ -376,13 +376,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                     minLength={8}
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                     placeholder="At least 8 characters"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -390,13 +390,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   User Type
                 </label>
                 <select
                   value={formData.userType}
                   onChange={(e) => setFormData({ ...formData, userType: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="Player">Player</option>
                   <option value="Club">Club</option>
@@ -406,7 +406,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   {formData.userType === 'Player'
                     ? 'Full Name'
                     : formData.userType === 'Club'
@@ -420,27 +420,27 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder="Enter your name"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-text-primary mb-2">
                     Phone (Optional)
                   </label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Phone number"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-text-primary mb-2">
                     {requiresCountry ? 'Country *' : 'Country (Optional)'}
                   </label>
                   <select
@@ -451,7 +451,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                         setError('');
                       }
                     }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     disabled={countriesLoading}
                     required={requiresCountry}
                   >
@@ -472,12 +472,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           {/* ----------------------------- OTP VIEW ---------------------------- */}
           {!isLogin && stage === 'otp' && (
             <>
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+              <div className="p-4 bg-primary-50 border border-primary-200 rounded-lg text-sm text-primary-700">
                 We’ve sent a 6-digit verification code to <b>{formData.email}</b>. Enter it below.
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-text-primary mb-2">
                   6-digit code
                 </label>
                 <input
@@ -488,15 +488,15 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  className="tracking-widest text-center text-lg w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="tracking-widest text-center text-lg w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   placeholder="______"
                 />
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-text-secondary mt-2">
                   Didn’t get it?{' '}
                   <button
                     type="button"
                     onClick={handleResendOtp}
-                    className="text-emerald-600 hover:text-emerald-700 font-medium"
+                    className="text-primary-500 hover:text-primary-600 font-medium"
                     disabled={loading}
                   >
                     Resend code
@@ -508,7 +508,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                 <button
                   type="button"
                   onClick={goBackToForm}
-                  className="text-sm text-gray-600 hover:text-gray-800"
+                  className="text-sm text-text-secondary hover:text-text-primary"
                   disabled={loading}
                 >
                   Edit details
@@ -523,7 +523,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
               loading ||
               (isLogin ? false : stage === 'form' ? !canSubmitSignupForm : !canSubmitOtp)
             }
-            className="w-full bg-emerald-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-primary-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
               ? 'Please wait...'
@@ -538,7 +538,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         <div className="mt-6 text-center">
           <button
             onClick={switchAuthMode}
-            className="text-emerald-600 hover:text-emerald-700 font-medium"
+            className="text-primary-500 hover:text-primary-600 font-medium"
           >
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>

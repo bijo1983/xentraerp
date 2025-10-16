@@ -116,19 +116,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
       `}>
         <div className="p-6">
           <div className="flex justify-between items-center mb-4 lg:hidden">
-            <h2 className="text-lg font-semibold text-gray-900">Menu</h2>
+            <h2 className="text-lg font-semibold text-text-primary">Menu</h2>
             <button
               onClick={onClose}
-              className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-text-secondary hover:text-text-primary hover:bg-background-subtle rounded-lg transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Logged in as</p>
-            <p className="font-medium text-gray-900 capitalize">{userProfile?.type || 'Unknown'}</p>
-            <p className="text-sm text-gray-600 truncate">{userProfile?.name}</p>
+          <div className="mb-4 p-3 bg-background-subtle rounded-lg">
+            <p className="text-xs text-text-secondary uppercase tracking-wide">Logged in as</p>
+            <p className="font-medium text-text-primary capitalize">{userProfile?.type || 'Unknown'}</p>
+            <p className="text-sm text-text-secondary truncate">{userProfile?.name}</p>
           </div>
 
           <nav className="space-y-2">
@@ -144,11 +144,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
                     onClick={() => onClose && onClose()}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
                       isActive
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-primary-50 text-primary-600 border border-primary-200'
+                        : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
                     }`}
                   >
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-emerald-600' : 'text-gray-500'}`} />
+                    <Icon className={`h-5 w-5 ${isActive ? 'text-primary-500' : 'text-text-secondary'}`} />
                     <span className="font-medium">{item.label}</span>
                   </Link>
                 );
@@ -160,11 +160,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
                   onClick={() => handleItemClick(item.id)}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
                     isActive
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-primary-50 text-primary-600 border border-primary-200'
+                      : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-emerald-600' : 'text-gray-500'}`} />
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-primary-500' : 'text-text-secondary'}`} />
                   <span className="font-medium">{item.label}</span>
                 </button>
               );

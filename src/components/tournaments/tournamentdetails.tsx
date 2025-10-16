@@ -206,14 +206,18 @@ const TournamentDetails: React.FC = () => {
           <option value="cancelled">Cancelled</option>
         </select>
         {isOwner && (
-          <button type="submit" disabled={saving} className="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700">
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-primary-500 text-white px-4 py-2 rounded hover:bg-primary-600 transition-colors"
+          >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         )}
-        <button 
-          type="button" 
-          onClick={() => navigate('/tournaments')} 
-          className="ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+        <button
+          type="button"
+          onClick={() => navigate('/tournaments')}
+          className="ml-2 border border-background-subtle bg-background-subtle text-text-primary px-4 py-2 rounded hover:bg-background"
         >
           Back to Tournaments
         </button>

@@ -65,11 +65,11 @@ export const ClubDashboard: React.FC = () => {
 
   const StatCard: React.FC<{ icon: React.ElementType; title: string; value: string | number; color: string }> =
     ({ icon: Icon, title, value, color }) => (
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+      <div className="bg-background p-4 sm:p-6 rounded-xl shadow-sm border border-background-subtle hover:shadow-md transition-shadow">
         <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
           <div className="flex-1">
-            <p className="text-xs sm:text-sm font-medium text-gray-600">{title}</p>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            <p className="text-xs sm:text-sm font-medium text-text-secondary">{title}</p>
+            <p className="text-xl sm:text-2xl font-bold text-text-primary mt-1">{value}</p>
           </div>
           <div className={`p-2 sm:p-3 rounded-lg ${color} flex items-center justify-center flex-shrink-0`}>
             <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
@@ -81,9 +81,9 @@ export const ClubDashboard: React.FC = () => {
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-teal-600 rounded-xl p-6 sm:p-8 text-white">
+      <div className="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 rounded-xl p-6 sm:p-8 text-white">
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Club Management Hub</h1>
-        <p className="text-blue-100 text-sm sm:text-base">Manage your courts, bookings, and tournaments all in one place</p>
+        <p className="text-secondary-100 text-sm sm:text-base">Manage your courts, bookings, and tournaments all in one place</p>
       </div>
 
       {/* Stats Grid */}
@@ -92,41 +92,41 @@ export const ClubDashboard: React.FC = () => {
           icon={MapPin}
           title="Total Courts"
           value={stats.totalCourts}
-          color="bg-emerald-500"
+          color="bg-primary-500"
         />
         <StatCard
           icon={Calendar}
           title="Total Bookings"
           value={stats.totalBookings}
-          color="bg-blue-500"
+          color="bg-secondary-500"
         />
         <StatCard
           icon={Trophy}
           title="Active Tournaments"
           value={stats.activeTournaments}
-          color="bg-orange-500"
+          color="bg-accent-500"
         />
         <StatCard
           icon={DollarSign}
           title="Monthly Revenue"
           value={`$${stats.monthlyRevenue}`}
-          color="bg-green-500"
+          color="bg-primary-600"
         />
         <StatCard
           icon={TrendingUp}
           title="Booking Rate"
           value={`${stats.bookingRate}/court`}
-          color="bg-teal-500"
+          color="bg-secondary-600"
         />
       </div>
 
       {/* Management Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
         {/* Recent Bookings */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-4 sm:p-6 border-b border-gray-200">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
-              <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+        <div className="bg-background rounded-xl shadow-sm border border-background-subtle">
+          <div className="p-4 sm:p-6 border-b border-background-subtle">
+            <h2 className="text-lg sm:text-xl font-semibold text-text-primary flex items-center">
+              <Calendar className="h-5 w-5 text-secondary-500 mr-2" />
               Recent Bookings
             </h2>
           </div>
@@ -134,29 +134,29 @@ export const ClubDashboard: React.FC = () => {
             {recentBookings.length > 0 ? (
               <div className="space-y-3 sm:space-y-4">
                 {recentBookings.map((booking) => (
-                  <div key={booking.booking_id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg">
+                  <div key={booking.booking_id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-background-subtle rounded-lg">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
+                      <p className="font-medium text-text-primary truncate">
                         {booking.player_name}
                       </p>
-                      <p className="text-sm text-gray-600 truncate">
+                      <p className="text-sm text-text-secondary truncate">
                         {booking.court_name}
                       </p>
-                      <p className="text-xs sm:text-sm text-gray-500">
+                      <p className="text-xs sm:text-sm text-text-secondary">
                         {booking.slot_date} at {booking.slot_start_time}
                       </p>
                     </div>
                     <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
-                        booking.booking_status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
-                        booking.booking_status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                        booking.booking_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        booking.booking_status === 'approved' ? 'bg-primary-50 text-primary-700' :
+                        booking.booking_status === 'completed' ? 'bg-secondary-100 text-secondary-700' :
+                        booking.booking_status === 'pending' ? 'bg-accent-100 text-accent-700' :
                         'bg-red-100 text-red-800'
                       }`}>
                         {booking.booking_status}
                       </span>
                       {booking.total_amount && (
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-text-primary">
                           ${booking.total_amount}
                         </p>
                       )}
@@ -165,16 +165,16 @@ export const ClubDashboard: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-8 text-sm sm:text-base">No bookings yet</p>
+              <p className="text-text-secondary text-center py-8 text-sm sm:text-base">No bookings yet</p>
             )}
           </div>
         </div>
 
         {/* Courts Overview */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-4 sm:p-6 border-b border-gray-200">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
-              <MapPin className="h-5 w-5 text-emerald-600 mr-2" />
+        <div className="bg-background rounded-xl shadow-sm border border-background-subtle">
+          <div className="p-4 sm:p-6 border-b border-background-subtle">
+            <h2 className="text-lg sm:text-xl font-semibold text-text-primary flex items-center">
+              <MapPin className="h-5 w-5 text-primary-500 mr-2" />
               Courts Overview
             </h2>
           </div>
@@ -182,22 +182,22 @@ export const ClubDashboard: React.FC = () => {
             {courts.length > 0 ? (
               <div className="space-y-3 sm:space-y-4">
                 {courts.map((court) => (
-                  <div key={court.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg">
+                  <div key={court.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-background-subtle rounded-lg">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{court.name}</p>
-                      <p className="text-sm text-gray-600">{court.surface_type} Surface</p>
+                      <p className="font-medium text-text-primary truncate">{court.name}</p>
+                      <p className="text-sm text-text-secondary">{court.surface_type} Surface</p>
                       {court.amenities && court.amenities.length > 0 && (
-                        <p className="text-xs sm:text-sm text-gray-500 truncate">
+                        <p className="text-xs sm:text-sm text-text-secondary truncate">
                           {court.amenities.join(', ')}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2">
-                      <p className="text-base sm:text-lg font-semibold text-gray-900">
+                      <p className="text-base sm:text-lg font-semibold text-text-primary">
                         ${court.hourly_rate}/hr
                       </p>
                       <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${
-                        court.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        court.is_available ? 'bg-secondary-100 text-secondary-700' : 'bg-red-100 text-red-800'
                       }`}>
                         {court.is_available ? 'Available' : 'Unavailable'}
                       </span>
@@ -207,8 +207,8 @@ export const ClubDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-gray-500 mb-4 text-sm sm:text-base">No courts added yet</p>
-                <button className="px-4 py-2 bg-emerald-600 text-white text-sm sm:text-base rounded-lg hover:bg-emerald-700 transition-colors">
+                <p className="text-text-secondary mb-4 text-sm sm:text-base">No courts added yet</p>
+                <button className="px-4 py-2 bg-primary-500 text-white text-sm sm:text-base rounded-lg hover:bg-primary-600 transition-colors">
                   Add Your First Court
                 </button>
               </div>
