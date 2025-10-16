@@ -84,6 +84,8 @@ export const FindClubs: React.FC = () => {
           *,
           countries (name, code)
         `)
+        .eq('approval_status', 'approved')
+        .eq('is_visible', true)
         .order('club_name', { ascending: true });
 
       if (searchTerm) query = query.ilike('club_name', `%${searchTerm}%`);

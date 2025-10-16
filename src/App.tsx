@@ -29,6 +29,7 @@ import { SupabaseSetup } from './components/debug/SupabaseSetup';
 import { DatabaseConnection } from './components/debug/DatabaseConnection';
 import { useAuthStore } from './store/authStore';
 import { Login } from './components/auth/Login';
+import { AdminConsole } from './components/admin/AdminConsole';
 
 function AppContent() {
   const { user, userProfile, loading } = useAuthStore();
@@ -131,6 +132,8 @@ function AppContent() {
         return <FindClubs />;
       case 'analytics':
         return <Analytics />;
+      case 'admin-console':
+        return <AdminConsole />;
       default:
         return (
           <div className="flex items-center justify-center h-96">

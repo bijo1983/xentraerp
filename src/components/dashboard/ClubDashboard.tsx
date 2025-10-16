@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Calendar, Trophy, Users, DollarSign, TrendingUp } from 'lucide-react';
+import { MapPin, Calendar, Trophy, DollarSign, TrendingUp, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 
@@ -15,6 +15,13 @@ export const ClubDashboard: React.FC = () => {
 
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
   const [courts, setCourts] = useState<any[]>([]);
+  type LifecycleState = {
+    approval_status: 'pending' | 'approved' | 'rejected';
+    payment_status: 'unpaid' | 'paid' | 'overdue';
+    is_visible: boolean;
+  };
+
+  const [lifecycle, setLifecycle] = useState<LifecycleState | null>(null);
 
   useEffect(() => {
     if (userProfile) {
@@ -24,6 +31,12 @@ export const ClubDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     if (!userProfile) return;
+
+    const lifecyclePromise = supabase
+      .from('club_users')
+      .select('approval_status, payment_status, is_visible')
+      .eq('id', userProfile.id)
+      .maybeSingle();
 
     // Fetch dashboard stats using stored procedure
     const { data: statsData, error: statsError } = await supabase
@@ -42,6 +55,13 @@ export const ClubDashboard: React.FC = () => {
         monthlyRevenue: stat.monthly_revenue || 0,
         bookingRate: stat.booking_rate || 0,
       });
+    }
+
+    const { data: lifecycleData, error: lifecycleError } = await lifecyclePromise;
+    if (lifecycleError) {
+      console.error('Club lifecycle fetch error:', lifecycleError);
+    } else if (lifecycleData) {
+      setLifecycle(lifecycleData as LifecycleState);
     }
 
     // Fetch recent bookings using stored procedure
@@ -85,6 +105,61 @@ export const ClubDashboard: React.FC = () => {
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Club Management Hub</h1>
         <p className="text-blue-100 text-sm sm:text-base">Manage your courts, bookings, and tournaments all in one place</p>
       </div>
+
+      {lifecycle && (
+        (() => {
+          const alerts: { message: string; tone: 'warning' | 'danger' }[] = [];
+
+          if (lifecycle.approval_status === 'pending') {
+            alerts.push({
+              message: 'Your club profile is awaiting administrator approval. Players cannot discover your club until it is approved.',
+              tone: 'warning',
+            });
+          }
+
+          if (lifecycle.approval_status === 'rejected') {
+            alerts.push({
+              message: 'Your club registration was rejected. Please contact support to resolve the issue.',
+              tone: 'danger',
+            });
+          }
+
+          if (lifecycle.approval_status === 'approved' && !lifecycle.is_visible) {
+            alerts.push({
+              message: 'Your club is currently hidden from public listings. Reach out to the administrator to publish it.',
+              tone: 'warning',
+            });
+          }
+
+          if (lifecycle.payment_status !== 'paid') {
+            alerts.push({
+              message: `Your subscription payment is marked as ${lifecycle.payment_status}. Please coordinate with the administrator to update your payment status.`,
+              tone: lifecycle.payment_status === 'overdue' ? 'danger' : 'warning',
+            });
+          }
+
+          if (alerts.length === 0) return null;
+
+          const severity = alerts.some(alert => alert.tone === 'danger') ? 'danger' : 'warning';
+          const wrapperClasses =
+            severity === 'danger'
+              ? 'bg-rose-50 border-rose-200 text-rose-700'
+              : 'bg-amber-50 border-amber-200 text-amber-800';
+
+          return (
+            <div className={`border rounded-xl p-4 sm:p-5 shadow-sm ${wrapperClasses}`}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 mt-1 flex-shrink-0" />
+                <div className="space-y-2 text-sm">
+                  {alerts.map((alert, index) => (
+                    <p key={index}>{alert.message}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6">
