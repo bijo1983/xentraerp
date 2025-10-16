@@ -6,6 +6,7 @@ import { AuthForm } from './components/auth/AuthForm';
 import Register from './components/auth/Register';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
+import { Footer } from './components/layout/Footer';
 import { PlayerDashboard } from './components/dashboard/PlayerDashboard';
 import { ClubDashboard } from './components/dashboard/ClubDashboard';
 import { OrganizerDashboard } from './components/dashboard/OrganizerDashboard';
@@ -160,21 +161,7 @@ function AppContent() {
           <div className="max-w-7xl mx-auto">{renderMainContent()}</div>
         </main>
       </div>
-      <footer className="bg-background border-t border-background-subtle">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 text-sm text-text-secondary space-y-2">
-          <p className="font-medium text-text-primary">© 2025 Badminton Booking. All rights reserved.</p>
-          <p>Powered by Innovegic Consultancy and IT Services Co W.L.L.</p>
-          <p>
-            Contact:{' '}
-            <a
-              href="mailto:info@innovegict.com"
-              className="text-primary-500 hover:text-primary-600 transition-colors"
-            >
-              info@innovegict.com
-            </a>
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

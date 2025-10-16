@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
+import { SiteSettingsManager } from './SiteSettingsManager';
 
 const APPROVAL_OPTIONS = ['pending', 'approved', 'rejected'] as const;
 const PAYMENT_OPTIONS = ['unpaid', 'paid', 'overdue'] as const;
@@ -348,6 +349,8 @@ export const AdminConsole: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <SiteSettingsManager />
 
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
         <div className="border-b border-gray-200 p-4 sm:p-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
