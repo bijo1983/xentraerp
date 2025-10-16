@@ -147,8 +147,8 @@ DO $$
 DECLARE
   target_email text := 'bijo.mammen@innovegicit.com';
   admin_user_id uuid;
-  admin_profile_id uuid;
-  profile_uuid uuid;
+  admin_account_id uuid;
+  target_profile_uuid uuid := '484435eb-ffde-450b-a3f5-0915b24e1907';
   derived_name text;
   has_password_function boolean;
 BEGIN
@@ -163,19 +163,19 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT id INTO profile_uuid FROM profiles WHERE name = 'Administrator' LIMIT 1;
-  IF profile_uuid IS NULL THEN
-    RAISE EXCEPTION 'Administrator profile missing in profiles table.';
+  PERFORM 1 FROM profiles WHERE id = target_profile_uuid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Administrator profile (id=%) missing in profiles table.', target_profile_uuid;
   END IF;
 
   INSERT INTO admin_users (user_id, full_name, email, profile_id)
-  VALUES (admin_user_id, derived_name, lower(target_email), profile_uuid)
+  VALUES (admin_user_id, derived_name, lower(target_email), target_profile_uuid)
   ON CONFLICT (user_id) DO UPDATE
     SET full_name = EXCLUDED.full_name,
         email = EXCLUDED.email,
         profile_id = EXCLUDED.profile_id,
         updated_at = now()
-  RETURNING id INTO admin_profile_id;
+  RETURNING id INTO admin_account_id;
 
   -- Persist profile type metadata on auth.users
   UPDATE auth.users
@@ -185,7 +185,7 @@ BEGIN
 
   -- Sync auth_user_profiles helper table if available
   IF to_regprocedure('public.sync_auth_user_profile(uuid, text, uuid)') IS NOT NULL THEN
-    PERFORM sync_auth_user_profile(admin_user_id, 'Administrator', admin_profile_id);
+    PERFORM sync_auth_user_profile(admin_user_id, 'Administrator', admin_account_id);
   END IF;
 
   -- Set default password if helper function exists
