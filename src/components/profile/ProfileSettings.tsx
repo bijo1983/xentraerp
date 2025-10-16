@@ -7,6 +7,7 @@ export const ProfileSettings: React.FC = () => {
   const { userProfile, fetchUserProfile } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [countries, setCountries] = useState<any[]>([]);
   const [notFound, setNotFound] = useState(false);
 
@@ -37,6 +38,7 @@ export const ProfileSettings: React.FC = () => {
   const loadUserData = async () => {
     if (!userProfile) return;
     setNotFound(false);
+    setErrorMessage(null);
 
     let tableName = '';
     if (userProfile.type === 'Player') tableName = 'player_users';
@@ -86,6 +88,13 @@ export const ProfileSettings: React.FC = () => {
     e.preventDefault();
     if (!userProfile) return;
 
+    const requiresCountry =
+      userProfile.type === 'Player' || userProfile.type === 'Club' || userProfile.type === 'Organizer';
+    if (requiresCountry && !formData.country_id) {
+      setErrorMessage('Country is required for your profile.');
+      return;
+    }
+
     setLoading(true);
     try {
       let tableName = '';
@@ -96,7 +105,7 @@ export const ProfileSettings: React.FC = () => {
       const updateData: any = {
         email: formData.email,
         phone_number: formData.phone_number,
-        country_id: formData.country_id || null,
+        country_id: requiresCountry ? formData.country_id : formData.country_id || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -120,11 +129,17 @@ export const ProfileSettings: React.FC = () => {
 
       if (error) throw error;
 
+      setErrorMessage(null);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
       fetchUserProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage('Failed to update profile.');
+      }
     } finally {
       setLoading(false);
     }
@@ -168,6 +183,12 @@ export const ProfileSettings: React.FC = () => {
       {success && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <p className="text-green-700 font-medium">Profile updated successfully!</p>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700 text-sm">{errorMessage}</p>
         </div>
       )}
 
@@ -235,14 +256,20 @@ export const ProfileSettings: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Country
+                  {userProfile?.type === 'Administrator' ? 'Country (Optional)' : 'Country *'}
                 </label>
                 <select
                   value={formData.country_id}
-                  onChange={(e) => setFormData({ ...formData, country_id: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, country_id: e.target.value });
+                    setErrorMessage(null);
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  required={userProfile?.type !== 'Administrator'}
                 >
-                  <option value="">Select country</option>
+                  <option value="" disabled={userProfile?.type !== 'Administrator'}>
+                    Select country
+                  </option>
                   {countries.map((country) => (
                     <option key={country.id} value={country.id}>
                       {country.name}
@@ -368,6 +395,12 @@ export const OrganizerUpgrade: React.FC = () => {
       return;
     }
 
+    if (!userProfile.country_id) {
+      setMessage('Please update your profile with a country before upgrading.');
+      setLoading(false);
+      return;
+    }
+
     // 1. Get the club profile for the current user
     const { data: clubUser, error: clubError } = await supabase
       .from('club_users')
@@ -390,7 +423,7 @@ export const OrganizerUpgrade: React.FC = () => {
             club_name: userProfile.name,
             email: userProfile.email,
             phone_number: userProfile.phone_number || '',
-            country_id: userProfile.country_id || null,
+            country_id: userProfile.country_id,
             created_at: new Date().toISOString(),
           },
         ]);
@@ -418,6 +451,12 @@ export const OrganizerUpgrade: React.FC = () => {
       }
 
       activeClubUser = refetchedClubUser;
+    }
+
+    if (!activeClubUser.country_id) {
+      setMessage('Please add a country to your club profile before upgrading.');
+      setLoading(false);
+      return;
     }
 
     // 2. Get the Organizer profile_id
