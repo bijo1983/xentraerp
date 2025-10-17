@@ -140,11 +140,74 @@ export const ApproveRequests: React.FC = () => {
 
       if (error) throw error;
 
+      const batchIds = Array.isArray(data) ? data.map((row) => row.id).filter(Boolean) : [];
+
+      let slotsByBatch: Record<string, GroupBatchSlot[]> = {};
+
+      if (batchIds.length > 0) {
+        const { data: bookingRows, error: bookingError } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            booking_batch_id,
+            slot_id,
+            court_slots (
+              date,
+              start_time,
+              end_time,
+              court_id,
+              courts (
+                id,
+                name
+              )
+            )
+          `)
+          .in('booking_batch_id', batchIds);
+
+        if (bookingError) {
+          console.error('Error fetching slots for batches:', bookingError);
+        } else if (Array.isArray(bookingRows)) {
+          slotsByBatch = bookingRows.reduce<Record<string, GroupBatchSlot[]>>((acc, booking: any) => {
+            const batchId = booking.booking_batch_id;
+            if (!batchId) return acc;
+
+            const slot: GroupBatchSlot = {
+              booking_id: booking.id,
+              slot_id: booking.slot_id ?? '',
+              slot_date: booking.court_slots?.date ?? null,
+              slot_start_time: booking.court_slots?.start_time ?? null,
+              slot_end_time: booking.court_slots?.end_time ?? null,
+              court_id: booking.court_slots?.court_id ?? null,
+              court_name: booking.court_slots?.courts?.name ?? null,
+            };
+
+            if (!acc[batchId]) {
+              acc[batchId] = [];
+            }
+
+            acc[batchId].push(slot);
+            return acc;
+          }, {});
+        }
+      }
+
       const mapped: GroupBatchRequest[] = (data || []).map((row: any) => {
         const relation = row.group_users;
         const derivedGroupName = Array.isArray(relation)
           ? relation[0]?.group_name ?? null
           : relation?.group_name ?? null;
+
+        const directSlots: GroupBatchSlot[] = Array.isArray(row.bookings)
+          ? row.bookings.map((booking: any) => ({
+              booking_id: booking.id,
+              slot_id: booking.slot_id ?? '',
+              slot_date: booking.court_slots?.date ?? null,
+              slot_start_time: booking.court_slots?.start_time ?? null,
+              slot_end_time: booking.court_slots?.end_time ?? null,
+              court_id: booking.court_slots?.court_id ?? null,
+              court_name: booking.court_slots?.courts?.name ?? null,
+            }))
+          : [];
 
         return {
           batch_id: row.id,
@@ -157,18 +220,7 @@ export const ApproveRequests: React.FC = () => {
           group_name: derivedGroupName,
           club_id: row.club_id,
           created_at: row.created_at,
-          slots:
-            Array.isArray(row.bookings)
-              ? row.bookings.map((booking: any) => ({
-                  booking_id: booking.id,
-                  slot_id: booking.slot_id ?? '',
-                  slot_date: booking.court_slots?.date ?? null,
-                  slot_start_time: booking.court_slots?.start_time ?? null,
-                  slot_end_time: booking.court_slots?.end_time ?? null,
-                  court_id: booking.court_slots?.court_id ?? null,
-                  court_name: booking.court_slots?.courts?.name ?? null,
-                }))
-              : [],
+          slots: slotsByBatch[row.id] ?? directSlots,
         };
       });
 
