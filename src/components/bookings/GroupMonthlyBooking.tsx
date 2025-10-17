@@ -4,6 +4,30 @@ import { Calendar, CheckCircle, Info, Loader2, RefreshCw, XCircle } from 'lucide
 import { supabase } from '../../lib/supabase';
 import { useCurrency } from '../../hooks/useCurrency';
 
+const isPermissionError = (status?: number, error?: unknown): boolean => {
+  if (status && [401, 403].includes(status)) {
+    return true;
+  }
+
+  const maybeError = (error ?? {}) as { code?: string; message?: string };
+  const code = maybeError.code ?? '';
+  if (code === '42501' || code === 'PGRST301' || code === 'PGRST302') {
+    return true;
+  }
+
+  const message = maybeError.message ?? '';
+  if (typeof message === 'string') {
+    return /permission denied|forbidden|unauthori[sz]ed/i.test(message);
+  }
+
+  return false;
+};
+
+const getRestrictionMessage = (mode: 'group' | 'club'): string =>
+  mode === 'group'
+    ? 'Monthly planning is currently disabled for your group account. Please contact your club administrator to enable this feature.'
+    : 'Monthly planning is currently disabled for this club. Review your Supabase policies or contact support to enable the feature.';
+
 type MonthlySlot = {
   slot_id: string;
   court_id: string;
@@ -50,33 +74,60 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const effectiveModeLabel = mode === 'group' ? 'Your group' : 'Club-managed';
-  const plannerDisabled = disabled || !clubId || !groupId;
-  const fallbackNoClubMessage =
-    noClubMessage ?? 'Connect your group profile to a club to unlock the monthly planner.';
+  const basePlannerDisabled = disabled || !clubId || !groupId;
+  const baseDisabledReason = useMemo(() => {
+    if (!clubId) {
+      return 'Connect your group profile to a club to unlock the monthly planner.';
+    }
 
-  const disabledReason = !clubId
-    ? fallbackNoClubMessage
-    : disabled
-    ? 'Monthly planning is currently disabled.'
-    : null;
+    if (disabled) {
+      return 'Monthly planning is currently disabled.';
+    }
+
+    return null;
+  }, [clubId, disabled]);
+
+  const [plannerRestriction, setPlannerRestriction] = useState<string | null>(null);
+  const plannerUnavailable = basePlannerDisabled || !!plannerRestriction;
 
   useEffect(() => {
-    if (plannerDisabled) {
+    if (basePlannerDisabled) {
       setSlots([]);
       setSelectedSlotIds([]);
       return;
     }
 
+    if (plannerRestriction) {
+      setSlots([]);
+      setSelectedSlotIds([]);
+      return;
+    }
+
+    let isActive = true;
+
     const loadSlots = async () => {
       setLoadingSlots(true);
       setFeedback(null);
       try {
-        const { data, error } = await supabase.rpc('get_club_monthly_available_slots', {
+        const { data, error, status } = await supabase.rpc('get_club_monthly_available_slots', {
           p_club_id: clubId,
           p_month: format(selectedMonth, 'yyyy-MM-dd'),
         });
 
+        if (!isActive) {
+          return;
+        }
+
         if (error) {
+          if (isPermissionError(status, error)) {
+            console.warn('[GroupMonthlyBooking] loadSlots permission issue', { status, error });
+            const message = getRestrictionMessage(mode);
+            setPlannerRestriction(message);
+            setSlots([]);
+            setSelectedSlotIds([]);
+            return;
+          }
+
           console.error('[GroupMonthlyBooking] loadSlots error', error);
           setSlots([]);
           setFeedback({ type: 'error', message: 'Unable to load slots for the selected month.' });
@@ -87,16 +138,38 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         setSlots(available);
         setSelectedSlotIds((prev) => prev.filter((id) => available.some((slot) => slot.slot_id === id)));
       } catch (err) {
-        console.error('[GroupMonthlyBooking] loadSlots exception', err);
-        setSlots([]);
-        setFeedback({ type: 'error', message: 'Something went wrong while loading slots.' });
+        if (!isActive) {
+          return;
+        }
+
+        if (isPermissionError((err as { status?: number } | null | undefined)?.status, err)) {
+          console.warn('[GroupMonthlyBooking] loadSlots permission exception', err);
+          const message = getRestrictionMessage(mode);
+          setPlannerRestriction(message);
+          setSlots([]);
+          setSelectedSlotIds([]);
+        } else {
+          console.error('[GroupMonthlyBooking] loadSlots exception', err);
+          setSlots([]);
+          setFeedback({ type: 'error', message: 'Something went wrong while loading slots.' });
+        }
       } finally {
-        setLoadingSlots(false);
+        if (isActive) {
+          setLoadingSlots(false);
+        }
       }
     };
 
     void loadSlots();
-  }, [clubId, groupId, selectedMonth, plannerDisabled]);
+
+    return () => {
+      isActive = false;
+    };
+  }, [clubId, groupId, selectedMonth, basePlannerDisabled, plannerRestriction, mode]);
+
+  useEffect(() => {
+    setPlannerRestriction(null);
+  }, [clubId, groupId]);
 
   const selectedSlots = useMemo(
     () => slots.filter((slot) => selectedSlotIds.includes(slot.slot_id)),
@@ -111,7 +184,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const bookingCount = selectedSlotIds.length;
 
   const toggleSlot = (slotId: string) => {
-    if (plannerDisabled) return;
+    if (plannerUnavailable) return;
     setSelectedSlotIds((prev) =>
       prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
     );
@@ -125,7 +198,12 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (plannerDisabled) return;
+    if (plannerUnavailable) {
+      if (plannerRestriction) {
+        setFeedback({ type: 'error', message: plannerRestriction });
+      }
+      return;
+    }
     if (!bookingCount) {
       setFeedback({ type: 'error', message: 'Please choose at least one slot to continue.' });
       return;
@@ -208,7 +286,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             type="button"
             onClick={() => shiftMonth('prev')}
             className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loadingSlots || submitting || plannerDisabled}
+            disabled={loadingSlots || submitting || plannerUnavailable}
           >
             <RefreshCw className="h-4 w-4 mr-1 inline-block rotate-180" /> Prev
           </button>
@@ -220,17 +298,36 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             type="button"
             onClick={() => shiftMonth('next')}
             className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loadingSlots || submitting || plannerDisabled}
+            disabled={loadingSlots || submitting || plannerUnavailable}
           >
             Next <RefreshCw className="h-4 w-4 ml-1 inline-block" />
           </button>
         </div>
       </div>
 
-      {disabledReason && (
+      {baseDisabledReason && (
         <div className="flex items-start gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
           <Info className="h-4 w-4 text-blue-500" />
-          <span>{disabledReason}</span>
+          <span>{baseDisabledReason}</span>
+        </div>
+      )}
+
+      {plannerRestriction && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
+          <div className="flex items-start gap-2">
+            <Info className="h-4 w-4 text-amber-500 mt-0.5" />
+            <span className="flex-1">{plannerRestriction}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setPlannerRestriction(null);
+              setFeedback(null);
+            }}
+            className="self-start sm:self-auto inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors"
+          >
+            Try again
+          </button>
         </div>
       )}
 
@@ -261,10 +358,12 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           )}
         </div>
         <div className="p-6">
-          {plannerDisabled ? (
+          {basePlannerDisabled ? (
             <div className="text-center text-sm text-blue-700">
               {disabledReason ?? 'Monthly planning is currently unavailable.'}
             </div>
+          ) : plannerRestriction ? (
+            <div className="text-center text-sm text-amber-700">{plannerRestriction}</div>
           ) : slots.length === 0 ? (
             <div className="text-center text-sm text-gray-600">
               No free slots were found for this month. Try another month or check back later.
@@ -302,7 +401,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
                             className="h-4 w-4 text-green-600 rounded border-gray-300"
                             checked={selected}
                             onChange={() => toggleSlot(slot.slot_id)}
-                            disabled={submitting || plannerDisabled}
+                            disabled={submitting || plannerUnavailable}
                           />
                         </td>
                       </tr>
@@ -335,7 +434,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             onChange={(e) => setNotes(e.target.value)}
             placeholder={notesPlaceholder}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            disabled={submitting || plannerDisabled}
+            disabled={submitting || plannerUnavailable}
           />
         </div>
 
@@ -343,7 +442,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || bookingCount === 0 || plannerDisabled}
+            disabled={submitting || bookingCount === 0 || plannerUnavailable}
             className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
           >
             {submitting ? 'Submitting…' : 'Submit monthly plan'}
