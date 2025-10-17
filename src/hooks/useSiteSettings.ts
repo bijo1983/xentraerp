@@ -33,26 +33,58 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
 const SITE_SETTINGS_QUERY_KEY = ['site-settings', 'footer'] as const;
 
-const fetchSiteSettings = async (): Promise<SiteSettings> => {
-  const { data, error } = await supabase
-    .from('site_settings')
-    .select('*')
-    .eq('slug', 'footer')
-    .maybeSingle();
+const shouldFallbackToDefault = (status?: number, error?: unknown): boolean => {
+  if (status && [401, 403, 404].includes(status)) {
+    return true;
+  }
 
-  if (error) {
-    if ((error as { code?: string }).code === 'PGRST116') {
+  const maybeError = (error ?? {}) as { code?: string; message?: string };
+  const code = maybeError.code ?? '';
+  if (code === 'PGRST116' || code === '42501' || code === 'PGRST301' || code === 'PGRST302') {
+    return true;
+  }
+
+  const message = maybeError.message ?? '';
+  if (typeof message === 'string') {
+    return /permission denied|forbidden|not found|does not exist/i.test(message);
+  }
+
+  return false;
+};
+
+const fetchSiteSettings = async (): Promise<SiteSettings> => {
+  try {
+    const { data, error, status } = await supabase
+      .from('site_settings')
+      .select('*')
+      .eq('slug', 'footer')
+      .maybeSingle();
+
+    if (error) {
+      if (shouldFallbackToDefault(status, error)) {
+        console.warn('[useSiteSettings] Falling back to default footer settings.', { status, error });
+        return DEFAULT_SITE_SETTINGS;
+      }
+
+      throw error;
+    }
+
+    if (!data) {
       return DEFAULT_SITE_SETTINGS;
     }
 
-    throw error;
-  }
+    return data as SiteSettings;
+  } catch (err: unknown) {
+    const maybeStatus = (err as { status?: number } | null | undefined)?.status;
+    const status = typeof maybeStatus === 'number' ? maybeStatus : undefined;
 
-  if (!data) {
-    return DEFAULT_SITE_SETTINGS;
-  }
+    if (shouldFallbackToDefault(status, err)) {
+      console.warn('[useSiteSettings] Unexpected error, using default footer settings.', err);
+      return DEFAULT_SITE_SETTINGS;
+    }
 
-  return data as SiteSettings;
+    throw err;
+  }
 };
 
 export const useSiteSettings = () => {
