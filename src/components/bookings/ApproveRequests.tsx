@@ -64,6 +64,10 @@ export const ApproveRequests: React.FC = () => {
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
 
+  const toggleBatchDetails = (batchId: string) => {
+    setExpandedBatchId((current) => (current === batchId ? null : batchId));
+  };
+
   useEffect(() => {
     if (!userProfile) return;
 
@@ -152,7 +156,19 @@ export const ApproveRequests: React.FC = () => {
           group_id: row.group_id ?? null,
           group_name: derivedGroupName,
           club_id: row.club_id,
-          created_at: row.created_at
+          created_at: row.created_at,
+          slots:
+            Array.isArray(row.bookings)
+              ? row.bookings.map((booking: any) => ({
+                  booking_id: booking.id,
+                  slot_id: booking.slot_id ?? '',
+                  slot_date: booking.court_slots?.date ?? null,
+                  slot_start_time: booking.court_slots?.start_time ?? null,
+                  slot_end_time: booking.court_slots?.end_time ?? null,
+                  court_id: booking.court_slots?.court_id ?? null,
+                  court_name: booking.court_slots?.courts?.name ?? null,
+                }))
+              : [],
         };
       });
 
@@ -418,22 +434,6 @@ export const ApproveRequests: React.FC = () => {
                         </button>
                       </div>
                       {batch.notes && <p className="text-sm text-text-secondary mt-2">Notes: {batch.notes}</p>}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => rejectBatch(batch)}
-                        disabled={processingBatchId === batch.batch_id}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <XCircle className="h-4 w-4" /> Reject
-                      </button>
-                      <button
-                        onClick={() => approveBatch(batch)}
-                        disabled={processingBatchId === batch.batch_id}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <CheckCircle className="h-4 w-4" /> Approve
-                      </button>
                     </div>
                   </div>
                   {expanded && (
