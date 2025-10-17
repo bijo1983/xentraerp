@@ -27,6 +27,7 @@ type GroupMonthlyBookingProps = {
   mode: 'group' | 'club';
   disabled?: boolean;
   onSubmitted?: (result: SubmissionResult) => void;
+  noClubMessage?: string;
 };
 
 export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
@@ -36,6 +37,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   mode,
   disabled = false,
   onSubmitted,
+  noClubMessage,
 }) => {
   const { formatPrice } = useCurrency();
 
@@ -49,8 +51,11 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
 
   const effectiveModeLabel = mode === 'group' ? 'Your group' : 'Club-managed';
   const plannerDisabled = disabled || !clubId || !groupId;
+  const fallbackNoClubMessage =
+    noClubMessage ?? 'Connect your group profile to a club to unlock the monthly planner.';
+
   const disabledReason = !clubId
-    ? 'Connect your group profile to a club to unlock the monthly planner.'
+    ? fallbackNoClubMessage
     : disabled
     ? 'Monthly planning is currently disabled.'
     : null;
@@ -258,7 +263,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         <div className="p-6">
           {plannerDisabled ? (
             <div className="text-center text-sm text-blue-700">
-              Monthly planning will become available once your group is linked to an active club.
+              {disabledReason ?? 'Monthly planning is currently unavailable.'}
             </div>
           ) : slots.length === 0 ? (
             <div className="text-center text-sm text-gray-600">

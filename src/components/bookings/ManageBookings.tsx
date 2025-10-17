@@ -477,13 +477,58 @@ export const ManageBookings: React.FC = () => {
 
   const getSelectedCourtInfo = () => courts.find((c) => c.id === selectedCourt);
 
+  const modeButtonClass = (mode: 'player' | 'group') =>
+    `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 ${
+      bookingMode === mode
+        ? 'bg-green-600 text-white border-green-600 shadow-sm'
+        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+    }`;
+
   /* -------------------- Render -------------------- */
 
   return (
     <div className="space-y-8">
       <div className="bg-gradient-to-r from-green-600 to-teal-600 rounded-xl p-8 text-white">
         <h1 className="text-3xl font-bold mb-2">Manage Bookings</h1>
-        <p className="text-green-100">Create and manage court bookings for players</p>
+        <p className="text-green-100">
+          Create and manage court bookings for players or plan recurring sessions for groups
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Booking workspace</h2>
+          <p className="text-sm text-gray-600">
+            Switch between individual player bookings and the monthly group planner for your club.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="inline-flex rounded-lg bg-gray-50 p-1">
+            <button
+              type="button"
+              onClick={() => setBookingMode('player')}
+              className={modeButtonClass('player')}
+            >
+              <Clock className="h-4 w-4" /> Player bookings
+            </button>
+            <button
+              type="button"
+              onClick={() => setBookingMode('group')}
+              className={modeButtonClass('group')}
+            >
+              <Users className="h-4 w-4" /> Group planner
+            </button>
+          </div>
+          {bookingMode === 'group' ? (
+            <p className="text-xs text-gray-500">
+              Load group profiles linked to your club to plan monthly availability.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Search players and confirm ad-hoc bookings from your club roster.
+            </p>
+          )}
+        </div>
       </div>
 
       {bookingMode === 'player' ? (

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar, MapPin } from 'lucide-react';
+import { Calendar, Loader2, MapPin, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { GroupMonthlyBooking } from './GroupMonthlyBooking';
@@ -40,6 +40,15 @@ type GroupBatchRow = {
   created_at: string;
 };
 
+type ClubOption = {
+  id: string;
+  club_name: string;
+  city?: string | null;
+  countries?: {
+    name?: string | null;
+  } | null;
+};
+
 type GroupBookingPageProps = {
   showPlanner?: boolean;
 };
@@ -55,6 +64,16 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
   const [bookings, setBookings] = useState<GroupBookingRow[]>([]);
   const [batches, setBatches] = useState<GroupBatchRow[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+
+  const [plannerClub, setPlannerClub] = useState<{
+    id: string;
+    name: string;
+    location?: string | null;
+  } | null>(null);
+  const [clubSearchTerm, setClubSearchTerm] = useState('');
+  const [clubResults, setClubResults] = useState<ClubOption[]>([]);
+  const [searchingClubs, setSearchingClubs] = useState(false);
+  const [clubSearchError, setClubSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -103,6 +122,19 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.user_id]);
 
+  useEffect(() => {
+    if (groupInfo?.club_id && groupInfo.club_users?.club_name) {
+      setPlannerClub((current) =>
+        current?.id
+          ? current
+          : {
+              id: groupInfo.club_id!,
+              name: groupInfo.club_users!.club_name,
+            }
+      );
+    }
+  }, [groupInfo?.club_id, groupInfo?.club_users?.club_name]);
+
   const refreshData = async (groupId: string) => {
     setLoadingData(true);
     try {
@@ -132,6 +164,64 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
     }
   };
 
+  const resolveLocation = (club: ClubOption) =>
+    [club.city, club.countries?.name].filter(Boolean).join(', ') || null;
+
+  const searchClubs = async () => {
+    setSearchingClubs(true);
+    setClubSearchError(null);
+    try {
+      const trimmed = clubSearchTerm.trim();
+      let query = supabase
+        .from('club_users')
+        .select('id, club_name, city, countries (name)')
+        .eq('approval_status', 'approved')
+        .eq('is_visible', true)
+        .order('club_name', { ascending: true });
+
+      if (trimmed) {
+        query = query.ilike('club_name', `%${trimmed}%`);
+      }
+
+      const { data, error } = await query.limit(10);
+
+      if (error) {
+        console.error('[GroupBookingPage] club search error', error);
+        setClubResults([]);
+        setClubSearchError('Unable to search clubs right now. Please try again.');
+        return;
+      }
+
+      const rows = ((data ?? []) as ClubOption[]).filter(
+        (club) => Boolean(club.id) && Boolean(club.club_name)
+      );
+
+      setClubResults(rows);
+    } catch (err) {
+      console.error('[GroupBookingPage] club search exception', err);
+      setClubResults([]);
+      setClubSearchError('Unable to search clubs right now. Please try again.');
+    } finally {
+      setSearchingClubs(false);
+    }
+  };
+
+  const handleSelectClub = (club: ClubOption) => {
+    setPlannerClub({
+      id: club.id,
+      name: club.club_name,
+      location: resolveLocation(club),
+    });
+  };
+
+  const useAssignedClub = () => {
+    if (!groupInfo?.club_id || !groupInfo.club_users?.club_name) return;
+    setPlannerClub({
+      id: groupInfo.club_id,
+      name: groupInfo.club_users.club_name,
+    });
+  };
+
   if (loadingGroup) {
     return (
       <div className="p-8 text-center text-gray-600">Loading group information…</div>
@@ -152,36 +242,28 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
     );
   }
 
-  const clubName = groupInfo.club_users?.club_name ?? 'No club assigned';
+  const assignedClubName = groupInfo.club_users?.club_name ?? 'No club assigned';
   const hasClubAssigned = Boolean(groupInfo.club_id);
+  const plannerHasClub = Boolean(plannerClub?.id);
+  const plannerMatchesAssigned =
+    plannerHasClub && hasClubAssigned && plannerClub?.id === groupInfo.club_id;
+  const plannerLocation = plannerClub?.location;
+  const plannerStatusMessage = plannerHasClub
+    ? plannerMatchesAssigned
+      ? 'Planning with your assigned club.'
+      : 'Planning with a different approved club.'
+    : 'Select a club below to begin monthly planning.';
 
   const plannerSection = showPlanner ? (
-    hasClubAssigned ? (
-      <GroupMonthlyBooking
-        clubId={groupInfo.club_id!}
-        groupId={groupInfo.id}
-        groupName={groupInfo.group_name}
-        mode="group"
-        onSubmitted={() => void refreshData(groupInfo.id)}
-      />
-    ) : (
-      <div className="space-y-4">
-        <div className="bg-white border border-yellow-200 rounded-xl p-6 text-sm text-yellow-800">
-          <p className="font-medium">No club assigned yet</p>
-          <p className="mt-2">
-            Your group hasn't been linked to a club. Use the court search below to explore clubs in your country or ask a
-            club administrator to connect your profile for monthly planning.
-          </p>
-        </div>
-        <GroupMonthlyBooking
-          clubId=""
-          groupId={groupInfo.id}
-          groupName={groupInfo.group_name}
-          mode="group"
-          disabled
-        />
-      </div>
-    )
+    <GroupMonthlyBooking
+      clubId={plannerClub?.id ?? ''}
+      groupId={groupInfo.id}
+      groupName={groupInfo.group_name}
+      mode="group"
+      disabled={!plannerHasClub}
+      onSubmitted={() => void refreshData(groupInfo.id)}
+      noClubMessage="Select a club from the search above to load the monthly planner."
+    />
   ) : null;
 
   return (
@@ -193,20 +275,129 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
         </div>
         <div
           className={`rounded-lg px-4 py-3 border ${
-            hasClubAssigned ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'
+            plannerHasClub ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'
           }`}
         >
           <p
             className={`text-sm font-medium flex items-center gap-2 ${
-              hasClubAssigned ? 'text-green-700' : 'text-yellow-800'
+              plannerHasClub ? 'text-green-700' : 'text-yellow-800'
             }`}
           >
-            <MapPin className="h-4 w-4" /> {clubName}
+            <MapPin className="h-4 w-4" /> {plannerHasClub ? plannerClub?.name : 'No club selected'}
           </p>
-          <p className={`text-xs ${hasClubAssigned ? 'text-green-600' : 'text-yellow-700'}`}>
+          {plannerLocation && (
+            <p className={`text-xs mt-1 ${plannerHasClub ? 'text-green-600' : 'text-yellow-700'}`}>
+              {plannerLocation}
+            </p>
+          )}
+          <p className={`text-xs mt-1 ${plannerHasClub ? 'text-green-600' : 'text-yellow-700'}`}>
+            {plannerStatusMessage}
+          </p>
+          <p className={`text-xs mt-1 ${plannerHasClub ? 'text-green-600' : 'text-yellow-700'}`}>
+            Assigned club: {assignedClubName}
+            {plannerHasClub && hasClubAssigned && !plannerMatchesAssigned ? ' (different)' : ''}
+          </p>
+          <p className={`text-xs mt-1 ${plannerHasClub ? 'text-green-600' : 'text-yellow-700'}`}>
             Group: {groupInfo.group_name}
           </p>
         </div>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Select a club for monthly planning</h2>
+          <p className="text-sm text-gray-600">
+            Browse approved clubs and choose where your group would like to reserve slots. Selecting a club here doesn't
+            change your official club assignment.
+          </p>
+        </div>
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              value={clubSearchTerm}
+              onChange={(e) => {
+                setClubSearchTerm(e.target.value);
+                if (clubSearchError) setClubSearchError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void searchClubs();
+                }
+              }}
+              className="w-full pl-9 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              placeholder="Search by club name"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => void searchClubs()}
+            disabled={searchingClubs}
+            className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
+          >
+            {searchingClubs ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Searching…
+              </>
+            ) : (
+              'Search clubs'
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={useAssignedClub}
+            disabled={!hasClubAssigned || plannerClub?.id === groupInfo.club_id}
+            className="inline-flex items-center justify-center px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Use assigned club
+          </button>
+        </div>
+        {clubSearchError && <p className="text-xs text-red-600">{clubSearchError}</p>}
+        {clubResults.length > 0 && (
+          <ul className="space-y-2">
+            {clubResults.map((club) => {
+              const isActive = plannerClub?.id === club.id;
+              const location = resolveLocation(club);
+              return (
+                <li
+                  key={club.id}
+                  className="flex items-center justify-between border border-gray-200 rounded-lg p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{club.club_name}</p>
+                    {location && <p className="text-xs text-gray-500">{location}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectClub(club)}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                      isActive
+                        ? 'bg-green-100 text-green-700 border-green-300 cursor-default'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    disabled={isActive}
+                  >
+                    {isActive ? 'Selected' : 'Use this club'}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {!searchingClubs && !clubSearchError && clubResults.length === 0 && clubSearchTerm.trim() && (
+          <p className="text-sm text-gray-500">
+            No clubs matched "{clubSearchTerm.trim()}". Try another search.
+          </p>
+        )}
+        {!plannerHasClub && !clubSearchTerm.trim() && !searchingClubs && clubResults.length === 0 && (
+          <p className="text-xs text-gray-500">
+            {hasClubAssigned
+              ? 'Use your assigned club or search for another approved location.'
+              : 'Search for an approved club to begin monthly planning.'}
+          </p>
+        )}
       </div>
 
       {plannerSection}
