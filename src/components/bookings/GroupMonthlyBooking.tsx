@@ -64,6 +64,9 @@ const getRestrictionMessage = (mode: 'group' | 'club'): string =>
     ? 'Monthly planning is currently disabled for your group account. Please contact your club administrator to enable this feature.'
     : 'Monthly planning is currently disabled for this club. Review your Supabase policies or contact support to enable the feature.';
 
+const STACK_DEPTH_RESTRICTION_MESSAGE =
+  'Group booking submissions are temporarily unavailable because the database reported a stack depth limit error. Please contact your administrator to review the Supabase functions and configuration.';
+
 type MonthlySlot = {
   slot_id: string;
   court_id: string;
@@ -113,7 +116,9 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const basePlannerDisabled = disabled || !clubId || !groupId;
   const baseDisabledReason = useMemo(() => {
     if (!clubId) {
-      return 'Connect your group profile to a club to unlock the monthly planner.';
+      return (
+        noClubMessage ?? 'Connect your group profile to a club to unlock the monthly planner.'
+      );
     }
 
     if (disabled) {
@@ -121,19 +126,13 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     }
 
     return null;
-  }, [clubId, disabled]);
+  }, [clubId, disabled, noClubMessage]);
 
   const [plannerRestriction, setPlannerRestriction] = useState<string | null>(null);
   const plannerUnavailable = basePlannerDisabled || !!plannerRestriction;
 
   useEffect(() => {
-    if (basePlannerDisabled) {
-      setSlots([]);
-      setSelectedSlotIds([]);
-      return;
-    }
-
-    if (plannerRestriction) {
+    if (basePlannerDisabled || plannerRestriction) {
       setSlots([]);
       setSelectedSlotIds([]);
       return;
@@ -144,6 +143,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     const loadSlots = async () => {
       setLoadingSlots(true);
       setFeedback(null);
+
       try {
         const { data, error, status } = await supabase.rpc('get_club_monthly_available_slots', {
           p_club_id: clubId,
@@ -167,8 +167,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
 
           if (isPermissionError(status, error)) {
             console.warn('[GroupMonthlyBooking] loadSlots permission issue', { status, error });
-            const message = getRestrictionMessage(mode);
-            setPlannerRestriction(message);
+            setPlannerRestriction(getRestrictionMessage(mode));
             setSlots([]);
             setSelectedSlotIds([]);
             return;
@@ -197,8 +196,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           setSelectedSlotIds([]);
         } else if (isPermissionError((err as { status?: number } | null | undefined)?.status, err)) {
           console.warn('[GroupMonthlyBooking] loadSlots permission exception', err);
-          const message = getRestrictionMessage(mode);
-          setPlannerRestriction(message);
+          setPlannerRestriction(getRestrictionMessage(mode));
           setSlots([]);
           setSelectedSlotIds([]);
         } else {
@@ -237,7 +235,10 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const bookingCount = selectedSlotIds.length;
 
   const toggleSlot = (slotId: string) => {
-    if (plannerUnavailable) return;
+    if (plannerUnavailable) {
+      return;
+    }
+
     setSelectedSlotIds((prev) =>
       prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
     );
@@ -257,6 +258,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       }
       return;
     }
+
     if (!bookingCount) {
       setFeedback({ type: 'error', message: 'Please choose at least one slot to continue.' });
       return;
@@ -314,7 +316,9 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       });
       setSelectedSlotIds([]);
       setNotes('');
-      if (onSubmitted) onSubmitted(payload);
+      if (onSubmitted) {
+        onSubmitted(payload);
+      }
 
       // Refresh slots to reflect new reservations
       const { data: refreshed, error: refreshError } = await supabase.rpc(
