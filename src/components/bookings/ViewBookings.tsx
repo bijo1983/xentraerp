@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, User, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, User, CheckCircle, XCircle, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
@@ -70,33 +70,46 @@ export const ViewBookings: React.FC = () => {
 
       if (error) throw error;
 
-      const transformedData = data?.map((booking: any) => ({
-        id: booking.booking_id,
-        status: booking.booking_status,
-        payment_status: booking.payment_status,
-        total_amount: booking.total_amount,
-        notes: booking.booking_notes,
-        created_at: booking.booking_created_at,
-        slot_id: booking.slot_id,
-        player_users: {
-          id: booking.player_id,
-          full_name: booking.player_name,
-          email: booking.player_email,
-          phone_number: booking.player_phone
-        },
-        court_slots: {
-          id: booking.slot_id,
-          date: booking.slot_date,
-          start_time: booking.slot_start_time,
-          end_time: booking.slot_end_time,
-          court_id: booking.court_id,
-          courts: {
-            id: booking.court_id,
-            name: booking.court_name,
-            hourly_rate: booking.court_hourly_rate
+      const transformedData = data?.map((booking: any) => {
+        const groupName =
+          booking.group_name ||
+          booking.group_users?.group_name ||
+          (booking.group?.group_name ?? null);
+
+        return {
+          id: booking.booking_id,
+          status: booking.booking_status,
+          payment_status: booking.payment_status,
+          total_amount: booking.total_amount,
+          notes: booking.booking_notes,
+          created_at: booking.booking_created_at,
+          slot_id: booking.slot_id,
+          player_users: {
+            id: booking.player_id,
+            full_name: booking.player_name,
+            email: booking.player_email,
+            phone_number: booking.player_phone
+          },
+          group: booking.group_id
+            ? {
+                id: booking.group_id,
+                name: groupName,
+              }
+            : null,
+          court_slots: {
+            id: booking.slot_id,
+            date: booking.slot_date,
+            start_time: booking.slot_start_time,
+            end_time: booking.slot_end_time,
+            court_id: booking.court_id,
+            courts: {
+              id: booking.court_id,
+              name: booking.court_name,
+              hourly_rate: booking.court_hourly_rate
+            }
           }
-        }
-      })) || [];
+        };
+      }) || [];
 
       setBookings(transformedData);
     } catch (error) {
@@ -284,7 +297,7 @@ export const ViewBookings: React.FC = () => {
                     Date & Time
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Player
+                    Player / Group
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Contact
@@ -313,15 +326,31 @@ export const ViewBookings: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <User className="h-4 w-4 mr-2 text-gray-400" />
-                        <div className="text-sm font-medium text-gray-900">{booking.player_users.full_name}</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center">
+                          <User className="h-4 w-4 mr-2 text-gray-400" />
+                          <div className="text-sm font-medium text-gray-900">
+                            {booking.player_users.full_name || '—'}
+                          </div>
+                        </div>
+                        {booking.group && (
+                          <div className="flex items-center text-xs text-gray-600">
+                            <Users className="h-3.5 w-3.5 mr-1 text-gray-400" />
+                            <span>Group: {booking.group.name || 'Group booking'}</span>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{booking.player_users.email}</div>
-                      {booking.player_users.phone_number && (
-                        <div className="text-sm text-gray-500">{booking.player_users.phone_number}</div>
+                      {booking.group ? (
+                        <div className="text-sm text-gray-600">Group booking</div>
+                      ) : (
+                        <>
+                          <div className="text-sm text-gray-900">{booking.player_users.email}</div>
+                          {booking.player_users.phone_number && (
+                            <div className="text-sm text-gray-500">{booking.player_users.phone_number}</div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

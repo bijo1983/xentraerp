@@ -371,7 +371,8 @@ export const ManageBookings: React.FC = () => {
           `
           *,
           player_users ( full_name, email, phone_number ),
-          court_slots ( start_time, end_time )
+          group_users ( group_name ),
+          court_slots ( start_time, end_time, date, courts ( name ) )
         `
         )
         .eq('slot_id', slotId)
@@ -743,16 +744,33 @@ export const ManageBookings: React.FC = () => {
                       {bookingDetails.court_slots?.start_time || selectedSlot.start_time} -{' '}
                       {bookingDetails.court_slots?.end_time || selectedSlot.end_time}
                     </p>
+                    {bookingDetails.court_slots?.date && (
+                      <p className="text-sm text-gray-600">
+                        {new Date(bookingDetails.court_slots.date).toLocaleDateString()}
+                      </p>
+                    )}
+                    {bookingDetails.court_slots?.courts?.name && (
+                      <p className="text-sm text-gray-600">{bookingDetails.court_slots.courts.name}</p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Player</label>
-                    <p className="text-gray-900 font-medium">{bookingDetails.player_users?.full_name}</p>
-                    <p className="text-sm text-gray-600">{bookingDetails.player_users?.email}</p>
+                    <p className="text-gray-900 font-medium">{bookingDetails.player_users?.full_name || '—'}</p>
+                    {bookingDetails.player_users?.email && (
+                      <p className="text-sm text-gray-600">{bookingDetails.player_users.email}</p>
+                    )}
                     {bookingDetails.player_users?.phone_number && (
                       <p className="text-sm text-gray-600">{bookingDetails.player_users.phone_number}</p>
                     )}
                   </div>
+
+                  {bookingDetails.group_users?.group_name && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 mb-1">Group</label>
+                      <p className="text-gray-900 font-medium">{bookingDetails.group_users.group_name}</p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Amount</label>
