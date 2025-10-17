@@ -27,13 +27,14 @@ interface BookingRequest {
 
 
 interface GroupBatchSlot {
-  booking_id: string;
+  booking_id: string | null;
   slot_id: string;
   slot_date: string | null;
   slot_start_time: string | null;
   slot_end_time: string | null;
   court_id: string | null;
   court_name: string | null;
+  slot_price: number | null;
 }
 
 interface GroupBatchRequest {
@@ -122,6 +123,7 @@ export const ApproveRequests: React.FC = () => {
           bookings (
             id,
             slot_id,
+            total_amount,
             court_slots (
               date,
               start_time,
@@ -140,11 +142,95 @@ export const ApproveRequests: React.FC = () => {
 
       if (error) throw error;
 
+      const batchIds = Array.isArray(data) ? data.map((row) => row.id).filter(Boolean) : [];
+
+      let slotsByBatch: Record<string, GroupBatchSlot[]> = {};
+
+      if (batchIds.length > 0) {
+        const { data: bookingRows, error: bookingError } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            booking_batch_id,
+            slot_id,
+            total_amount,
+            court_slots (
+              date,
+              start_time,
+              end_time,
+              court_id,
+              courts (
+                id,
+                name
+              )
+            )
+          `)
+          .in('booking_batch_id', batchIds);
+
+        if (bookingError) {
+          console.error('Error fetching slots for batches:', bookingError);
+        } else if (Array.isArray(bookingRows)) {
+          slotsByBatch = bookingRows.reduce<Record<string, GroupBatchSlot[]>>((acc, booking: any) => {
+            const batchId = booking.booking_batch_id;
+            if (!batchId) return acc;
+
+            const slot: GroupBatchSlot = {
+              booking_id: booking.id ?? null,
+              slot_id: booking.slot_id ?? booking.id ?? '',
+              slot_date: booking.court_slots?.date ?? null,
+              slot_start_time: booking.court_slots?.start_time ?? null,
+              slot_end_time: booking.court_slots?.end_time ?? null,
+              court_id: booking.court_slots?.court_id ?? null,
+              court_name: booking.court_slots?.courts?.name ?? null,
+              slot_price: booking.total_amount != null ? Number(booking.total_amount) : null,
+            };
+
+            if (!acc[batchId]) {
+              acc[batchId] = [];
+            }
+
+            acc[batchId].push(slot);
+            return acc;
+          }, {});
+        }
+      }
+
       const mapped: GroupBatchRequest[] = (data || []).map((row: any) => {
         const relation = row.group_users;
         const derivedGroupName = Array.isArray(relation)
           ? relation[0]?.group_name ?? null
           : relation?.group_name ?? null;
+
+        const directSlotsRaw: GroupBatchSlot[] = Array.isArray(row.bookings)
+          ? row.bookings.map((booking: any) => ({
+              booking_id: booking.id ?? null,
+              slot_id: booking.slot_id ?? booking.id ?? '',
+              slot_date: booking.court_slots?.date ?? null,
+              slot_start_time: booking.court_slots?.start_time ?? null,
+              slot_end_time: booking.court_slots?.end_time ?? null,
+              court_id: booking.court_slots?.court_id ?? null,
+              court_name: booking.court_slots?.courts?.name ?? null,
+              slot_price: booking.total_amount != null ? Number(booking.total_amount) : null,
+            }))
+          : [];
+
+        const combinedSlots = [...(slotsByBatch[row.id] ?? []), ...directSlotsRaw];
+        const mergedSlotsMap = new Map<string, GroupBatchSlot>();
+        combinedSlots.forEach((slot, index) => {
+          const key = slot.slot_id || slot.booking_id || `fallback-${index}`;
+          if (!mergedSlotsMap.has(key)) {
+            mergedSlotsMap.set(key, slot);
+          }
+        });
+
+        const sortedSlots = Array.from(mergedSlotsMap.values()).sort((a, b) => {
+          const dateA = a.slot_date ? new Date(a.slot_date).getTime() : 0;
+          const dateB = b.slot_date ? new Date(b.slot_date).getTime() : 0;
+          if (dateA !== dateB) return dateA - dateB;
+          const timeA = a.slot_start_time ?? '';
+          const timeB = b.slot_start_time ?? '';
+          return timeA.localeCompare(timeB);
+        });
 
         return {
           batch_id: row.id,
@@ -157,18 +243,7 @@ export const ApproveRequests: React.FC = () => {
           group_name: derivedGroupName,
           club_id: row.club_id,
           created_at: row.created_at,
-          slots:
-            Array.isArray(row.bookings)
-              ? row.bookings.map((booking: any) => ({
-                  booking_id: booking.id,
-                  slot_id: booking.slot_id ?? '',
-                  slot_date: booking.court_slots?.date ?? null,
-                  slot_start_time: booking.court_slots?.start_time ?? null,
-                  slot_end_time: booking.court_slots?.end_time ?? null,
-                  court_id: booking.court_slots?.court_id ?? null,
-                  court_name: booking.court_slots?.courts?.name ?? null,
-                }))
-              : [],
+          slots: sortedSlots,
         };
       });
 
@@ -440,22 +515,33 @@ export const ApproveRequests: React.FC = () => {
                     <div className="mt-6 border-t border-background-subtle pt-4">
                       <h4 className="text-sm font-semibold text-text-primary mb-3">Requested schedule</h4>
                       {batch.slots.length > 0 ? (
-                        <div className="space-y-2 text-sm">
-                          {batch.slots.map((slot) => {
+                        <div className="space-y-2">
+                          {batch.slots.map((slot, index) => {
                             const dateLabel = slot.slot_date
-                              ? new Date(slot.slot_date).toLocaleDateString()
+                              ? new Date(slot.slot_date).toLocaleDateString(undefined, {
+                                  weekday: 'short',
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })
                               : 'Date TBD';
                             const start = slot.slot_start_time ?? '—';
                             const end = slot.slot_end_time ?? '—';
                             const court = slot.court_name ?? 'Court';
+                            const priceLabel = slot.slot_price != null ? formatPrice(slot.slot_price) : null;
+
                             return (
                               <div
-                                key={`${slot.booking_id}-${slot.slot_id}`}
-                                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary"
+                                key={`${slot.slot_id}-${slot.booking_id ?? index}`}
+                                className="flex flex-col gap-1 rounded-lg border border-background-subtle bg-background px-4 py-3 text-sm shadow-sm"
                               >
                                 <span className="font-medium text-text-primary">{dateLabel}</span>
-                                <span>| {start} - {end}</span>
-                                <span>| {court}</span>
+                                <span className="text-text-secondary">
+                                  {start} – {end} • {court}
+                                  {priceLabel && (
+                                    <span className="font-semibold text-text-primary"> ({priceLabel})</span>
+                                  )}
+                                </span>
                               </div>
                             );
                           })}
