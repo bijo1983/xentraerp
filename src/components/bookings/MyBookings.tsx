@@ -3,6 +3,7 @@ import { Calendar, MapPin, Clock, DollarSign, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
+import { GroupBookingPage } from './GroupBookingPage';
 
 interface Booking {
   id: string;
@@ -27,6 +28,10 @@ interface Booking {
 export const MyBookings: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
+
+  if (userProfile?.type === 'Group') {
+    return <GroupBookingPage showPlanner={false} />;
+  }
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'completed'>('all');

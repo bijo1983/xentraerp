@@ -1,10 +1,11 @@
 // src/pages/club/ManageBookings.tsx
 import React, { useEffect, useState } from 'react';
-import { Clock, Plus, Search as SearchIcon } from 'lucide-react';
+import { Clock, Plus, Search as SearchIcon, Users } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
+import { GroupMonthlyBooking } from './GroupMonthlyBooking';
 
 /* ========================== Types ========================== */
 
@@ -51,6 +52,13 @@ type SlotRow = {
   bookings?: Booking[]; // joined array
 };
 
+type GroupUser = {
+  id: string;
+  group_name: string;
+  email: string;
+  phone_number?: string | null;
+};
+
 type EnrichedSlot = SlotRow & {
   calculated_price: number;
   booking: Booking | null;
@@ -64,6 +72,8 @@ export const ManageBookings: React.FC = () => {
   const { formatPrice } = useCurrency();
 
   const [courts, setCourts] = useState<Court[]>([]);
+  const [clubId, setClubId] = useState<string>('');
+  const [bookingMode, setBookingMode] = useState<'player' | 'group'>('player');
   const [selectedCourt, setSelectedCourt] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<EnrichedSlot[]>([]);
@@ -73,6 +83,12 @@ export const ManageBookings: React.FC = () => {
   const [playerSearch, setPlayerSearch] = useState('');
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
+
+  // Groups (for group booking mode)
+  const [groups, setGroups] = useState<GroupUser[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupsError, setGroupsError] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
 
   const [selectedSlot, setSelectedSlot] = useState<EnrichedSlot | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string>('');
@@ -100,6 +116,17 @@ export const ManageBookings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourt, selectedDate]);
 
+  useEffect(() => {
+    if (bookingMode === 'group' && clubId) {
+      void fetchGroups();
+    }
+    if (bookingMode === 'group') {
+      setShowCreateModal(false);
+      setShowBookingModal(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingMode, clubId]);
+
   // Reset modal state when closing/opening
   useEffect(() => {
     if (!showCreateModal) {
@@ -126,10 +153,12 @@ export const ManageBookings: React.FC = () => {
       if (clubErr || !clubUser) {
         console.error('[ManageBookings] club_users lookup failed:', clubErr);
         setCourts([]);
+        setClubId('');
         return;
       }
 
-      const clubId = clubUser.id;
+      const clubId = clubUser.id as string;
+      setClubId(clubId);
 
       const { data: courtRows, error: courtErr } = await supabase
         .from('courts')
@@ -156,30 +185,21 @@ export const ManageBookings: React.FC = () => {
 
   // Direct search on player_users with OR ilike across name/email/phone
   const searchPlayers = async (q: string) => {
+    if (!clubId) {
+      setPlayers([]);
+      setPlayersError('Club context not available.');
+      return;
+    }
+
     try {
       setPlayersLoading(true);
       setPlayersError(null);
 
-      let query = supabase
-        .from('player_users')
-        .select('id, full_name, email, phone_number')
-        .order('full_name')
-        .limit(50);
-
       const trimmed = (q ?? '').trim();
-      if (trimmed.length > 0) {
-        const like = `%${trimmed}%`;
-        // Supabase .or() expects comma-separated filter fragments
-        query = query.or(
-          [
-            `full_name.ilike.${like}`,
-            `email.ilike.${like}`,
-            `phone_number.ilike.${like}`,
-          ].join(',')
-        );
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc('search_club_players', {
+        p_club_id: clubId,
+        p_query: trimmed.length > 0 ? trimmed : null,
+      });
 
       if (error) {
         console.error('[ManageBookings] players search error:', error);
@@ -188,13 +208,73 @@ export const ManageBookings: React.FC = () => {
         return;
       }
 
-      setPlayers((data ?? []) as PlayerUser[]);
+      const rows = (data ?? []) as Array<{
+        player_id: string;
+        full_name: string;
+        email: string;
+        phone_number?: string | null;
+      }>;
+
+      const mapped = rows
+        .map((row) => ({
+          id: row.player_id,
+          full_name: row.full_name,
+          email: row.email,
+          phone_number: row.phone_number ?? null,
+        }))
+        .filter((player): player is PlayerUser => Boolean(player.id));
+
+      setPlayers(mapped);
     } catch (err) {
       console.error('[ManageBookings] players search exception:', err);
       setPlayers([]);
       setPlayersError('Failed to search players.');
     } finally {
       setPlayersLoading(false);
+    }
+  };
+
+  const fetchGroups = async () => {
+    if (!clubId) return;
+
+    try {
+      setGroupsLoading(true);
+      setGroupsError(null);
+
+      const { data, error } = await supabase.rpc('list_club_groups', {
+        p_club_id: clubId,
+      });
+
+      if (error) {
+        console.error('[ManageBookings] fetchGroups error:', error);
+        setGroups([]);
+        setGroupsError('Failed to load groups for this club.');
+        return;
+      }
+
+      const rows = (data ?? []) as GroupUser[];
+      const mapped = rows
+        .map((row) => ({
+          id: row.group_id ?? row.id ?? '',
+          group_name: row.group_name,
+          email: row.email,
+          phone_number: row.phone_number ?? null,
+        }))
+        .filter((g) => g.id);
+
+      setGroups(mapped);
+      setSelectedGroupId((prev) => {
+        if (prev && mapped.some((group) => group.id === prev)) {
+          return prev;
+        }
+        return mapped.length > 0 ? mapped[0].id : '';
+      });
+    } catch (err) {
+      console.error('[ManageBookings] fetchGroups exception:', err);
+      setGroups([]);
+      setGroupsError('Failed to load groups for this club.');
+    } finally {
+      setGroupsLoading(false);
     }
   };
 
@@ -401,134 +481,202 @@ export const ManageBookings: React.FC = () => {
         <p className="text-green-100">Create and manage court bookings for players</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Court</label>
-            <select
-              value={selectedCourt}
-              onChange={(e) => setSelectedCourt(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            >
-              <option value="">Select a court</option>
-              {courts.map((court) => (
-                <option key={court.id} value={court.id}>
-                  {court.name} ({formatPrice(court.hourly_rate)}/hr)
-                </option>
-              ))}
-            </select>
-            {courts.length === 0 && (
-              <p className="mt-2 text-sm text-gray-500">
-                No courts found for your club membership. Check club membership and RLS policies.
-              </p>
+      {bookingMode === 'player' ? (
+        <>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Court</label>
+                <select
+                  value={selectedCourt}
+                  onChange={(e) => setSelectedCourt(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="">Select a court</option>
+                  {courts.map((court) => (
+                    <option key={court.id} value={court.id}>
+                      {court.name} ({formatPrice(court.hourly_rate)}/hr)
+                    </option>
+                  ))}
+                </select>
+                {courts.length === 0 && (
+                  <p className="mt-2 text-sm text-gray-500">
+                    No courts found for your club membership. Check club membership and RLS policies.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
+                <input
+                  type="date"
+                  value={format(selectedDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                  min={format(new Date(), 'yyyy-MM-dd')}
+                  max={format(addDays(new Date(), 365), 'yyyy-MM-dd')}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            {selectedCourt && (
+              <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-green-900">{getSelectedCourtInfo()?.name}</h3>
+                    <p className="text-sm text-green-700">{getSelectedCourtInfo()?.surface_type ?? '—'} Surface</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold text-green-900">
+                      {formatPrice(getSelectedCourtInfo()?.hourly_rate || 0)}/hour
+                    </p>
+                    <p className="text-sm text-green-600">Base Rate</p>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
-            <input
-              type="date"
-              value={format(selectedDate, 'yyyy-MM-dd')}
-              onChange={(e) => setSelectedDate(new Date(e.target.value))}
-              min={format(new Date(), 'yyyy-MM-dd')}
-              max={format(addDays(new Date(), 365), 'yyyy-MM-dd')}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
-          </div>
-        </div>
-
-        {selectedCourt && (
-          <div className="mt-4 p-4 bg-green-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-green-900">{getSelectedCourtInfo()?.name}</h3>
-                <p className="text-sm text-green-700">{getSelectedCourtInfo()?.surface_type ?? '—'} Surface</p>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold text-green-900">
-                  {formatPrice(getSelectedCourtInfo()?.hourly_rate || 0)}/hour
-                </p>
-                <p className="text-sm text-green-600">Base Rate</p>
-              </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Clock className="h-5 w-5 text-green-600 mr-2" />
+                Available Slots - {format(selectedDate, 'EEEE, MMM d, yyyy')}
+              </h2>
             </div>
-          </div>
-        )}
-      </div>
+            <div className="p-6">
+              {availableSlots.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {availableSlots.map((slot) => {
+                    const booked = slot.isBookedComputed;
+                    return (
+                      <div
+                        key={slot.id}
+                        className={`group relative rounded-lg border-2 transition-all duration-200 overflow-hidden ${
+                          booked
+                            ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-300 hover:border-red-400'
+                            : 'bg-gradient-to-br from-green-50 to-teal-50 border-green-200 hover:border-green-400'
+                        }`}
+                      >
+                        <div className="p-4 space-y-2">
+                          <div className="text-center">
+                            <p className="font-semibold text-gray-900 text-sm">{slot.start_time}</p>
+                            <p className="text-xs text-gray-500">to</p>
+                            <p className="font-semibold text-gray-900 text-sm">{slot.end_time}</p>
+                          </div>
+                          <div className={`pt-2 border-t ${booked ? 'border-red-200' : 'border-green-200'}`}>
+                            <p
+                              className={`text-center font-bold text-base ${
+                                booked ? 'text-red-700' : 'text-green-700'
+                              }`}
+                            >
+                              {formatPrice(slot.custom_price ?? slot.calculated_price)}
+                            </p>
+                            {booked && slot.booking && (
+                              <p className="text-xs text-center text-red-600 mt-1 font-medium">Booked</p>
+                            )}
+                          </div>
+                        </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Clock className="h-5 w-5 text-green-600 mr-2" />
-            Available Slots - {format(selectedDate, 'EEEE, MMM d, yyyy')}
-          </h2>
-        </div>
-        <div className="p-6">
-          {availableSlots.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {availableSlots.map((slot) => {
-                const booked = slot.isBookedComputed;
-                return (
-                  <div
-                    key={slot.id}
-                    className={`group relative rounded-lg border-2 transition-all duration-200 overflow-hidden ${
-                      booked
-                        ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-300 hover:border-red-400'
-                        : 'bg-gradient-to-br from-green-50 to-teal-50 border-green-200 hover:border-green-400'
-                    }`}
-                  >
-                    <div className="p-4 space-y-2">
-                      <div className="text-center">
-                        <p className="font-semibold text-gray-900 text-sm">{slot.start_time}</p>
-                        <p className="text-xs text-gray-500">to</p>
-                        <p className="font-semibold text-gray-900 text-sm">{slot.end_time}</p>
-                      </div>
-                      <div className={`pt-2 border-t ${booked ? 'border-red-200' : 'border-green-200'}`}>
-                        <p
-                          className={`text-center font-bold text-base ${
-                            booked ? 'text-red-700' : 'text-green-700'
+                        <button
+                          onClick={() => openCreateBookingModal(slot)}
+                          className={`absolute inset-0 flex items-center justify-center bg-opacity-0 group-hover:bg-opacity-90 transition-all duration-200 ${
+                            booked ? 'bg-red-600 cursor-pointer' : 'bg-green-600'
                           }`}
                         >
-                          {formatPrice(slot.custom_price ?? slot.calculated_price)}
-                        </p>
-                        {booked && slot.booking && (
-                          <p className="text-xs text-center text-red-600 mt-1 font-medium">Booked</p>
-                        )}
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center space-y-1">
+                            {booked ? (
+                              <>
+                                <Clock className="h-8 w-8 text-white" />
+                                <span className="text-white font-medium text-sm">View Details</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-8 w-8 text-white" />
+                                <span className="text-white font-medium text-sm">Book</span>
+                              </>
+                            )}
+                          </div>
+                        </button>
                       </div>
-                    </div>
-
-                    <button
-                      onClick={() => openCreateBookingModal(slot)}
-                      className={`absolute inset-0 flex items-center justify-center bg-opacity-0 group-hover:bg-opacity-90 transition-all duration-200 ${
-                        booked ? 'bg-red-600 cursor-pointer' : 'bg-green-600'
-                      }`}
-                    >
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center space-y-1">
-                        {booked ? (
-                          <>
-                            <Clock className="h-8 w-8 text-white" />
-                            <span className="text-white font-medium text-sm">View Details</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-8 w-8 text-white" />
-                            <span className="text-white font-medium text-sm">Book</span>
-                          </>
-                        )}
-                      </div>
-                    </button>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Available Slots</h3>
+                  <p className="text-gray-600">All slots are booked or no slots have been created for this date.</p>
+                </div>
+              )}
             </div>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Group</label>
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  disabled={groupsLoading || groups.length === 0}
+                >
+                  {groupsLoading && <option value="">Loading groups…</option>}
+                  {!groupsLoading && groups.length === 0 && (
+                    <option value="">No groups found</option>
+                  )}
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.group_name}
+                    </option>
+                  ))}
+                </select>
+                {groupsError && <p className="text-xs text-red-600 mt-1">{groupsError}</p>}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void fetchGroups()}
+                  className="px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+                  disabled={groupsLoading}
+                >
+                  Refresh groups
+                </button>
+              </div>
+            </div>
+
+            {selectedGroup && (
+              <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-900 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-green-700" />
+                  {selectedGroup.group_name}
+                </h3>
+                <p className="text-sm text-green-700">{selectedGroup.email}</p>
+                {selectedGroup.phone_number && (
+                  <p className="text-sm text-green-700">{selectedGroup.phone_number}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {selectedGroup ? (
+            <GroupMonthlyBooking
+              clubId={clubId}
+              groupId={selectedGroup.id}
+              groupName={selectedGroup.group_name}
+              mode="club"
+              onSubmitted={() => void fetchGroups()}
+            />
           ) : (
-            <div className="text-center py-12">
-              <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Available Slots</h3>
-              <p className="text-gray-600">All slots are booked or no slots have been created for this date.</p>
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-600">
+              Register a group for your club to start monthly bookings.
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* Booking details modal */}
       {showBookingModal && bookingDetails && selectedSlot && (

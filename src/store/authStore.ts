@@ -7,7 +7,7 @@ const dbg = (...args: any[]) => console.log('[AUTH]', ...args);
 
 /* ============================== Types ==================================== */
 
-export type UserType = 'Player' | 'Club' | 'Organizer' | 'Administrator';
+export type UserType = 'Player' | 'Club' | 'Organizer' | 'Administrator' | 'Group';
 
 export type UserProfile = {
   id: string;               // profile_id from your catalog/view
@@ -32,6 +32,8 @@ type SignupMeta = {
   website?: string | null;
   company_name?: string | null;
   skill_level?: string | null;
+  club_id?: string | null;
+  notes?: string | null;
 };
 
 type UiStatus =
@@ -61,17 +63,29 @@ interface AuthState {
 const pendingPasswords = new Map<string, string>();
 const pendingMetas     = new Map<string, SignupMeta>();
 
-const PROFILE_ID_MAP: Record<UserType, string> = {
-  Player:        'c5289148-8bcd-4b49-8c7a-834b1947ddae',
-  Club:          'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
-  Organizer:     '51de8f1e-02f6-4bbd-b628-5b831dff6350',
-  Administrator: '484435eb-ffde-450b-a3f5-0915b24e1907',
-};
+const PROFILE_ID_CACHE = new Map<UserType, string>([
+  ['Player', 'c5289148-8bcd-4b49-8c7a-834b1947ddae'],
+  ['Club', 'c0f272d3-dedd-4480-b45d-46e0a1a14f27'],
+  ['Organizer', '51de8f1e-02f6-4bbd-b628-5b831dff6350'],
+  ['Administrator', '484435eb-ffde-450b-a3f5-0915b24e1907'],
+]);
 
 async function getProfileIdByName(name: UserType): Promise<string> {
-  const id = PROFILE_ID_MAP[name];
-  if (!id) throw new Error(`Profile id not configured for "${name}"`);
-  return id;
+  const cached = PROFILE_ID_CACHE.get(name);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('name', name)
+    .maybeSingle();
+
+  if (error || !data?.id) {
+    throw new Error(`Profile id not configured for "${name}"`);
+  }
+
+  PROFILE_ID_CACHE.set(name, data.id);
+  return data.id;
 }
 
 /** Upsert role row (idempotent) and force returning to surface RLS/column errors in console. */
@@ -80,7 +94,8 @@ async function upsertRoleRow(
     | 'player_users'
     | 'club_users'
     | 'organizer_users'
-    | 'admin_users',
+    | 'admin_users'
+    | 'group_users',
   payload: Record<string, any>
 ): Promise<void> {
   console.log('[AUTH] upsert', table, payload);
@@ -101,9 +116,13 @@ async function createRoleRowForUser(
   userType: UserType,
   meta: SignupMeta
 ): Promise<void> {
-  const requiresCountry = userType === 'Player' || userType === 'Club' || userType === 'Organizer';
+  const requiresCountry =
+    userType === 'Player' || userType === 'Club' || userType === 'Organizer' || userType === 'Group';
+  if (userType === 'Group' && !meta.club_id) {
+    throw new Error('Club is required for group accounts.');
+  }
   if (requiresCountry && !meta.country_id) {
-    throw new Error('Country is required for player, club, and organizer accounts.');
+    throw new Error('Country is required for player, club, organizer, and group accounts.');
   }
 
   const base = {
@@ -145,6 +164,14 @@ async function createRoleRowForUser(
         website: meta.website ?? null,
       });
       return;
+    case 'Group':
+      await upsertRoleRow('group_users', {
+        ...base,
+        group_name: meta.name ?? (user.user_metadata as any)?.name ?? null,
+        club_id: meta.club_id,
+        notes: meta.notes ?? null,
+      });
+      return;
   }
 }
 
@@ -165,12 +192,14 @@ async function loadUserProfile(user: User): Promise<UserProfile | null> {
     type === 'Player' ? 'player_users' :
     type === 'Club' ? 'club_users' :
     type === 'Organizer' ? 'organizer_users' :
-    type === 'Administrator' ? 'admin_users' : '';
+    type === 'Administrator' ? 'admin_users' :
+    type === 'Group' ? 'group_users' : '';
 
   const nameField =
     type === 'Player' ? 'full_name' :
     type === 'Club' ? 'club_name' :
     type === 'Organizer' ? 'organizer_name' :
+    type === 'Group' ? 'group_name' :
     'full_name';
 
   const { data: info, error: infoErr } = await supabase
@@ -265,7 +294,8 @@ export const useAuthStore = create<AuthState>(() => ({
     const requiresCountry =
       userData?.userType === 'Player' ||
       userData?.userType === 'Club' ||
-      userData?.userType === 'Organizer';
+      userData?.userType === 'Organizer' ||
+      userData?.userType === 'Group';
 
     if (!password || password.length < 8) {
       useAuthStore.setState({
@@ -280,9 +310,9 @@ export const useAuthStore = create<AuthState>(() => ({
       useAuthStore.setState({
         loading: false,
         status: 'error',
-        message: 'Country is required for player, club, and organizer signups.',
+        message: 'Country is required for player, club, organizer, and group signups.',
       });
-      throw new Error('Country is required for player, club, and organizer signups.');
+      throw new Error('Country is required for player, club, organizer, and group signups.');
     }
 
     // keep password + meta in memory until verify
