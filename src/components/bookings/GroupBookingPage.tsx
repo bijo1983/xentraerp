@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building2, Globe, Info, Loader2, Phone } from 'lucide-react';
+import { Building2, Info, Loader2, Phone, Globe } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { GroupMonthlyBooking } from './GroupMonthlyBooking';
@@ -106,7 +106,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
 
   const plannerDisabled = !clubId;
   const noClubMessage =
-    'Link your group to a club to submit a monthly plan. Ask the club administrator to connect your account in the admin portal.';
+    "Link your group to a club to submit a monthly plan. Ask the club administrator to connect your account in the admin portal.";
 
   return (
     <div className="space-y-6">
