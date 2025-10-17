@@ -317,128 +317,133 @@ export const ViewBookings: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {bookings.map((booking) => (
-                  <tr key={booking.id} className={booking.status === 'cancelled' ? 'bg-red-50' : ''}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{booking.court_slots.date}</div>
-                      <div className="text-sm text-gray-500">
-                        {booking.court_slots.start_time} - {booking.court_slots.end_time}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
-                        <div className="flex items-center">
-                          <User className="h-4 w-4 mr-2 text-gray-400" />
-                          <div className="text-sm font-medium text-gray-900">
-                            {booking.player_users.full_name || '—'}
-                          </div>
+                {bookings.map((booking) => {
+                  const normalizedStatus = booking.status || 'pending';
+                  const normalizedPaymentStatus = booking.payment_status || 'pending';
+
+                  return (
+                    <tr key={booking.id} className={normalizedStatus === 'cancelled' ? 'bg-red-50' : ''}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{booking.court_slots.date}</div>
+                        <div className="text-sm text-gray-500">
+                          {booking.court_slots.start_time} - {booking.court_slots.end_time}
                         </div>
-                        {booking.group && (
-                          <div className="flex items-center text-xs text-gray-600">
-                            <Users className="h-3.5 w-3.5 mr-1 text-gray-400" />
-                            <span>Group: {booking.group.name || 'Group booking'}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div className="flex items-center">
+                            <User className="h-4 w-4 mr-2 text-gray-400" />
+                            <div className="text-sm font-medium text-gray-900">
+                              {booking.player_users.full_name || '—'}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {booking.group ? (
-                        <div className="text-sm text-gray-600">Group booking</div>
-                      ) : (
-                        <>
-                          <div className="text-sm text-gray-900">{booking.player_users.email}</div>
-                          {booking.player_users.phone_number && (
-                            <div className="text-sm text-gray-500">{booking.player_users.phone_number}</div>
+                          {booking.group && (
+                            <div className="flex items-center text-xs text-gray-600">
+                              <Users className="h-3.5 w-3.5 mr-1 text-gray-400" />
+                              <span>Group: {booking.group.name || 'Group booking'}</span>
+                            </div>
                           )}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{formatPrice(booking.total_amount)}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.status === 'approved'
-                            ? 'bg-green-100 text-green-800'
-                            : booking.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : booking.status === 'rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : booking.status === 'cancelled'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {booking.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.payment_status === 'paid'
-                            ? 'bg-blue-100 text-blue-800'
-                            : booking.payment_status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {booking.payment_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex flex-col space-y-2">
-                        {booking.status === 'pending' && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => approveBooking(booking)}
-                              disabled={loading}
-                              className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                              title="Approve booking"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => rejectBooking(booking)}
-                              disabled={loading}
-                              className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                              title="Reject booking"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                        {booking.status === 'approved' && (
-                          <div className="flex flex-col space-y-1">
-                            {booking.payment_status === 'pending' && (
-                              <button
-                                onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                                disabled={loading}
-                                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                title="Mark as paid"
-                              >
-                                Mark Paid
-                              </button>
-                            )}
-                            <button
-                              onClick={() => cancelBooking(booking)}
-                              disabled={loading}
-                              className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                              title="Cancel booking"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {booking.notes && (
-                        <div className="mt-2 text-xs text-gray-500 italic" title={booking.notes}>
-                          {booking.notes.length > 30 ? booking.notes.substring(0, 30) + '...' : booking.notes}
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4">
+                        {booking.group ? (
+                          <div className="text-sm text-gray-600">Group booking</div>
+                        ) : (
+                          <>
+                            <div className="text-sm text-gray-900">{booking.player_users.email}</div>
+                            {booking.player_users.phone_number && (
+                              <div className="text-sm text-gray-500">{booking.player_users.phone_number}</div>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{formatPrice(booking.total_amount)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            normalizedStatus === 'approved'
+                              ? 'bg-green-100 text-green-800'
+                              : normalizedStatus === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : normalizedStatus === 'rejected'
+                              ? 'bg-red-100 text-red-800'
+                              : normalizedStatus === 'cancelled'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {normalizedStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            normalizedPaymentStatus === 'paid'
+                              ? 'bg-blue-100 text-blue-800'
+                              : normalizedPaymentStatus === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {normalizedPaymentStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <div className="flex flex-col space-y-2">
+                          {normalizedStatus === 'pending' && (
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => approveBooking(booking)}
+                                disabled={loading}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                title="Approve booking"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => rejectBooking(booking)}
+                                disabled={loading}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                title="Reject booking"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                          {normalizedStatus === 'approved' && (
+                            <div className="flex flex-col space-y-1">
+                              {normalizedPaymentStatus === 'pending' && (
+                                <button
+                                  onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                                  disabled={loading}
+                                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                  title="Mark as paid"
+                                >
+                                  Mark Paid
+                                </button>
+                              )}
+                              <button
+                                onClick={() => cancelBooking(booking)}
+                                disabled={loading}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                title="Cancel booking"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {booking.notes && (
+                          <div className="mt-2 text-xs text-gray-500 italic" title={booking.notes}>
+                            {booking.notes.length > 30 ? booking.notes.substring(0, 30) + '...' : booking.notes}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (
