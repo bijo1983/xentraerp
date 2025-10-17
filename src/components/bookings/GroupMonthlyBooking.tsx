@@ -247,6 +247,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
 
     try {
       const { data, error } = await supabase.rpc('create_group_booking_batch', {
+        p_club_id: clubId,
         p_group_id: groupId,
         p_slot_ids: selectedSlotIds,
         p_booking_month: format(selectedMonth, 'yyyy-MM-dd'),
