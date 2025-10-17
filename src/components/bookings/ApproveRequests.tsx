@@ -55,43 +55,24 @@ export const ApproveRequests: React.FC = () => {
   useEffect(() => {
     if (!userProfile) return;
 
-    let cancelled = false;
-
-    const run = async () => {
-      if (viewMode === 'group') {
-        await fetchPendingBatches();
-        return;
-      }
-
-      const pending = await fetchPendingRequests();
-
-      if (cancelled) return;
-
-      if (pending.length === 0) {
-        const batches = await fetchPendingBatches({ skipLoading: true });
-        if (!cancelled && batches.length > 0) {
-          setViewMode('group');
-        }
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
+    if (viewMode === 'group') {
+      void fetchPendingBatches();
+    } else {
+      void fetchPendingRequests();
+    }
   }, [userProfile, viewMode]);
 
   
   // Fetch group booking batches pending approval for the club
-  const fetchPendingBatches = async ({ skipLoading = false }: { skipLoading?: boolean } = {}): Promise<GroupBatchRequest[]> => {
-    if (!userProfile) return [];
+  const fetchPendingBatches = async () => {
+    if (!userProfile) return;
 
-    if (!skipLoading) {
-      setGroupLoading(true);
-    }
+    setGroupLoading(true);
 
     try {
+      // Determine current user's club_id via a simple query
+      // Assumes authStore provides userProfile for club users
+      // Find the club row for this auth user
       const { data: clubRows, error: clubErr } = await supabase
         .from('club_users')
         .select('id')
@@ -154,11 +135,8 @@ export const ApproveRequests: React.FC = () => {
     } catch (e) {
       console.error('Error fetching pending group batches:', e);
       setPendingBatches([]);
-      return [];
     } finally {
-      if (!skipLoading) {
-        setGroupLoading(false);
-      }
+      setGroupLoading(false);
     }
   };
 
