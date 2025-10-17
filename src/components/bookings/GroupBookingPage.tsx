@@ -56,9 +56,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
           .eq('user_id', userProfile.user_id)
           .maybeSingle();
 
-        if (fetchError) {
-          throw fetchError;
-        }
+        if (fetchError) throw fetchError;
 
         setGroupRecord((data as GroupRecord | null) ?? null);
       } catch (err) {
@@ -106,7 +104,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
 
   const plannerDisabled = !clubId;
   const noClubMessage =
-    "Link your group to a club to submit a monthly plan. Ask the club administrator to connect your account in the admin portal.";
+    'Link your group to a club to submit a monthly plan. Ask the club administrator to connect your account in the admin portal.';
 
   return (
     <div className="space-y-6">
