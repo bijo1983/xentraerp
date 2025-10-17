@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, DollarSign, CheckCircle, XCircle, AlertCircle, MapPin } from 'lucide-react';
+import { Calendar, Clock, User, DollarSign, CheckCircle, XCircle, AlertCircle, MapPin, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
@@ -26,6 +26,16 @@ interface BookingRequest {
 
 
 
+interface GroupBatchSlot {
+  booking_id: string;
+  slot_id: string;
+  slot_date: string | null;
+  slot_start_time: string | null;
+  slot_end_time: string | null;
+  court_id: string | null;
+  court_name: string | null;
+}
+
 interface GroupBatchRequest {
   batch_id: string;
   status: string;
@@ -37,6 +47,7 @@ interface GroupBatchRequest {
   group_name: string | null;
   club_id: string;
   created_at: string;
+  slots: GroupBatchSlot[];
 }
 export const ApproveRequests: React.FC = () => {
   const { userProfile } = useAuthStore();
@@ -51,6 +62,7 @@ export const ApproveRequests: React.FC = () => {
   const [pendingBatches, setPendingBatches] = useState<GroupBatchRequest[]>([]);
   const [groupLoading, setGroupLoading] = useState(false);
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
+  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userProfile) return;
@@ -102,6 +114,20 @@ export const ApproveRequests: React.FC = () => {
           created_at,
           group_users!left(
             group_name
+          ),
+          bookings (
+            id,
+            slot_id,
+            court_slots (
+              date,
+              start_time,
+              end_time,
+              court_id,
+              courts (
+                id,
+                name
+              )
+            )
           )
         `)
         .eq('club_id', clubId)
@@ -329,21 +355,67 @@ export const ApproveRequests: React.FC = () => {
               <p className="text-text-secondary">You're all set.</p>
             </div>
           ) : (
-            pendingBatches.map((batch) => (
-              <div key={batch.batch_id} className="bg-background rounded-xl shadow-sm border border-background-subtle overflow-hidden hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <User className="h-5 w-5 text-text-secondary" />
-                        <h3 className="text-lg font-semibold text-text-primary">
-                          {batch.group_name || 'Group'} • {new Date(batch.created_at).toLocaleDateString()}
-                        </h3>
+            pendingBatches.map((batch) => {
+              const expanded = expandedBatchId === batch.batch_id;
+              return (
+                <div
+                  key={batch.batch_id}
+                  className="bg-background rounded-xl shadow-sm border border-background-subtle overflow-hidden hover:shadow-md transition-shadow"
+                >
+                  <div className="p-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <User className="h-5 w-5 text-text-secondary" />
+                          <h3 className="text-lg font-semibold text-text-primary">
+                            {batch.group_name || 'Group'} • {new Date(batch.created_at).toLocaleDateString()}
+                          </h3>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-text-secondary">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" /> Month:{' '}
+                            {new Date(batch.booking_month).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'long',
+                            })}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" /> Slots: {batch.booking_count ?? 0}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4" /> Total: {formatPrice(batch.total_amount || 0)}
+                          </div>
+                        </div>
+                        {batch.notes && (
+                          <p className="text-sm text-text-secondary mt-2">Notes: {batch.notes}</p>
+                        )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-text-secondary">
-                        <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Month: {new Date(batch.booking_month).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</div>
-                        <div className="flex items-center gap-2"><Clock className="h-4 w-4" /> Slots: {batch.booking_count ?? 0}</div>
-                        <div className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Total: {formatPrice(batch.total_amount || 0)}</div>
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleBatchDetails(batch.batch_id)}
+                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+                            expanded
+                              ? 'border-secondary-500 text-secondary-600 bg-secondary-50'
+                              : 'border-secondary-200 text-secondary-600 hover:bg-secondary-50'
+                          }`}
+                        >
+                          <Eye className="h-4 w-4" /> {expanded ? 'Hide slots' : 'View slots'}
+                        </button>
+                        <button
+                          onClick={() => rejectBatch(batch)}
+                          disabled={processingBatchId === batch.batch_id}
+                          className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-transparent bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <XCircle className="h-4 w-4" /> Reject
+                        </button>
+                        <button
+                          onClick={() => approveBatch(batch)}
+                          disabled={processingBatchId === batch.batch_id}
+                          className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-transparent bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <CheckCircle className="h-4 w-4" /> Approve
+                        </button>
                       </div>
                       {batch.notes && <p className="text-sm text-text-secondary mt-2">Notes: {batch.notes}</p>}
                     </div>
@@ -364,9 +436,38 @@ export const ApproveRequests: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                  {expanded && (
+                    <div className="mt-6 border-t border-background-subtle pt-4">
+                      <h4 className="text-sm font-semibold text-text-primary mb-3">Requested schedule</h4>
+                      {batch.slots.length > 0 ? (
+                        <div className="space-y-2 text-sm">
+                          {batch.slots.map((slot) => {
+                            const dateLabel = slot.slot_date
+                              ? new Date(slot.slot_date).toLocaleDateString()
+                              : 'Date TBD';
+                            const start = slot.slot_start_time ?? '—';
+                            const end = slot.slot_end_time ?? '—';
+                            const court = slot.court_name ?? 'Court';
+                            return (
+                              <div
+                                key={`${slot.booking_id}-${slot.slot_id}`}
+                                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary"
+                              >
+                                <span className="font-medium text-text-primary">{dateLabel}</span>
+                                <span>| {start} - {end}</span>
+                                <span>| {court}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-text-secondary">Slot details are not available for this batch.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       ) : pendingRequests.length === 0 ? (
