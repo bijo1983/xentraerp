@@ -8,10 +8,10 @@ type MonthlySlot = {
   slot_id: string;
   court_id: string;
   court_name: string;
-  slot_date: string;       // returned by RPC
+  slot_date: string;       // from RPC
   start_time: string;
   end_time: string;
-  effective_price: number; // returned by RPC
+  effective_price: number; // from RPC
 };
 
 type SubmissionResult = {
@@ -21,13 +21,12 @@ type SubmissionResult = {
 };
 
 type GroupMonthlyBookingProps = {
-  clubId: string;          // REQUIRED by new RPC
+  clubId: string;
   groupId: string;
   groupName: string;
   mode: 'group' | 'club';
   disabled?: boolean;
   onSubmitted?: (result: SubmissionResult) => void;
-  /** Optional message to show when planner is disabled due to no club */
   noClubMessage?: string;
 };
 
@@ -59,7 +58,6 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     ? 'Monthly planning is currently disabled.'
     : null;
 
-  // Fetch available slots for selected month from RPC
   useEffect(() => {
     if (plannerDisabled) {
       setSlots([]);
@@ -74,8 +72,8 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         const monthIso = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
 
         const { data, error } = await supabase.rpc('get_club_monthly_available_slots', {
-          p_club_id: clubId,     // uuid
-          p_month: monthIso,     // 'YYYY-MM-01'
+          p_club_id: clubId,
+          p_month: monthIso,
         });
 
         if (error) {
@@ -87,7 +85,6 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
 
         const available = (data ?? []) as MonthlySlot[];
         setSlots(available);
-        // keep selections that still exist
         setSelectedSlotIds((prev) => prev.filter((id) => available.some((s) => s.slot_id === id)));
       } catch (err) {
         console.error('[GroupMonthlyBooking] loadSlots exception', err);
@@ -138,7 +135,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     try {
       const { data, error } = await supabase.rpc('create_group_booking_batch', {
         p_group_id: groupId,
-        p_club_id: clubId,                                                  // IMPORTANT: new param
+        p_club_id: clubId,
         p_slot_ids: selectedSlotIds,                                        // uuid[]
         p_booking_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'), // date
         p_notes: notes || null,
@@ -150,9 +147,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       }
 
       const result = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      if (!result) {
-        throw new Error('Unexpected empty response from booking service');
-      }
+      if (!result) throw new Error('Unexpected empty response from booking service');
 
       const payload: SubmissionResult = {
         batchId: result.batch_id,
@@ -168,7 +163,6 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       setNotes('');
       onSubmitted?.(payload);
 
-      // Refresh slots to reflect new reservations
       const { data: refreshed } = await supabase.rpc('get_club_monthly_available_slots', {
         p_club_id: clubId,
         p_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'),
@@ -350,5 +344,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       </div>
     </div>
   );
-  export default GroupBookingPage;
 };
+
+// ✅ default export placed AFTER the component and using the correct name
+export default GroupMonthlyBooking;
