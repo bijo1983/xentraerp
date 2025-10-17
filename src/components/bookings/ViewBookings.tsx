@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, User, CheckCircle, XCircle, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -13,6 +13,8 @@ export const ViewBookings: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [bookingTypeFilter, setBookingTypeFilter] = useState<'all' | 'players' | 'groups'>('all');
+  const [selectedBookingIds, setSelectedBookingIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (userProfile) {
@@ -115,6 +117,152 @@ export const ViewBookings: React.FC = () => {
     } catch (error) {
       console.error('Error fetching monthly bookings:', error);
     }
+  };
+
+  useEffect(() => {
+    setSelectedBookingIds((prevSelected) =>
+      prevSelected.filter((id) => {
+        const booking = bookings.find((item) => item.id === id);
+        if (!booking) return false;
+        if ((booking.payment_status || 'pending') === 'paid') return false;
+        if (bookingTypeFilter === 'groups' && !booking.group) return false;
+        if (bookingTypeFilter === 'players' && booking.group) return false;
+        return true;
+      })
+    );
+  }, [bookings, bookingTypeFilter]);
+
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((booking) => {
+      const isGroupBooking = Boolean(booking.group);
+      if (bookingTypeFilter === 'groups') return isGroupBooking;
+      if (bookingTypeFilter === 'players') return !isGroupBooking;
+      return true;
+    });
+  }, [bookings, bookingTypeFilter]);
+
+  const totalSelectedAmount = useMemo(() => {
+    return selectedBookingIds.reduce((sum, id) => {
+      const booking = bookings.find((item) => item.id === id);
+      if (!booking) return sum;
+      return sum + (Number(booking.total_amount) || 0);
+    }, 0);
+  }, [bookings, selectedBookingIds]);
+
+  const toggleBookingSelection = (bookingId: string, isSelectable: boolean) => {
+    if (!isSelectable) return;
+    setSelectedBookingIds((prevSelected) =>
+      prevSelected.includes(bookingId)
+        ? prevSelected.filter((id) => id !== bookingId)
+        : [...prevSelected, bookingId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const selectableIds = filteredBookings
+      .filter((booking) => (booking.payment_status || 'pending') !== 'paid')
+      .map((booking) => booking.id);
+
+    const allSelected =
+      selectableIds.length > 0 && selectableIds.every((id) => selectedBookingIds.includes(id));
+
+    if (allSelected) {
+      setSelectedBookingIds((prevSelected) =>
+        prevSelected.filter((id) => !selectableIds.includes(id))
+      );
+    } else {
+      setSelectedBookingIds((prevSelected) =>
+        Array.from(new Set([...prevSelected, ...selectableIds]))
+      );
+    }
+  };
+
+  const bulkMarkAsPaid = async () => {
+    if (selectedBookingIds.length === 0) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ payment_status: 'paid' })
+        .in('id', selectedBookingIds);
+
+      if (error) throw error;
+
+      alert('Selected bookings marked as paid successfully!');
+      setSelectedBookingIds([]);
+      fetchMonthlyBookings();
+    } catch (error) {
+      console.error('Error updating payment status in bulk:', error);
+      alert('Error updating selected bookings. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadExcel = () => {
+    if (filteredBookings.length === 0) {
+      alert('No bookings available to download for the selected filters.');
+      return;
+    }
+
+    const headers = [
+      'Date',
+      'Start Time',
+      'End Time',
+      'Player / Group',
+      'Contact',
+      'Amount',
+      'Approval Status',
+      'Payment Status',
+    ];
+
+    const rows = filteredBookings.map((booking) => {
+      const isGroupBooking = Boolean(booking.group);
+      const contactDetails = isGroupBooking
+        ? 'Group booking'
+        : [booking.player_users?.email, booking.player_users?.phone_number]
+            .filter(Boolean)
+            .join(' | ');
+
+      return [
+        booking.court_slots?.date || '',
+        booking.court_slots?.start_time || '',
+        booking.court_slots?.end_time || '',
+        isGroupBooking
+          ? booking.group?.name || 'Group booking'
+          : booking.player_users?.full_name || '',
+        contactDetails,
+        String(booking.total_amount ?? ''),
+        booking.status || 'pending',
+        booking.payment_status || 'pending',
+      ];
+    });
+
+    const csvContent = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((value) => {
+            if (value === null || value === undefined) return '';
+            const stringValue = String(value);
+            if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n')) {
+              return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+            return stringValue;
+          })
+          .join(',')
+      )
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `bookings-${selectedMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   const approveBooking = async (booking: any) => {
@@ -282,17 +430,79 @@ export const ViewBookings: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Calendar className="h-5 w-5 text-blue-600 mr-2" />
-            Bookings - {format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}
-          </h2>
+        <div className="p-6 border-b border-gray-200 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+              Bookings - {format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}
+            </h2>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={bookingTypeFilter}
+                onChange={(event) =>
+                  setBookingTypeFilter(event.target.value as 'all' | 'players' | 'groups')
+                }
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All bookings</option>
+                <option value="players">Players</option>
+                <option value="groups">Groups</option>
+              </select>
+              <button
+                onClick={handleDownloadExcel}
+                className="inline-flex items-center justify-center px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                Download Excel
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-sm text-gray-600">
+              Selected bookings:{' '}
+              <span className="font-semibold text-gray-900">{selectedBookingIds.length}</span>
+              {selectedBookingIds.length > 0 && (
+                <>
+                  {' '}
+                  | Total amount:{' '}
+                  <span className="font-semibold text-gray-900">
+                    {formatPrice(totalSelectedAmount)}
+                  </span>
+                </>
+              )}
+            </div>
+            <button
+              onClick={bulkMarkAsPaid}
+              disabled={selectedBookingIds.length === 0 || loading}
+              className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-white transition-colors ${
+                selectedBookingIds.length === 0 || loading
+                  ? 'bg-blue-200 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              Mark selected as paid
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          {bookings.length > 0 ? (
+          {filteredBookings.length > 0 ? (
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <input
+                      type="checkbox"
+                      onChange={toggleSelectAll}
+                      checked={
+                        filteredBookings.length > 0 &&
+                        filteredBookings
+                          .filter((booking) => (booking.payment_status || 'pending') !== 'paid')
+                          .every((booking) => selectedBookingIds.includes(booking.id)) &&
+                        filteredBookings.some((booking) => (booking.payment_status || 'pending') !== 'paid')
+                      }
+                      aria-label="Select all pending bookings"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date & Time
                   </th>
@@ -317,128 +527,144 @@ export const ViewBookings: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {bookings.map((booking) => (
-                  <tr key={booking.id} className={booking.status === 'cancelled' ? 'bg-red-50' : ''}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{booking.court_slots.date}</div>
-                      <div className="text-sm text-gray-500">
-                        {booking.court_slots.start_time} - {booking.court_slots.end_time}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
-                        <div className="flex items-center">
-                          <User className="h-4 w-4 mr-2 text-gray-400" />
-                          <div className="text-sm font-medium text-gray-900">
-                            {booking.player_users.full_name || '—'}
-                          </div>
+                {filteredBookings.map((booking) => {
+                  const normalizedStatus = booking.status || 'pending';
+                  const normalizedPaymentStatus = booking.payment_status || 'pending';
+                  const isSelectable = normalizedPaymentStatus !== 'paid';
+                  const isSelected = selectedBookingIds.includes(booking.id);
+
+                  return (
+                    <tr key={booking.id} className={normalizedStatus === 'cancelled' ? 'bg-red-50' : ''}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isSelectable}
+                          onChange={() => toggleBookingSelection(booking.id, isSelectable)}
+                          aria-label="Select booking"
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{booking.court_slots.date}</div>
+                        <div className="text-sm text-gray-500">
+                          {booking.court_slots.start_time} - {booking.court_slots.end_time}
                         </div>
-                        {booking.group && (
-                          <div className="flex items-center text-xs text-gray-600">
-                            <Users className="h-3.5 w-3.5 mr-1 text-gray-400" />
-                            <span>Group: {booking.group.name || 'Group booking'}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <div className="flex items-center">
+                            <User className="h-4 w-4 mr-2 text-gray-400" />
+                            <div className="text-sm font-medium text-gray-900">
+                              {booking.player_users.full_name || '—'}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {booking.group ? (
-                        <div className="text-sm text-gray-600">Group booking</div>
-                      ) : (
-                        <>
-                          <div className="text-sm text-gray-900">{booking.player_users.email}</div>
-                          {booking.player_users.phone_number && (
-                            <div className="text-sm text-gray-500">{booking.player_users.phone_number}</div>
+                          {booking.group && (
+                            <div className="flex items-center text-xs text-gray-600">
+                              <Users className="h-3.5 w-3.5 mr-1 text-gray-400" />
+                              <span>Group: {booking.group.name || 'Group booking'}</span>
+                            </div>
                           )}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{formatPrice(booking.total_amount)}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.status === 'approved'
-                            ? 'bg-green-100 text-green-800'
-                            : booking.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : booking.status === 'rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : booking.status === 'cancelled'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {booking.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          booking.payment_status === 'paid'
-                            ? 'bg-blue-100 text-blue-800'
-                            : booking.payment_status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {booking.payment_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex flex-col space-y-2">
-                        {booking.status === 'pending' && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => approveBooking(booking)}
-                              disabled={loading}
-                              className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                              title="Approve booking"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => rejectBooking(booking)}
-                              disabled={loading}
-                              className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                              title="Reject booking"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                        {booking.status === 'approved' && (
-                          <div className="flex flex-col space-y-1">
-                            {booking.payment_status === 'pending' && (
-                              <button
-                                onClick={() => updatePaymentStatus(booking.id, 'paid')}
-                                disabled={loading}
-                                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                title="Mark as paid"
-                              >
-                                Mark Paid
-                              </button>
-                            )}
-                            <button
-                              onClick={() => cancelBooking(booking)}
-                              disabled={loading}
-                              className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                              title="Cancel booking"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {booking.notes && (
-                        <div className="mt-2 text-xs text-gray-500 italic" title={booking.notes}>
-                          {booking.notes.length > 30 ? booking.notes.substring(0, 30) + '...' : booking.notes}
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4">
+                        {booking.group ? (
+                          <div className="text-sm text-gray-600">Group booking</div>
+                        ) : (
+                          <>
+                            <div className="text-sm text-gray-900">{booking.player_users.email}</div>
+                            {booking.player_users.phone_number && (
+                              <div className="text-sm text-gray-500">{booking.player_users.phone_number}</div>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{formatPrice(booking.total_amount)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            normalizedStatus === 'approved'
+                              ? 'bg-green-100 text-green-800'
+                              : normalizedStatus === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : normalizedStatus === 'rejected'
+                              ? 'bg-red-100 text-red-800'
+                              : normalizedStatus === 'cancelled'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {normalizedStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            normalizedPaymentStatus === 'paid'
+                              ? 'bg-blue-100 text-blue-800'
+                              : normalizedPaymentStatus === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {normalizedPaymentStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <div className="flex flex-col space-y-2">
+                          {normalizedStatus === 'pending' && (
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => approveBooking(booking)}
+                                disabled={loading}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                title="Approve booking"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => rejectBooking(booking)}
+                                disabled={loading}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                title="Reject booking"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                          {normalizedStatus === 'approved' && (
+                            <div className="flex flex-col space-y-1">
+                              {normalizedPaymentStatus === 'pending' && (
+                                <button
+                                  onClick={() => updatePaymentStatus(booking.id, 'paid')}
+                                  disabled={loading}
+                                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                  title="Mark as paid"
+                                >
+                                  Mark Paid
+                                </button>
+                              )}
+                              <button
+                                onClick={() => cancelBooking(booking)}
+                                disabled={loading}
+                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                                title="Cancel booking"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {booking.notes && (
+                          <div className="mt-2 text-xs text-gray-500 italic" title={booking.notes}>
+                            {booking.notes.length > 30 ? booking.notes.substring(0, 30) + '...' : booking.notes}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           ) : (

@@ -153,7 +153,6 @@ export const ApproveRequests: React.FC = () => {
             id,
             booking_batch_id,
             slot_id,
-            total_amount,
             court_slots (
               date,
               start_time,
@@ -175,14 +174,13 @@ export const ApproveRequests: React.FC = () => {
             if (!batchId) return acc;
 
             const slot: GroupBatchSlot = {
-              booking_id: booking.id ?? null,
-              slot_id: booking.slot_id ?? booking.id ?? '',
+              booking_id: booking.id,
+              slot_id: booking.slot_id ?? '',
               slot_date: booking.court_slots?.date ?? null,
               slot_start_time: booking.court_slots?.start_time ?? null,
               slot_end_time: booking.court_slots?.end_time ?? null,
               court_id: booking.court_slots?.court_id ?? null,
               court_name: booking.court_slots?.courts?.name ?? null,
-              slot_price: booking.total_amount != null ? Number(booking.total_amount) : null,
             };
 
             if (!acc[batchId]) {
@@ -201,36 +199,17 @@ export const ApproveRequests: React.FC = () => {
           ? relation[0]?.group_name ?? null
           : relation?.group_name ?? null;
 
-        const directSlotsRaw: GroupBatchSlot[] = Array.isArray(row.bookings)
+        const directSlots: GroupBatchSlot[] = Array.isArray(row.bookings)
           ? row.bookings.map((booking: any) => ({
-              booking_id: booking.id ?? null,
-              slot_id: booking.slot_id ?? booking.id ?? '',
+              booking_id: booking.id,
+              slot_id: booking.slot_id ?? '',
               slot_date: booking.court_slots?.date ?? null,
               slot_start_time: booking.court_slots?.start_time ?? null,
               slot_end_time: booking.court_slots?.end_time ?? null,
               court_id: booking.court_slots?.court_id ?? null,
               court_name: booking.court_slots?.courts?.name ?? null,
-              slot_price: booking.total_amount != null ? Number(booking.total_amount) : null,
             }))
           : [];
-
-        const combinedSlots = [...(slotsByBatch[row.id] ?? []), ...directSlotsRaw];
-        const mergedSlotsMap = new Map<string, GroupBatchSlot>();
-        combinedSlots.forEach((slot, index) => {
-          const key = slot.slot_id || slot.booking_id || `fallback-${index}`;
-          if (!mergedSlotsMap.has(key)) {
-            mergedSlotsMap.set(key, slot);
-          }
-        });
-
-        const sortedSlots = Array.from(mergedSlotsMap.values()).sort((a, b) => {
-          const dateA = a.slot_date ? new Date(a.slot_date).getTime() : 0;
-          const dateB = b.slot_date ? new Date(b.slot_date).getTime() : 0;
-          if (dateA !== dateB) return dateA - dateB;
-          const timeA = a.slot_start_time ?? '';
-          const timeB = b.slot_start_time ?? '';
-          return timeA.localeCompare(timeB);
-        });
 
         return {
           batch_id: row.id,
@@ -243,7 +222,7 @@ export const ApproveRequests: React.FC = () => {
           group_name: derivedGroupName,
           club_id: row.club_id,
           created_at: row.created_at,
-          slots: sortedSlots,
+          slots: slotsByBatch[row.id] ?? directSlots,
         };
       });
 
