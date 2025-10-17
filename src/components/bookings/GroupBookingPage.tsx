@@ -407,7 +407,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
             <h2 className="text-lg font-semibold text-gray-900">Recent booking batches</h2>
             {loadingData && <span className="text-xs text-gray-500">Refreshing…</span>}
           </div>
-        {batches.length === 0 ? (
+          {batches.length === 0 ? (
             <p className="text-sm text-gray-600">No batch submissions yet.</p>
           ) : (
             <ul className="space-y-3">
