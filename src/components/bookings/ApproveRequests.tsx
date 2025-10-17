@@ -49,22 +49,29 @@ export const ApproveRequests: React.FC = () => {
   const [viewMode, setViewMode] = useState<'individual' | 'group'>('individual');
   // Group batches
   const [pendingBatches, setPendingBatches] = useState<GroupBatchRequest[]>([]);
+  const [groupLoading, setGroupLoading] = useState(false);
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (userProfile) {
-      fetchPendingRequests();
+    if (!userProfile) return;
+
+    if (viewMode === 'group') {
+      void fetchPendingBatches();
+    } else {
+      void fetchPendingRequests();
     }
-  }, [userProfile]);
+  }, [userProfile, viewMode]);
 
   
   // Fetch group booking batches pending approval for the club
   const fetchPendingBatches = async () => {
+    if (!userProfile) return;
+
+    setGroupLoading(true);
+
     try {
       // Determine current user's club_id via a simple query
       // Assumes authStore provides userProfile for club users
-      if (!userProfile || !userProfile.id) return;
-
       // Find the club row for this auth user
       const { data: clubRows, error: clubErr } = await supabase
         .from('club_users')
@@ -121,6 +128,8 @@ export const ApproveRequests: React.FC = () => {
     } catch (e) {
       console.error('Error fetching pending group batches:', e);
       setPendingBatches([]);
+    } finally {
+      setGroupLoading(false);
     }
   };
 
@@ -245,12 +254,11 @@ export const ApproveRequests: React.FC = () => {
       setProcessingBatchId(null);
     }
   };
+  const isGroupView = viewMode === 'group';
+  const currentLoading = isGroupView ? groupLoading : loading;
+  const pendingCount = isGroupView ? pendingBatches.length : pendingRequests.length;
 
-
-
-  
-  useEffect(() => { if (viewMode==='group') { fetchPendingBatches(); } else { fetchPendingRequests(); } }, [viewMode]);
-return (
+  return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -274,28 +282,22 @@ return (
           </div>
           <p className="text-text-secondary mt-1">Review and approve pending court bookings</p>
         </div>
-        {pendingRequests.length > 0 && (
+        {pendingCount > 0 && (
           <div className="flex items-center gap-2 bg-accent-50 border border-accent-200 rounded-lg px-4 py-2">
             <AlertCircle className="h-5 w-5 text-accent-500" />
             <span className="font-semibold text-accent-700">
-              {pendingRequests.length} Pending {pendingRequests.length === 1 ? 'Request' : 'Requests'}
+              {pendingCount} Pending {isGroupView ? (pendingCount === 1 ? 'Group Batch' : 'Group Batches') : pendingCount === 1 ? 'Request' : 'Requests'}
             </span>
           </div>
         )}
       </div>
 
-      {loading ? (
+      {currentLoading ? (
 
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
         </div>
-      ) : pendingRequests.length === 0 ? (
-        <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-12 text-center">
-          <CheckCircle className="h-12 w-12 text-primary-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-text-primary mb-2">All caught up!</h3>
-          <p className="text-text-secondary">No pending booking requests at the moment.</p>
-        </div>
-      ) : viewMode === 'group' ? (
+      ) : isGroupView ? (
         <div className="grid gap-6">
           {pendingBatches.length === 0 ? (
             <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-12 text-center">
@@ -343,6 +345,12 @@ return (
               </div>
             ))
           )}
+        </div>
+      ) : pendingRequests.length === 0 ? (
+        <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-12 text-center">
+          <CheckCircle className="h-12 w-12 text-primary-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-text-primary mb-2">All caught up!</h3>
+          <p className="text-text-secondary">No pending booking requests at the moment.</p>
         </div>
       ) : (
         <div className="grid gap-6">
