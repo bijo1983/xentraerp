@@ -27,14 +27,13 @@ interface BookingRequest {
 
 
 interface GroupBatchSlot {
-  booking_id: string | null;
+  booking_id: string;
   slot_id: string;
   slot_date: string | null;
   slot_start_time: string | null;
   slot_end_time: string | null;
   court_id: string | null;
   court_name: string | null;
-  slot_price: number | null;
 }
 
 interface GroupBatchRequest {
@@ -123,7 +122,6 @@ export const ApproveRequests: React.FC = () => {
           bookings (
             id,
             slot_id,
-            total_amount,
             court_slots (
               date,
               start_time,
@@ -494,33 +492,22 @@ export const ApproveRequests: React.FC = () => {
                     <div className="mt-6 border-t border-background-subtle pt-4">
                       <h4 className="text-sm font-semibold text-text-primary mb-3">Requested schedule</h4>
                       {batch.slots.length > 0 ? (
-                        <div className="space-y-2">
-                          {batch.slots.map((slot, index) => {
+                        <div className="space-y-2 text-sm">
+                          {batch.slots.map((slot) => {
                             const dateLabel = slot.slot_date
-                              ? new Date(slot.slot_date).toLocaleDateString(undefined, {
-                                  weekday: 'short',
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })
+                              ? new Date(slot.slot_date).toLocaleDateString()
                               : 'Date TBD';
                             const start = slot.slot_start_time ?? '—';
                             const end = slot.slot_end_time ?? '—';
                             const court = slot.court_name ?? 'Court';
-                            const priceLabel = slot.slot_price != null ? formatPrice(slot.slot_price) : null;
-
                             return (
                               <div
-                                key={`${slot.slot_id}-${slot.booking_id ?? index}`}
-                                className="flex flex-col gap-1 rounded-lg border border-background-subtle bg-background px-4 py-3 text-sm shadow-sm"
+                                key={`${slot.booking_id}-${slot.slot_id}`}
+                                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary"
                               >
                                 <span className="font-medium text-text-primary">{dateLabel}</span>
-                                <span className="text-text-secondary">
-                                  {start} – {end} • {court}
-                                  {priceLabel && (
-                                    <span className="font-semibold text-text-primary"> ({priceLabel})</span>
-                                  )}
-                                </span>
+                                <span>| {start} - {end}</span>
+                                <span>| {court}</span>
                               </div>
                             );
                           })}
