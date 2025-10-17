@@ -1,350 +1,181 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { addMonths, format, startOfMonth } from 'date-fns';
-import { Calendar, CheckCircle, Info, Loader2, RefreshCw, XCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Building2, Info, Loader2, Phone, Globe } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useCurrency } from '../../hooks/useCurrency';
+import { useAuthStore } from '../../store/authStore';
+import { GroupMonthlyBooking } from './GroupMonthlyBooking';
 
-type MonthlySlot = {
-  slot_id: string;
-  court_id: string;
-  court_name: string;
-  slot_date: string;       // from RPC
-  start_time: string;
-  end_time: string;
-  effective_price: number; // from RPC
+interface GroupRecord {
+  id: string;
+  group_name: string | null;
+  club_id: string | null;
+  club_users: {
+    id: string;
+    club_name: string | null;
+    phone_number: string | null;
+    website: string | null;
+  } | null;
+}
+
+type GroupBookingPageProps = {
+  showPlanner?: boolean;
 };
 
-type SubmissionResult = {
-  batchId: string;
-  totalAmount: number;
-  bookingCount: number;
-};
-
-type GroupMonthlyBookingProps = {
-  clubId: string;
-  groupId: string;
-  groupName: string;
-  mode: 'group' | 'club';
-  disabled?: boolean;
-  onSubmitted?: (result: SubmissionResult) => void;
-  noClubMessage?: string;
-};
-
-export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
-  clubId,
-  groupId,
-  groupName,
-  mode,
-  disabled = false,
-  onSubmitted,
-  noClubMessage,
-}) => {
-  const { formatPrice } = useCurrency();
-
-  const [selectedMonth, setSelectedMonth] = useState<Date>(() => startOfMonth(new Date()));
-  const [slots, setSlots] = useState<MonthlySlot[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  const effectiveModeLabel = mode === 'group' ? 'Your group' : 'Club-managed';
-
-  const plannerDisabled = disabled || !clubId || !groupId;
-  const disabledReason = !clubId
-    ? (noClubMessage || 'Connect your group to a club to unlock monthly planning.')
-    : disabled
-    ? 'Monthly planning is currently disabled.'
-    : null;
+export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner = true }) => {
+  const { userProfile } = useAuthStore();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [groupRecord, setGroupRecord] = useState<GroupRecord | null>(null);
 
   useEffect(() => {
-    if (plannerDisabled) {
-      setSlots([]);
-      setSelectedSlotIds([]);
-      return;
-    }
+    const loadGroup = async () => {
+      if (!userProfile?.user_id) {
+        setGroupRecord(null);
+        setLoading(false);
+        return;
+      }
 
-    const loadSlots = async () => {
-      setLoadingSlots(true);
-      setFeedback(null);
+      setLoading(true);
+      setError(null);
+
       try {
-        const monthIso = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
+        const { data, error: fetchError } = await supabase
+          .from('group_users')
+          .select(
+            `
+              id,
+              group_name,
+              club_id,
+              club_users (
+                id,
+                club_name,
+                phone_number,
+                website
+              )
+            `
+          )
+          .eq('user_id', userProfile.user_id)
+          .maybeSingle();
 
-        const { data, error } = await supabase.rpc('get_club_monthly_available_slots', {
-          p_club_id: clubId,
-          p_month: monthIso,
-        });
-
-        if (error) {
-          console.error('[GroupMonthlyBooking] loadSlots error', error);
-          setSlots([]);
-          setFeedback({ type: 'error', message: 'Unable to load slots for the selected month.' });
-          return;
+        if (fetchError) {
+          throw fetchError;
         }
 
-        const available = (data ?? []) as MonthlySlot[];
-        setSlots(available);
-        setSelectedSlotIds((prev) => prev.filter((id) => available.some((s) => s.slot_id === id)));
+        setGroupRecord((data as GroupRecord | null) ?? null);
       } catch (err) {
-        console.error('[GroupMonthlyBooking] loadSlots exception', err);
-        setSlots([]);
-        setFeedback({ type: 'error', message: 'Something went wrong while loading slots.' });
+        console.error('[GroupBookingPage] load group error', err);
+        setError('Unable to load your group details right now. Please try again later.');
+        setGroupRecord(null);
       } finally {
-        setLoadingSlots(false);
+        setLoading(false);
       }
     };
 
-    void loadSlots();
-  }, [clubId, groupId, selectedMonth, plannerDisabled]);
+    void loadGroup();
+  }, [userProfile?.user_id]);
 
-  const selectedSlots = useMemo(
-    () => slots.filter((slot) => selectedSlotIds.includes(slot.slot_id)),
-    [slots, selectedSlotIds]
-  );
-
-  const totalAmount = useMemo(
-    () => selectedSlots.reduce((sum, slot) => sum + (Number(slot.effective_price) || 0), 0),
-    [selectedSlots]
-  );
-
-  const bookingCount = selectedSlotIds.length;
-
-  const toggleSlot = (slotId: string) => {
-    if (plannerDisabled) return;
-    setSelectedSlotIds((prev) =>
-      prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
-    );
-  };
-
-  const shiftMonth = (direction: 'prev' | 'next') => {
-    setSelectedMonth((current) => (direction === 'prev' ? addMonths(current, -1) : addMonths(current, 1)));
-    setSelectedSlotIds([]);
-  };
-
-  const handleSubmit = async () => {
-    if (plannerDisabled) return;
-    if (!bookingCount) {
-      setFeedback({ type: 'error', message: 'Please choose at least one slot to continue.' });
-      return;
-    }
-
-    setSubmitting(true);
-    setFeedback(null);
-
-    try {
-      const { data, error } = await supabase.rpc('create_group_booking_batch', {
-        p_group_id: groupId,
-        p_club_id: clubId,
-        p_slot_ids: selectedSlotIds,                                        // uuid[]
-        p_booking_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'), // date
-        p_notes: notes || null,
-      });
-
-      if (error) {
-        console.error('[GroupMonthlyBooking] create_group_booking_batch error', error);
-        throw error;
-      }
-
-      const result = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      if (!result) throw new Error('Unexpected empty response from booking service');
-
-      const payload: SubmissionResult = {
-        batchId: result.batch_id,
-        totalAmount: Number(result.total_amount) || totalAmount,
-        bookingCount: Number(result.booking_count) || bookingCount,
-      };
-
-      setFeedback({
-        type: 'success',
-        message: `${payload.bookingCount} slots submitted successfully for ${groupName}.`,
-      });
-      setSelectedSlotIds([]);
-      setNotes('');
-      onSubmitted?.(payload);
-
-      const { data: refreshed } = await supabase.rpc('get_club_monthly_available_slots', {
-        p_club_id: clubId,
-        p_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'),
-      });
-      setSlots((refreshed ?? []) as MonthlySlot[]);
-    } catch (err: any) {
-      console.error('[GroupMonthlyBooking] handleSubmit exception', err);
-      const message = err?.message || 'Unable to submit group booking. Please try again.';
-      setFeedback({ type: 'error', message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const notesPlaceholder =
-    mode === 'group'
-      ? 'Share any special instructions for the club (optional)'
-      : 'Add notes for this group submission (optional)';
-
-  if (!groupId) {
+  if (loading) {
     return (
-      <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-sm text-gray-600">
-        Select a valid group to view available slots.
+      <div className="p-6 flex items-center justify-center text-gray-600 gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading group booking tools…
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        {error}
+      </div>
+    );
+  }
+
+  if (!groupRecord) {
+    return (
+      <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-gray-600">
+        This account is not linked to a group profile yet. Contact your club administrator for access.
+      </div>
+    );
+  }
+
+  const clubId = groupRecord.club_users?.id ?? groupRecord.club_id ?? '';
+  const groupId = groupRecord.id;
+  const groupName = groupRecord.group_name ?? 'Group';
+  const clubName = groupRecord.club_users?.club_name ?? null;
+  const clubPhone = groupRecord.club_users?.phone_number ?? null;
+  const clubWebsite = groupRecord.club_users?.website ?? null;
+
+  const plannerDisabled = !clubId;
+  const noClubMessage =
+    "Link your group to a club to submit a monthly plan. Ask the club administrator to connect your account in the admin portal.";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Monthly slot planner</h2>
-          <p className="text-sm text-gray-600">
-            {effectiveModeLabel} bookings for <span className="font-medium text-gray-900">{groupName}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => shiftMonth('prev')}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loadingSlots || submitting || plannerDisabled}
-          >
-            <RefreshCw className="h-4 w-4 mr-1 inline-block rotate-180" /> Prev
-          </button>
-          <div className="px-4 py-2 bg-gray-100 rounded-lg font-medium text-gray-800">
-            <Calendar className="h-4 w-4 inline-block mr-1 text-green-600" />
-            {format(selectedMonth, 'MMMM yyyy')}
-          </div>
-          <button
-            type="button"
-            onClick={() => shiftMonth('next')}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loadingSlots || submitting || plannerDisabled}
-          >
-            Next <RefreshCw className="h-4 w-4 ml-1 inline-block" />
-          </button>
-        </div>
-      </div>
-
-      {disabledReason && (
-        <div className="flex items-start gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
-          <Info className="h-4 w-4 text-blue-500" />
-          <span>{disabledReason}</span>
-        </div>
-      )}
-
-      {feedback && (
-        <div
-          className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm ${
-            feedback.type === 'success'
-              ? 'bg-green-50 border-green-200 text-green-700'
-              : 'bg-red-50 border-red-200 text-red-700'
-          }`}
-        >
-          {feedback.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-          <span>{feedback.message}</span>
-        </div>
-      )}
-
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Available slots</h3>
-          {loadingSlots && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-            </div>
-          )}
-        </div>
-        <div className="p-6">
-          {plannerDisabled ? (
-            <div className="text-center text-sm text-blue-700">
-              {disabledReason || 'Monthly planning will become available once your group is linked to a club.'}
-            </div>
-          ) : slots.length === 0 ? (
-            <div className="text-center text-sm text-gray-600">
-              No free slots were found for this month. Try another month or check back later.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Date</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Time</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">Court</th>
-                    <th className="px-4 py-2 text-right font-medium text-gray-600">Price</th>
-                    <th className="px-4 py-2 text-center font-medium text-gray-600">Select</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {slots.map((slot) => {
-                    const selected = selectedSlotIds.includes(slot.slot_id);
-                    return (
-                      <tr key={slot.slot_id} className={selected ? 'bg-green-50' : undefined}>
-                        <td className="px-4 py-3 text-gray-900 font-medium">
-                          {format(new Date(slot.slot_date), 'EEE, dd MMM')}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {slot.start_time} – {slot.end_time}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">{slot.court_name}</td>
-                        <td className="px-4 py-3 text-right text-gray-900 font-semibold">
-                          {formatPrice(Number(slot.effective_price) || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 text-green-600 rounded border-gray-300"
-                            checked={selected}
-                            onChange={() => toggleSlot(slot.slot_id)}
-                            disabled={submitting || plannerDisabled}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <p className="text-sm text-gray-600">Selected slots</p>
-            <p className="text-2xl font-semibold text-gray-900">{bookingCount}</p>
+            <h1 className="text-2xl font-bold text-gray-900">Group bookings</h1>
+            <p className="text-gray-600">
+              {clubName
+                ? 'Review available slots and submit your monthly plan directly to your club.'
+                : 'Connect with a club administrator to link your account and unlock the monthly planner.'}
+            </p>
           </div>
-          <div>
-            <p className="text-sm text-gray-600">Total amount</p>
-            <p className="text-2xl font-semibold text-green-700">{formatPrice(totalAmount)}</p>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-          <textarea
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={notesPlaceholder}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            disabled={submitting || plannerDisabled}
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || bookingCount === 0 || plannerDisabled}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
+          <div
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm border ${
+              clubName
+                ? 'border-green-200 bg-green-50 text-green-700'
+                : 'border-amber-200 bg-amber-50 text-amber-700'
+            }`}
           >
-            {submitting ? 'Submitting…' : 'Submit monthly plan'}
-          </button>
+            <Building2 className="h-4 w-4" />
+            {clubName ?? 'No club assigned'}
+          </div>
         </div>
+
+        {plannerDisabled && (
+          <div className="flex items-start gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+            <span>{noClubMessage}</span>
+          </div>
+        )}
+
+        {clubPhone && (
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <Phone className="h-4 w-4 text-gray-500" />
+            {clubPhone}
+          </div>
+        )}
+
+        {clubWebsite && (
+          <a
+            href={clubWebsite.startsWith('http') ? clubWebsite : `https://${clubWebsite}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-green-700 hover:underline"
+          >
+            <Globe className="h-4 w-4" /> Visit club website
+          </a>
+        )}
       </div>
+
+      {showPlanner ? (
+        <GroupMonthlyBooking
+          clubId={clubId}
+          groupId={groupId}
+          groupName={groupName}
+          mode="group"
+          disabled={plannerDisabled}
+          noClubMessage={noClubMessage}
+        />
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl p-6 text-sm text-gray-600">
+          {clubName
+            ? 'Your booking history appears below. Submit your next monthly plan from the Book Court page.'
+            : noClubMessage}
+        </div>
+      )}
     </div>
   );
 };
 
-// ✅ default export placed AFTER the component and using the correct name
 export default GroupBookingPage;
