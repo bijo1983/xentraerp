@@ -4,6 +4,42 @@ import { Calendar, CheckCircle, Info, Loader2, RefreshCw, XCircle } from 'lucide
 import { supabase } from '../../lib/supabase';
 import { useCurrency } from '../../hooks/useCurrency';
 
+const isMissingFunctionError = (error: unknown): boolean => {
+  if (!error) {
+    return false;
+  }
+
+  const message = (error as { message?: string }).message ?? '';
+  const details = (error as { details?: string }).details ?? '';
+
+  return (
+    /could not find the function/i.test(message) ||
+    /could not find the function/i.test(details) ||
+    /schema cache/i.test(message) ||
+    /schema cache/i.test(details)
+  );
+};
+
+const isStackDepthError = (error: unknown): boolean => {
+  if (!error) {
+    return false;
+  }
+
+  const maybeError = error as { code?: string; message?: string };
+  const code = maybeError.code ?? '';
+  const message = maybeError.message ?? '';
+
+  if (code === '54001') {
+    return true;
+  }
+
+  if (typeof message === 'string' && /stack depth limit exceeded/i.test(message)) {
+    return true;
+  }
+
+  return false;
+};
+
 const isPermissionError = (status?: number, error?: unknown): boolean => {
   if (status && [401, 403].includes(status)) {
     return true;
@@ -119,6 +155,16 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         }
 
         if (error) {
+          if (isMissingFunctionError(error)) {
+            console.warn('[GroupMonthlyBooking] loadSlots missing RPC', error);
+            const message =
+              'Monthly planning is not available because the required database function is missing. Please contact your administrator to run the latest migrations.';
+            setPlannerRestriction(message);
+            setSlots([]);
+            setSelectedSlotIds([]);
+            return;
+          }
+
           if (isPermissionError(status, error)) {
             console.warn('[GroupMonthlyBooking] loadSlots permission issue', { status, error });
             const message = getRestrictionMessage(mode);
@@ -142,7 +188,14 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           return;
         }
 
-        if (isPermissionError((err as { status?: number } | null | undefined)?.status, err)) {
+        if (isMissingFunctionError(err)) {
+          console.warn('[GroupMonthlyBooking] loadSlots exception missing RPC', err);
+          const message =
+            'Monthly planning is not available because the required database function is missing. Please contact your administrator to run the latest migrations.';
+          setPlannerRestriction(message);
+          setSlots([]);
+          setSelectedSlotIds([]);
+        } else if (isPermissionError((err as { status?: number } | null | undefined)?.status, err)) {
           console.warn('[GroupMonthlyBooking] loadSlots permission exception', err);
           const message = getRestrictionMessage(mode);
           setPlannerRestriction(message);
@@ -214,6 +267,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
 
     try {
       const { data, error } = await supabase.rpc('create_group_booking_batch', {
+        p_club_id: clubId,
         p_group_id: groupId,
         p_slot_ids: selectedSlotIds,
         p_booking_month: format(selectedMonth, 'yyyy-MM-dd'),
@@ -221,6 +275,24 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       });
 
       if (error) {
+        if (isMissingFunctionError(error)) {
+          console.error('[GroupMonthlyBooking] create_group_booking_batch missing RPC', error);
+          const message =
+            'Group booking submissions are unavailable because the required database function is missing. Please contact your administrator to run the latest migrations.';
+          setPlannerRestriction(message);
+          setSelectedSlotIds([]);
+          setFeedback({ type: 'error', message });
+          return;
+        }
+
+        if (isStackDepthError(error)) {
+          console.error('[GroupMonthlyBooking] create_group_booking_batch stack depth issue', error);
+          const message =
+            'Your submission could not be completed because the database reported a stack depth limit error. Please contact your administrator to review the Supabase functions.';
+          setFeedback({ type: 'error', message });
+          return;
+        }
+
         console.error('[GroupMonthlyBooking] create_group_booking_batch error', error);
         throw error;
       }
@@ -245,15 +317,47 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       if (onSubmitted) onSubmitted(payload);
 
       // Refresh slots to reflect new reservations
-      const { data: refreshed } = await supabase.rpc('get_club_monthly_available_slots', {
-        p_club_id: clubId,
-        p_month: format(selectedMonth, 'yyyy-MM-dd'),
-      });
-      setSlots((refreshed ?? []) as MonthlySlot[]);
+      const { data: refreshed, error: refreshError } = await supabase.rpc(
+        'get_club_monthly_available_slots',
+        {
+          p_club_id: clubId,
+          p_month: format(selectedMonth, 'yyyy-MM-dd'),
+        }
+      );
+
+      if (refreshError) {
+        if (isMissingFunctionError(refreshError)) {
+          console.warn('[GroupMonthlyBooking] refreshSlots missing RPC', refreshError);
+          const message =
+            'Monthly planning is not available because the required database function is missing. Please contact your administrator to run the latest migrations.';
+          setPlannerRestriction(message);
+          setSelectedSlotIds([]);
+          setFeedback({ type: 'error', message });
+        } else {
+          console.error('[GroupMonthlyBooking] refreshSlots error', refreshError);
+          setFeedback({ type: 'error', message: 'Unable to refresh available slots after submission.' });
+        }
+      } else {
+        setSlots((refreshed ?? []) as MonthlySlot[]);
+      }
     } catch (err: any) {
-      console.error('[GroupMonthlyBooking] handleSubmit exception', err);
-      const message = err?.message || 'Unable to submit group booking. Please try again.';
-      setFeedback({ type: 'error', message });
+        if (isMissingFunctionError(err)) {
+          console.error('[GroupMonthlyBooking] handleSubmit exception missing RPC', err);
+          const message =
+            'Group booking submissions are unavailable because the required database function is missing. Please contact your administrator to run the latest migrations.';
+          setPlannerRestriction(message);
+          setSelectedSlotIds([]);
+          setFeedback({ type: 'error', message });
+        } else if (isStackDepthError(err)) {
+          console.error('[GroupMonthlyBooking] handleSubmit stack depth issue', err);
+          const message =
+            'Your submission could not be completed because the database reported a stack depth limit error. Please contact your administrator to review the Supabase functions.';
+          setFeedback({ type: 'error', message });
+        } else {
+          console.error('[GroupMonthlyBooking] handleSubmit exception', err);
+          const message = err?.message || 'Unable to submit group booking. Please try again.';
+          setFeedback({ type: 'error', message });
+        }
     } finally {
       setSubmitting(false);
     }
@@ -360,7 +464,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         <div className="p-6">
           {basePlannerDisabled ? (
             <div className="text-center text-sm text-blue-700">
-              {disabledReason ?? 'Monthly planning is currently unavailable.'}
+              {baseDisabledReason ?? 'Monthly planning is currently unavailable.'}
             </div>
           ) : plannerRestriction ? (
             <div className="text-center text-sm text-amber-700">{plannerRestriction}</div>
