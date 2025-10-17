@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, User, CheckCircle, XCircle, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
@@ -13,6 +13,8 @@ export const ViewBookings: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [bookingTypeFilter, setBookingTypeFilter] = useState<'all' | 'players' | 'groups'>('all');
+  const [selectedBookingIds, setSelectedBookingIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (userProfile) {
@@ -115,6 +117,152 @@ export const ViewBookings: React.FC = () => {
     } catch (error) {
       console.error('Error fetching monthly bookings:', error);
     }
+  };
+
+  useEffect(() => {
+    setSelectedBookingIds((prevSelected) =>
+      prevSelected.filter((id) => {
+        const booking = bookings.find((item) => item.id === id);
+        if (!booking) return false;
+        if ((booking.payment_status || 'pending') === 'paid') return false;
+        if (bookingTypeFilter === 'groups' && !booking.group) return false;
+        if (bookingTypeFilter === 'players' && booking.group) return false;
+        return true;
+      })
+    );
+  }, [bookings, bookingTypeFilter]);
+
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((booking) => {
+      const isGroupBooking = Boolean(booking.group);
+      if (bookingTypeFilter === 'groups') return isGroupBooking;
+      if (bookingTypeFilter === 'players') return !isGroupBooking;
+      return true;
+    });
+  }, [bookings, bookingTypeFilter]);
+
+  const totalSelectedAmount = useMemo(() => {
+    return selectedBookingIds.reduce((sum, id) => {
+      const booking = bookings.find((item) => item.id === id);
+      if (!booking) return sum;
+      return sum + (Number(booking.total_amount) || 0);
+    }, 0);
+  }, [bookings, selectedBookingIds]);
+
+  const toggleBookingSelection = (bookingId: string, isSelectable: boolean) => {
+    if (!isSelectable) return;
+    setSelectedBookingIds((prevSelected) =>
+      prevSelected.includes(bookingId)
+        ? prevSelected.filter((id) => id !== bookingId)
+        : [...prevSelected, bookingId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const selectableIds = filteredBookings
+      .filter((booking) => (booking.payment_status || 'pending') !== 'paid')
+      .map((booking) => booking.id);
+
+    const allSelected =
+      selectableIds.length > 0 && selectableIds.every((id) => selectedBookingIds.includes(id));
+
+    if (allSelected) {
+      setSelectedBookingIds((prevSelected) =>
+        prevSelected.filter((id) => !selectableIds.includes(id))
+      );
+    } else {
+      setSelectedBookingIds((prevSelected) =>
+        Array.from(new Set([...prevSelected, ...selectableIds]))
+      );
+    }
+  };
+
+  const bulkMarkAsPaid = async () => {
+    if (selectedBookingIds.length === 0) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ payment_status: 'paid' })
+        .in('id', selectedBookingIds);
+
+      if (error) throw error;
+
+      alert('Selected bookings marked as paid successfully!');
+      setSelectedBookingIds([]);
+      fetchMonthlyBookings();
+    } catch (error) {
+      console.error('Error updating payment status in bulk:', error);
+      alert('Error updating selected bookings. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadExcel = () => {
+    if (filteredBookings.length === 0) {
+      alert('No bookings available to download for the selected filters.');
+      return;
+    }
+
+    const headers = [
+      'Date',
+      'Start Time',
+      'End Time',
+      'Player / Group',
+      'Contact',
+      'Amount',
+      'Approval Status',
+      'Payment Status',
+    ];
+
+    const rows = filteredBookings.map((booking) => {
+      const isGroupBooking = Boolean(booking.group);
+      const contactDetails = isGroupBooking
+        ? 'Group booking'
+        : [booking.player_users?.email, booking.player_users?.phone_number]
+            .filter(Boolean)
+            .join(' | ');
+
+      return [
+        booking.court_slots?.date || '',
+        booking.court_slots?.start_time || '',
+        booking.court_slots?.end_time || '',
+        isGroupBooking
+          ? booking.group?.name || 'Group booking'
+          : booking.player_users?.full_name || '',
+        contactDetails,
+        String(booking.total_amount ?? ''),
+        booking.status || 'pending',
+        booking.payment_status || 'pending',
+      ];
+    });
+
+    const csvContent = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((value) => {
+            if (value === null || value === undefined) return '';
+            const stringValue = String(value);
+            if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n')) {
+              return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+            return stringValue;
+          })
+          .join(',')
+      )
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `bookings-${selectedMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   const approveBooking = async (booking: any) => {
@@ -282,17 +430,79 @@ export const ViewBookings: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Calendar className="h-5 w-5 text-blue-600 mr-2" />
-            Bookings - {format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}
-          </h2>
+        <div className="p-6 border-b border-gray-200 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+              Bookings - {format(new Date(selectedMonth + '-01'), 'MMMM yyyy')}
+            </h2>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={bookingTypeFilter}
+                onChange={(event) =>
+                  setBookingTypeFilter(event.target.value as 'all' | 'players' | 'groups')
+                }
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All bookings</option>
+                <option value="players">Players</option>
+                <option value="groups">Groups</option>
+              </select>
+              <button
+                onClick={handleDownloadExcel}
+                className="inline-flex items-center justify-center px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                Download Excel
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-sm text-gray-600">
+              Selected bookings:{' '}
+              <span className="font-semibold text-gray-900">{selectedBookingIds.length}</span>
+              {selectedBookingIds.length > 0 && (
+                <>
+                  {' '}
+                  | Total amount:{' '}
+                  <span className="font-semibold text-gray-900">
+                    {formatPrice(totalSelectedAmount)}
+                  </span>
+                </>
+              )}
+            </div>
+            <button
+              onClick={bulkMarkAsPaid}
+              disabled={selectedBookingIds.length === 0 || loading}
+              className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-white transition-colors ${
+                selectedBookingIds.length === 0 || loading
+                  ? 'bg-blue-200 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              Mark selected as paid
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          {bookings.length > 0 ? (
+          {filteredBookings.length > 0 ? (
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <input
+                      type="checkbox"
+                      onChange={toggleSelectAll}
+                      checked={
+                        filteredBookings.length > 0 &&
+                        filteredBookings
+                          .filter((booking) => (booking.payment_status || 'pending') !== 'paid')
+                          .every((booking) => selectedBookingIds.includes(booking.id)) &&
+                        filteredBookings.some((booking) => (booking.payment_status || 'pending') !== 'paid')
+                      }
+                      aria-label="Select all pending bookings"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date & Time
                   </th>
@@ -317,12 +527,23 @@ export const ViewBookings: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {bookings.map((booking) => {
+                {filteredBookings.map((booking) => {
                   const normalizedStatus = booking.status || 'pending';
                   const normalizedPaymentStatus = booking.payment_status || 'pending';
+                  const isSelectable = normalizedPaymentStatus !== 'paid';
+                  const isSelected = selectedBookingIds.includes(booking.id);
 
                   return (
                     <tr key={booking.id} className={normalizedStatus === 'cancelled' ? 'bg-red-50' : ''}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isSelectable}
+                          onChange={() => toggleBookingSelection(booking.id, isSelectable)}
+                          aria-label="Select booking"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{booking.court_slots.date}</div>
                         <div className="text-sm text-gray-500">
