@@ -8,7 +8,7 @@ type MonthlySlot = {
   slot_id: string;
   court_id: string;
   court_name: string;
-  slot_date: string; // date
+  slot_date: string; // ISO date string (yyyy-MM-dd)
   start_time: string;
   end_time: string;
   effective_price: number; // numeric
@@ -50,11 +50,12 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const plannerDisabled = disabled || !clubId || !groupId;
-  const disabledReason = !clubId
-    ? noClubMessage || 'Connect your group to a club to unlock monthly planning.'
-    : disabled
-    ? 'Monthly planning is currently disabled.'
-    : null;
+  const disabledReason =
+    !clubId
+      ? noClubMessage || 'Connect your group to a club to unlock monthly planning.'
+      : disabled
+      ? 'Monthly planning is currently disabled.'
+      : null;
 
   // Load available slots for the selected month
   useEffect(() => {
@@ -80,15 +81,26 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         if (!live) return;
 
         if (error) {
-          console.error('[GroupMonthlyBooking] loadSlots error', error);
+          // If this RPC ever hits stack depth (unlikely for a read), surface it clearly
+          if ((error as any).code === '54001') {
+            setFeedback({
+              type: 'error',
+              message:
+                'Loading slots hit a database stack-depth limit. Please try again or contact the administrator.',
+            });
+          } else {
+            console.error('[GroupMonthlyBooking] loadSlots error', error);
+            setFeedback({ type: 'error', message: 'Unable to load slots for the selected month.' });
+          }
           setSlots([]);
-          setFeedback({ type: 'error', message: 'Unable to load slots for the selected month.' });
           return;
         }
 
-        setSlots((data ?? []) as MonthlySlot[]);
+        const rows = (data ?? []) as MonthlySlot[];
+        setSlots(rows);
+
         // Keep only still-existing selections
-        setSelectedSlotIds((prev) => prev.filter((id) => (data ?? []).some((s: MonthlySlot) => s.slot_id === id)));
+        setSelectedSlotIds((prev) => prev.filter((id) => rows.some((s) => s.slot_id === id)));
       } catch (err) {
         if (!live) return;
         console.error('[GroupMonthlyBooking] loadSlots exception', err);
@@ -139,22 +151,37 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     setFeedback(null);
 
     try {
-      // IMPORTANT: match the function signature PostgREST knows (from your logs)
+      // ✅ Parameter order MUST match the SQL function PostgREST sees:
+      // (p_booking_month, p_club_id, p_group_id, p_notes, p_slot_ids)
       const { data, error } = await supabase.rpc('create_group_booking_batch', {
-        p_booking_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'), // date
-        p_club_id: clubId,                                                 // uuid
-        p_group_id: groupId,                                               // uuid
-        p_notes: notes || null,                                            // text
-        p_slot_ids: selectedSlotIds,                                       // uuid[]
+        p_booking_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'),
+        p_club_id: clubId,
+        p_group_id: groupId,
+        p_notes: notes || null,
+        p_slot_ids: selectedSlotIds,
       });
 
       if (error) {
+        // Surface stack-depth cleanly (seen in your logs as code 54001)
+        if ((error as any).code === '54001') {
+          setFeedback({
+            type: 'error',
+            message:
+              'The submission hit a database stack-depth limit. Please try again in a moment or contact the administrator.',
+          });
+          return;
+        }
         console.error('[GroupMonthlyBooking] create_group_booking_batch error', error);
         throw error;
       }
 
-      const row = Array.isArray(data) && data.length > 0 ? (data as any[])[0] : null;
-      if (!row) throw new Error('Unexpected empty response from booking service');
+      const row = (Array.isArray(data) && data.length > 0 ? data[0] : data) as
+        | { batch_id: string; total_amount: number; booking_count: number }
+        | null;
+
+      if (!row) {
+        throw new Error('Unexpected empty response from booking service');
+      }
 
       const payload: SubmissionResult = {
         batchId: row.batch_id,
@@ -170,11 +197,12 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       setNotes('');
       onSubmitted?.(payload);
 
-      // Refresh available slots
+      // Refresh available slots after submission
       const { data: refreshed, error: refreshError } = await supabase.rpc('get_club_monthly_available_slots', {
         p_club_id: clubId,
         p_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'),
       });
+
       if (refreshError) {
         console.error('[GroupMonthlyBooking] refresh slots error', refreshError);
       } else {
@@ -182,7 +210,8 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       }
     } catch (err: any) {
       console.error('[GroupMonthlyBooking] handleSubmit exception', err);
-      const message = err?.message || 'Unable to submit group booking. Please try again.';
+      const message =
+        err?.message || 'Unable to submit group booking. Please try again or contact the administrator.';
       setFeedback({ type: 'error', message });
     } finally {
       setSubmitting(false);
