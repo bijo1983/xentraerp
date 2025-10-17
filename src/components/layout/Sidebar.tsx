@@ -61,6 +61,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
           { id: 'profile', label: 'Profile', icon: Settings },
           { id: 'manage-dropdowns', label: 'Manage Event Dropdowns', icon: List, link: '/admin/manage-dropdown-options' },
         ];
+
+      case 'Group':
+        return [
+          ...baseItems,
+          { id: 'book-court', label: 'Plan Monthly Slots', icon: Calendar },
+          { id: 'my-bookings', label: 'Booking History', icon: Clock },
+          { id: 'profile', label: 'Profile', icon: Settings },
+        ];
       
       case 'Organizer':
         return [

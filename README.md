@@ -34,6 +34,27 @@ The admin console manages two kinds of partner accounts—clubs and event organi
 Both groups share the same lifecycle fields, so the status rules below apply to
 either entity type.
 
+## Group booking workflow overview
+
+The platform now supports a dedicated **Group** role tailored for teams that plan
+their court time in monthly blocks. Group accounts can sign up directly through
+the authentication flow, and once verified they gain access to the Group
+dashboard (`src/components/dashboard/GroupDashboard.tsx`). From there, the
+monthly planner (`src/components/bookings/GroupMonthlyBooking.tsx`) lets them
+review every available slot across their club, select the desired schedule, and
+submit the entire batch in one action. The submission pipeline relies on the
+`booking_batches` table plus the Supabase RPCs introduced in
+`supabase/migrations/20251020123000_group_booking_support.sql` (notably
+`get_club_monthly_available_slots` and `create_group_booking_batch`) to price and
+persist the bookings safely.
+
+Club operators manage these reservations from the updated
+`src/components/bookings/ManageBookings.tsx` page. The interface offers a player
+mode—filtered by `club_player_memberships`—and a group mode that lists the club’s
+registered group accounts via the `list_club_groups` helper. Club staff can book
+slots on behalf of a group using the same monthly planner, ensuring pricing and
+availability stay consistent with the group-facing experience.
+
 ### Approval status
 
 Each profile carries an `approval_status` value. New registrations start in the

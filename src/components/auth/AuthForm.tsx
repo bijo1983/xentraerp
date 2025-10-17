@@ -12,7 +12,7 @@ type AuthFormProps = {
   afterAuthRedirectTo?: string;
 };
 
-type SignupUserType = 'Player' | 'Club' | 'Organizer';
+type SignupUserType = 'Player' | 'Club' | 'Organizer' | 'Group';
 
 export const AuthForm: React.FC<AuthFormProps> = ({
   initialMode = 'login',
@@ -45,6 +45,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     userType: SignupUserType;
     phone: string;
     country: string;
+    clubId: string;
+    notes: string;
   }>({
     email: '',
     password: '',
@@ -52,12 +54,19 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     userType: 'Player',
     phone: '',
     country: '',
+    clubId: '',
+    notes: '',
   });
 
   const [countries, setCountries] = useState<any[]>([]);
+  const [clubs, setClubs] = useState<any[]>([]);
+  const [clubsLoading, setClubsLoading] = useState(false);
 
   const requiresCountry =
-    formData.userType === 'Player' || formData.userType === 'Club' || formData.userType === 'Organizer';
+    formData.userType === 'Player' ||
+    formData.userType === 'Club' ||
+    formData.userType === 'Organizer' ||
+    formData.userType === 'Group';
 
   // store actions + status message
   const { signIn, sendEmailOtp, verifyEmailOtp, status, message } = useAuthStore();
@@ -109,6 +118,47 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     if (!isLogin) fetchCountries();
   }, [isLogin]);
 
+  useEffect(() => {
+    const loadClubsForCountry = async () => {
+      if (isLogin || formData.userType !== 'Group' || !formData.country) {
+        setClubs([]);
+        if (formData.clubId) setFormData((prev) => ({ ...prev, clubId: '' }));
+        return;
+      }
+
+      setClubsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('club_users')
+          .select('id, club_name, approval_status, is_visible')
+          .eq('country_id', formData.country)
+          .order('club_name');
+
+        if (error) {
+          console.error('[AuthForm] failed to load clubs', error);
+          setClubs([]);
+          return;
+        }
+
+        const approved = (data ?? []).filter((club) =>
+          (club as any).approval_status === 'approved' && ((club as any).is_visible ?? true)
+        );
+        setClubs(approved);
+
+        if (formData.clubId && !approved.some((club) => club.id === formData.clubId)) {
+          setFormData((prev) => ({ ...prev, clubId: '' }));
+        }
+      } catch (err) {
+        console.error('[AuthForm] loadClubsForCountry exception', err);
+        setClubs([]);
+      } finally {
+        setClubsLoading(false);
+      }
+    };
+
+    void loadClubsForCountry();
+  }, [isLogin, formData.userType, formData.country, formData.clubId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -135,6 +185,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             return;
           }
 
+          if (formData.userType === 'Group' && !formData.clubId) {
+            setError('Please choose the club your group belongs to.');
+            setLoading(false);
+            return;
+          }
+
           const selectedType = formData.userType as UserType;
           await sendEmailOtp(formData.email, formData.password, {
             userType: selectedType,
@@ -142,6 +198,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             name: formData.name,
             phone_number: formData.phone || null,
             country_id: requiresCountry ? formData.country : null,
+            club_id: selectedType === 'Group' ? formData.clubId : null,
+            notes: selectedType === 'Group' ? formData.notes || null : null,
           });
 
           setStage('otp');
@@ -242,6 +300,11 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         return;
       }
 
+      if (formData.userType === 'Group' && !formData.clubId) {
+        setError('Please choose the club for your group before resending the code.');
+        return;
+      }
+
       const selectedType = formData.userType as UserType;
       await sendEmailOtp(formData.email, formData.password, {
         userType: selectedType,
@@ -249,6 +312,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         name: formData.name,
         phone_number: formData.phone || null,
         country_id: requiresCountry ? formData.country : null,
+        club_id: selectedType === 'Group' ? formData.clubId : null,
+        notes: selectedType === 'Group' ? formData.notes || null : null,
       });
     } catch (err: any) {
       setError(err?.message || 'Failed to resend code');
@@ -263,7 +328,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     formData.email &&
     formData.name &&
     formData.password.length >= 8 &&
-    (!requiresCountry || !!formData.country);
+    (!requiresCountry || !!formData.country) &&
+    (formData.userType !== 'Group' || !!formData.clubId);
 
   const canSubmitOtp =
     !isLogin && stage === 'otp' && otpCode && otpCode.length === 6;
@@ -407,12 +473,20 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                 </label>
                 <select
                   value={formData.userType}
-                  onChange={(e) => setFormData({ ...formData, userType: e.target.value })}
+                  onChange={(e) => {
+                    const nextType = e.target.value as SignupUserType;
+                    setFormData((prev) => ({
+                      ...prev,
+                      userType: nextType,
+                      clubId: nextType === 'Group' ? prev.clubId : '',
+                    }));
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="Player">Player</option>
                   <option value="Club">Club</option>
                   <option value="Organizer">Organizer</option>
+                  <option value="Group">Group</option>
                 </select>
               </div>
 
@@ -424,6 +498,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                     ? 'Club Name'
                     : formData.userType === 'Organizer'
                     ? 'Organization Name'
+                    : formData.userType === 'Group'
+                    ? 'Group Name'
                     : 'Full Name'}
                 </label>
                 <input
@@ -477,6 +553,54 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   </select>
                 </div>
               </div>
+
+              {formData.userType === 'Group' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-primary mb-2">
+                      Select Club *
+                    </label>
+                    <select
+                      value={formData.clubId}
+                      onChange={(e) => setFormData({ ...formData, clubId: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      disabled={clubsLoading || !formData.country}
+                      required
+                    >
+                      <option value="">
+                        {clubsLoading
+                          ? 'Loading clubs...'
+                          : formData.country
+                          ? 'Select club'
+                          : 'Select a country first'}
+                      </option>
+                      {clubs.map((club) => (
+                        <option key={club.id} value={club.id}>
+                          {club.club_name}
+                        </option>
+                      ))}
+                    </select>
+                    {!clubsLoading && formData.country && clubs.length === 0 && (
+                      <p className="text-xs text-red-500 mt-1">
+                        No approved clubs found in the selected country yet.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-primary mb-2">
+                      Group Notes (Optional)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Describe your group or recurring needs"
+                    />
+                  </div>
+                </div>
+              )}
             </>
           )}
 

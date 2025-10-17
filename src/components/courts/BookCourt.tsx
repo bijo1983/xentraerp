@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
 import { CurrencySelector } from '../ui/CurrencySelector';
+import { GroupBookingPage } from '../bookings/GroupBookingPage';
 import { format, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isBefore } from 'date-fns';
 
 const BOOKING_STATUS_DEFAULT = 'pending';
@@ -12,6 +13,10 @@ const PAYMENT_STATUS_DEFAULT = 'pending';
 export const BookCourt: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
+
+  if (userProfile?.type === 'Group') {
+    return <GroupBookingPage />;
+  }
 
   const [countries, setCountries] = useState<any[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>('');
