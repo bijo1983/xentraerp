@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useNavigate, Link } from 'react-router-dom';
 import { Activity, Trophy, Users, Calendar, ArrowRight } from 'lucide-react';
 import badmintonLogo from '../../assets/logo/badminton-booking-logo.svg';
+import { Footer } from '../layout/Footer';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -86,9 +87,10 @@ export const Login = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center min-h-[calc(100vh-3rem)] sm:min-h-[calc(100vh-4rem)]">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex flex-col">
+      <div className="flex-1">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center min-h-[calc(100vh-3rem)] sm:min-h-[calc(100vh-4rem)]">
           <div className="space-y-6 sm:space-y-8 order-2 lg:order-1">
             <div className="space-y-3 sm:space-y-4">
               <img
@@ -253,8 +255,10 @@ export const Login = () => {
               </div>
             </div>
           </div>
+          </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

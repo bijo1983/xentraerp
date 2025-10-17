@@ -14,6 +14,10 @@ export const BookCourt: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
 
+  if (userProfile?.type === 'Group') {
+    return <GroupBookingPage />;
+  }
+
   const [countries, setCountries] = useState<any[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>('');
   const [clubs, setClubs] = useState<any[]>([]);

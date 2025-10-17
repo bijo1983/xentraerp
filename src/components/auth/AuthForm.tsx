@@ -187,6 +187,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             return;
           }
 
+          if (formData.userType === 'Group' && !formData.clubId) {
+            setError('Please choose the club your group belongs to.');
+            setLoading(false);
+            return;
+          }
+
           const selectedType = formData.userType as UserType;
           await sendEmailOtp(formData.email, formData.password, {
             userType: selectedType,
@@ -296,6 +302,11 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         return;
       }
 
+      if (formData.userType === 'Group' && !formData.clubId) {
+        setError('Please choose the club for your group before resending the code.');
+        return;
+      }
+
       const selectedType = formData.userType as UserType;
       await sendEmailOtp(formData.email, formData.password, {
         userType: selectedType,
@@ -319,7 +330,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     formData.email &&
     formData.name &&
     formData.password.length >= 8 &&
-    (!requiresCountry || !!formData.country);
+    (!requiresCountry || !!formData.country) &&
+    (formData.userType !== 'Group' || !!formData.clubId);
 
   const canSubmitOtp =
     !isLogin && stage === 'otp' && otpCode && otpCode.length === 6;

@@ -190,30 +190,21 @@ export const ManageBookings: React.FC = () => {
 
   // Direct search on player_users with OR ilike across name/email/phone
   const searchPlayers = async (q: string) => {
+    if (!clubId) {
+      setPlayers([]);
+      setPlayersError('Club context not available.');
+      return;
+    }
+
     try {
       setPlayersLoading(true);
       setPlayersError(null);
 
-      let query = supabase
-        .from('player_users')
-        .select('id, full_name, email, phone_number')
-        .order('full_name')
-        .limit(50);
-
       const trimmed = (q ?? '').trim();
-      if (trimmed.length > 0) {
-        const like = `%${trimmed}%`;
-        // Supabase .or() expects comma-separated filter fragments
-        query = query.or(
-          [
-            `full_name.ilike.${like}`,
-            `email.ilike.${like}`,
-            `phone_number.ilike.${like}`,
-          ].join(',')
-        );
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc('search_club_players', {
+        p_club_id: clubId,
+        p_query: trimmed.length > 0 ? trimmed : null,
+      });
 
       if (error) {
         console.error('[ManageBookings] players search error:', error);
@@ -222,7 +213,23 @@ export const ManageBookings: React.FC = () => {
         return;
       }
 
-      setPlayers((data ?? []) as PlayerUser[]);
+      const rows = (data ?? []) as Array<{
+        player_id: string;
+        full_name: string;
+        email: string;
+        phone_number?: string | null;
+      }>;
+
+      const mapped = rows
+        .map((row) => ({
+          id: row.player_id,
+          full_name: row.full_name,
+          email: row.email,
+          phone_number: row.phone_number ?? null,
+        }))
+        .filter((player): player is PlayerUser => Boolean(player.id));
+
+      setPlayers(mapped);
     } catch (err) {
       console.error('[ManageBookings] players search exception:', err);
       setPlayers([]);
