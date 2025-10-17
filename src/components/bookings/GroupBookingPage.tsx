@@ -350,4 +350,5 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       </div>
     </div>
   );
+  export default GroupBookingPage;
 };
