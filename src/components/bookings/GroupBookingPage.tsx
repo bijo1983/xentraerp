@@ -347,4 +347,4 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
 };
 
 // ✅ default export placed AFTER the component and using the correct name
-export default GroupMonthlyBooking;
+export default GroupBookingPage;
