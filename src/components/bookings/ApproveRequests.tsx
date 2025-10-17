@@ -45,6 +45,12 @@ export const ApproveRequests: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  // View mode: individual bookings vs group batches
+  const [viewMode, setViewMode] = useState<'individual' | 'group'>('individual');
+  // Group batches
+  const [pendingBatches, setPendingBatches] = useState<GroupBatchRequest[]>([]);
+  const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
+
   useEffect(() => {
     if (userProfile) {
       fetchPendingRequests();
@@ -249,6 +255,23 @@ return (
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-text-primary">Approve Booking Requests</h1>
+
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode('individual')}
+              className={`px-3 py-1 rounded-lg border ${viewMode==='individual' ? 'bg-primary text-white border-primary' : 'border-border-subtle'}`}
+            >
+              Individual
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('group')}
+              className={`px-3 py-1 rounded-lg border ${viewMode==='group' ? 'bg-primary text-white border-primary' : 'border-border-subtle'}`}
+            >
+              Groups
+            </button>
+          </div>
           <p className="text-text-secondary mt-1">Review and approve pending court bookings</p>
         </div>
         {pendingRequests.length > 0 && (
