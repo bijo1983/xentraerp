@@ -4,77 +4,14 @@ import { Calendar, CheckCircle, Info, Loader2, RefreshCw, XCircle } from 'lucide
 import { supabase } from '../../lib/supabase';
 import { useCurrency } from '../../hooks/useCurrency';
 
-const isMissingFunctionError = (error: unknown): boolean => {
-  if (!error) {
-    return false;
-  }
-
-  const message = (error as { message?: string }).message ?? '';
-  const details = (error as { details?: string }).details ?? '';
-
-  return (
-    /could not find the function/i.test(message) ||
-    /could not find the function/i.test(details) ||
-    /schema cache/i.test(message) ||
-    /schema cache/i.test(details)
-  );
-};
-
-const isStackDepthError = (error: unknown): boolean => {
-  if (!error) {
-    return false;
-  }
-
-  const maybeError = error as { code?: string; message?: string };
-  const code = maybeError.code ?? '';
-  const message = maybeError.message ?? '';
-
-  if (code === '54001') {
-    return true;
-  }
-
-  if (typeof message === 'string' && /stack depth limit exceeded/i.test(message)) {
-    return true;
-  }
-
-  return false;
-};
-
-const isPermissionError = (status?: number, error?: unknown): boolean => {
-  if (status && [401, 403].includes(status)) {
-    return true;
-  }
-
-  const maybeError = (error ?? {}) as { code?: string; message?: string };
-  const code = maybeError.code ?? '';
-  if (code === '42501' || code === 'PGRST301' || code === 'PGRST302') {
-    return true;
-  }
-
-  const message = maybeError.message ?? '';
-  if (typeof message === 'string') {
-    return /permission denied|forbidden|unauthori[sz]ed/i.test(message);
-  }
-
-  return false;
-};
-
-const getRestrictionMessage = (mode: 'group' | 'club'): string =>
-  mode === 'group'
-    ? 'Monthly planning is currently disabled for your group account. Please contact your club administrator to enable this feature.'
-    : 'Monthly planning is currently disabled for this club. Review your Supabase policies or contact support to enable the feature.';
-
-const STACK_DEPTH_RESTRICTION_MESSAGE =
-  'Group booking submissions are temporarily unavailable because the database reported a stack depth limit error. Please contact your administrator to review the Supabase functions and configuration.';
-
 type MonthlySlot = {
   slot_id: string;
   court_id: string;
   court_name: string;
-  slot_date: string;
+  slot_date: string; // date
   start_time: string;
   end_time: string;
-  effective_price: number;
+  effective_price: number; // numeric
 };
 
 type SubmissionResult = {
@@ -112,115 +49,61 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const effectiveModeLabel = mode === 'group' ? 'Your group' : 'Club-managed';
-  const basePlannerDisabled = disabled || !clubId || !groupId;
-  const baseDisabledReason = useMemo(() => {
-    if (!clubId) {
-      return (
-        noClubMessage ?? 'Connect your group profile to a club to unlock the monthly planner.'
-      );
-    }
+  const plannerDisabled = disabled || !clubId || !groupId;
+  const disabledReason = !clubId
+    ? noClubMessage || 'Connect your group to a club to unlock monthly planning.'
+    : disabled
+    ? 'Monthly planning is currently disabled.'
+    : null;
 
-    if (disabled) {
-      return 'Monthly planning is currently disabled.';
-    }
-
-    return null;
-  }, [clubId, disabled, noClubMessage]);
-
-  const [plannerRestriction, setPlannerRestriction] = useState<string | null>(null);
-  const plannerUnavailable = basePlannerDisabled || !!plannerRestriction;
-
+  // Load available slots for the selected month
   useEffect(() => {
-    if (basePlannerDisabled || plannerRestriction) {
+    if (plannerDisabled) {
       setSlots([]);
       setSelectedSlotIds([]);
       return;
     }
 
-    let isActive = true;
+    let live = true;
 
-    const loadSlots = async () => {
+    const load = async () => {
       setLoadingSlots(true);
       setFeedback(null);
 
       try {
-        const { data, error, status } = await supabase.rpc('get_club_monthly_available_slots', {
+        const monthIso = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
+        const { data, error } = await supabase.rpc('get_club_monthly_available_slots', {
           p_club_id: clubId,
-          p_month: format(selectedMonth, 'yyyy-MM-dd'),
+          p_month: monthIso,
         });
 
-        if (!isActive) {
-          return;
-        }
+        if (!live) return;
 
         if (error) {
-          if (isMissingFunctionError(error)) {
-            console.warn('[GroupMonthlyBooking] loadSlots missing RPC', error);
-            const message =
-              'Monthly planning is not available because the required database function is missing. Please contact your administrator to run the latest migrations.';
-            setPlannerRestriction(message);
-            setSlots([]);
-            setSelectedSlotIds([]);
-            return;
-          }
-
-          if (isPermissionError(status, error)) {
-            console.warn('[GroupMonthlyBooking] loadSlots permission issue', { status, error });
-            setPlannerRestriction(getRestrictionMessage(mode));
-            setSlots([]);
-            setSelectedSlotIds([]);
-            return;
-          }
-
           console.error('[GroupMonthlyBooking] loadSlots error', error);
           setSlots([]);
           setFeedback({ type: 'error', message: 'Unable to load slots for the selected month.' });
           return;
         }
 
-        const available = (data ?? []) as MonthlySlot[];
-        setSlots(available);
-        setSelectedSlotIds((prev) => prev.filter((id) => available.some((slot) => slot.slot_id === id)));
+        setSlots((data ?? []) as MonthlySlot[]);
+        // Keep only still-existing selections
+        setSelectedSlotIds((prev) => prev.filter((id) => (data ?? []).some((s: MonthlySlot) => s.slot_id === id)));
       } catch (err) {
-        if (!isActive) {
-          return;
-        }
-
-        if (isMissingFunctionError(err)) {
-          console.warn('[GroupMonthlyBooking] loadSlots exception missing RPC', err);
-          const message =
-            'Monthly planning is not available because the required database function is missing. Please contact your administrator to run the latest migrations.';
-          setPlannerRestriction(message);
-          setSlots([]);
-          setSelectedSlotIds([]);
-        } else if (isPermissionError((err as { status?: number } | null | undefined)?.status, err)) {
-          console.warn('[GroupMonthlyBooking] loadSlots permission exception', err);
-          setPlannerRestriction(getRestrictionMessage(mode));
-          setSlots([]);
-          setSelectedSlotIds([]);
-        } else {
-          console.error('[GroupMonthlyBooking] loadSlots exception', err);
-          setSlots([]);
-          setFeedback({ type: 'error', message: 'Something went wrong while loading slots.' });
-        }
+        if (!live) return;
+        console.error('[GroupMonthlyBooking] loadSlots exception', err);
+        setSlots([]);
+        setFeedback({ type: 'error', message: 'Something went wrong while loading slots.' });
       } finally {
-        if (isActive) {
-          setLoadingSlots(false);
-        }
+        if (live) setLoadingSlots(false);
       }
     };
 
-    void loadSlots();
-
+    void load();
     return () => {
-      isActive = false;
+      live = false;
     };
-  }, [clubId, groupId, selectedMonth, basePlannerDisabled, plannerRestriction, mode]);
-
-  useEffect(() => {
-    setPlannerRestriction(null);
-  }, [clubId, groupId]);
+  }, [clubId, groupId, selectedMonth, plannerDisabled]);
 
   const selectedSlots = useMemo(
     () => slots.filter((slot) => selectedSlotIds.includes(slot.slot_id)),
@@ -228,36 +111,24 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   );
 
   const totalAmount = useMemo(
-    () => selectedSlots.reduce((sum, slot) => sum + (slot.effective_price || 0), 0),
+    () => selectedSlots.reduce((sum, slot) => sum + (Number(slot.effective_price) || 0), 0),
     [selectedSlots]
   );
 
   const bookingCount = selectedSlotIds.length;
 
   const toggleSlot = (slotId: string) => {
-    if (plannerUnavailable) {
-      return;
-    }
-
-    setSelectedSlotIds((prev) =>
-      prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
-    );
+    if (plannerDisabled) return;
+    setSelectedSlotIds((prev) => (prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]));
   };
 
-  const shiftMonth = (direction: 'prev' | 'next') => {
-    setSelectedMonth((current) =>
-      direction === 'prev' ? addMonths(current, -1) : addMonths(current, 1)
-    );
+  const shiftMonth = (dir: 'prev' | 'next') => {
+    setSelectedMonth((cur) => (dir === 'prev' ? addMonths(cur, -1) : addMonths(cur, 1)));
     setSelectedSlotIds([]);
   };
 
   const handleSubmit = async () => {
-    if (plannerUnavailable) {
-      if (plannerRestriction) {
-        setFeedback({ type: 'error', message: plannerRestriction });
-      }
-      return;
-    }
+    if (plannerDisabled) return;
 
     if (!bookingCount) {
       setFeedback({ type: 'error', message: 'Please choose at least one slot to continue.' });
@@ -268,46 +139,27 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     setFeedback(null);
 
     try {
+      // IMPORTANT: match the function signature PostgREST knows (from your logs)
       const { data, error } = await supabase.rpc('create_group_booking_batch', {
-        p_club_id: clubId,
-        p_group_id: groupId,
-        p_slot_ids: selectedSlotIds,
-        p_booking_month: format(selectedMonth, 'yyyy-MM-dd'),
-        p_notes: notes || null,
+        p_booking_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'), // date
+        p_club_id: clubId,                                                 // uuid
+        p_group_id: groupId,                                               // uuid
+        p_notes: notes || null,                                            // text
+        p_slot_ids: selectedSlotIds,                                       // uuid[]
       });
 
       if (error) {
-        if (isMissingFunctionError(error)) {
-          console.error('[GroupMonthlyBooking] create_group_booking_batch missing RPC', error);
-          const message =
-            'Group booking submissions are unavailable because the required database function is missing. Please contact your administrator to run the latest migrations.';
-          setPlannerRestriction(message);
-          setSelectedSlotIds([]);
-          setFeedback({ type: 'error', message });
-          return;
-        }
-
-        if (isStackDepthError(error)) {
-          console.error('[GroupMonthlyBooking] create_group_booking_batch stack depth issue', error);
-          const message =
-            'Your submission could not be completed because the database reported a stack depth limit error. Please contact your administrator to review the Supabase functions.';
-          setFeedback({ type: 'error', message });
-          return;
-        }
-
         console.error('[GroupMonthlyBooking] create_group_booking_batch error', error);
         throw error;
       }
 
-      const result = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      if (!result) {
-        throw new Error('Unexpected empty response from booking service');
-      }
+      const row = Array.isArray(data) && data.length > 0 ? (data as any[])[0] : null;
+      if (!row) throw new Error('Unexpected empty response from booking service');
 
       const payload: SubmissionResult = {
-        batchId: result.batch_id,
-        totalAmount: Number(result.total_amount) || totalAmount,
-        bookingCount: Number(result.booking_count) || bookingCount,
+        batchId: row.batch_id,
+        totalAmount: Number(row.total_amount) || totalAmount,
+        bookingCount: Number(row.booking_count) || bookingCount,
       };
 
       setFeedback({
@@ -316,52 +168,22 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       });
       setSelectedSlotIds([]);
       setNotes('');
-      if (onSubmitted) {
-        onSubmitted(payload);
-      }
+      onSubmitted?.(payload);
 
-      // Refresh slots to reflect new reservations
-      const { data: refreshed, error: refreshError } = await supabase.rpc(
-        'get_club_monthly_available_slots',
-        {
-          p_club_id: clubId,
-          p_month: format(selectedMonth, 'yyyy-MM-dd'),
-        }
-      );
-
+      // Refresh available slots
+      const { data: refreshed, error: refreshError } = await supabase.rpc('get_club_monthly_available_slots', {
+        p_club_id: clubId,
+        p_month: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'),
+      });
       if (refreshError) {
-        if (isMissingFunctionError(refreshError)) {
-          console.warn('[GroupMonthlyBooking] refreshSlots missing RPC', refreshError);
-          const message =
-            'Monthly planning is not available because the required database function is missing. Please contact your administrator to run the latest migrations.';
-          setPlannerRestriction(message);
-          setSelectedSlotIds([]);
-          setFeedback({ type: 'error', message });
-        } else {
-          console.error('[GroupMonthlyBooking] refreshSlots error', refreshError);
-          setFeedback({ type: 'error', message: 'Unable to refresh available slots after submission.' });
-        }
+        console.error('[GroupMonthlyBooking] refresh slots error', refreshError);
       } else {
         setSlots((refreshed ?? []) as MonthlySlot[]);
       }
     } catch (err: any) {
-        if (isMissingFunctionError(err)) {
-          console.error('[GroupMonthlyBooking] handleSubmit exception missing RPC', err);
-          const message =
-            'Group booking submissions are unavailable because the required database function is missing. Please contact your administrator to run the latest migrations.';
-          setPlannerRestriction(message);
-          setSelectedSlotIds([]);
-          setFeedback({ type: 'error', message });
-        } else if (isStackDepthError(err)) {
-          console.error('[GroupMonthlyBooking] handleSubmit stack depth issue', err);
-          const message =
-            'Your submission could not be completed because the database reported a stack depth limit error. Please contact your administrator to review the Supabase functions.';
-          setFeedback({ type: 'error', message });
-        } else {
-          console.error('[GroupMonthlyBooking] handleSubmit exception', err);
-          const message = err?.message || 'Unable to submit group booking. Please try again.';
-          setFeedback({ type: 'error', message });
-        }
+      console.error('[GroupMonthlyBooking] handleSubmit exception', err);
+      const message = err?.message || 'Unable to submit group booking. Please try again.';
+      setFeedback({ type: 'error', message });
     } finally {
       setSubmitting(false);
     }
@@ -386,7 +208,8 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Monthly slot planner</h2>
           <p className="text-sm text-gray-600">
-            {effectiveModeLabel} bookings for <span className="font-medium text-gray-900">{groupName}</span>
+            {mode === 'group' ? 'Your group' : 'Club-managed'} bookings for{' '}
+            <span className="font-medium text-gray-900">{groupName}</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -394,7 +217,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             type="button"
             onClick={() => shiftMonth('prev')}
             className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loadingSlots || submitting || plannerUnavailable}
+            disabled={loadingSlots || submitting || plannerDisabled}
           >
             <RefreshCw className="h-4 w-4 mr-1 inline-block rotate-180" /> Prev
           </button>
@@ -406,36 +229,17 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             type="button"
             onClick={() => shiftMonth('next')}
             className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loadingSlots || submitting || plannerUnavailable}
+            disabled={loadingSlots || submitting || plannerDisabled}
           >
             Next <RefreshCw className="h-4 w-4 ml-1 inline-block" />
           </button>
         </div>
       </div>
 
-      {baseDisabledReason && (
+      {disabledReason && (
         <div className="flex items-start gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
           <Info className="h-4 w-4 text-blue-500" />
-          <span>{baseDisabledReason}</span>
-        </div>
-      )}
-
-      {plannerRestriction && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
-          <div className="flex items-start gap-2">
-            <Info className="h-4 w-4 text-amber-500 mt-0.5" />
-            <span className="flex-1">{plannerRestriction}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setPlannerRestriction(null);
-              setFeedback(null);
-            }}
-            className="self-start sm:self-auto inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-amber-300 text-amber-800 hover:bg-amber-100 transition-colors"
-          >
-            Try again
-          </button>
+          <span>{disabledReason}</span>
         </div>
       )}
 
@@ -447,11 +251,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
               : 'bg-red-50 border-red-200 text-red-700'
           }`}
         >
-          {feedback.type === 'success' ? (
-            <CheckCircle className="h-4 w-4" />
-          ) : (
-            <XCircle className="h-4 w-4" />
-          )}
+          {feedback.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
           <span>{feedback.message}</span>
         </div>
       )}
@@ -466,12 +266,10 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           )}
         </div>
         <div className="p-6">
-          {basePlannerDisabled ? (
+          {plannerDisabled ? (
             <div className="text-center text-sm text-blue-700">
-              {baseDisabledReason ?? 'Monthly planning is currently unavailable.'}
+              {disabledReason || 'Monthly planning will become available once your group is linked to a club.'}
             </div>
-          ) : plannerRestriction ? (
-            <div className="text-center text-sm text-amber-700">{plannerRestriction}</div>
           ) : slots.length === 0 ? (
             <div className="text-center text-sm text-gray-600">
               No free slots were found for this month. Try another month or check back later.
@@ -501,7 +299,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
                         </td>
                         <td className="px-4 py-3 text-gray-700">{slot.court_name}</td>
                         <td className="px-4 py-3 text-right text-gray-900 font-semibold">
-                          {formatPrice(slot.effective_price || 0)}
+                          {formatPrice(Number(slot.effective_price) || 0)}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <input
@@ -509,7 +307,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
                             className="h-4 w-4 text-green-600 rounded border-gray-300"
                             checked={selected}
                             onChange={() => toggleSlot(slot.slot_id)}
-                            disabled={submitting || plannerUnavailable}
+                            disabled={submitting || plannerDisabled}
                           />
                         </td>
                       </tr>
@@ -540,9 +338,13 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder={notesPlaceholder}
+            placeholder={
+              mode === 'group'
+                ? 'Share any special instructions for the club (optional)'
+                : 'Add notes for this group submission (optional)'
+            }
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            disabled={submitting || plannerUnavailable}
+            disabled={submitting || plannerDisabled}
           />
         </div>
 
@@ -550,7 +352,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || bookingCount === 0 || plannerUnavailable}
+            disabled={submitting || bookingCount === 0 || plannerDisabled}
             className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
           >
             {submitting ? 'Submitting…' : 'Submit monthly plan'}
@@ -560,3 +362,5 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     </div>
   );
 };
+
+export default GroupMonthlyBooking;
