@@ -24,6 +24,20 @@ interface BookingRequest {
   club_name: string;
 }
 
+
+
+interface GroupBatchRequest {
+  batch_id: string;
+  status: string;
+  booking_month: string;
+  total_amount: number;
+  booking_count: number;
+  notes: string | null;
+  group_id: string | null;
+  group_name: string | null;
+  club_id: string;
+  created_at: string;
+}
 export const ApproveRequests: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
@@ -36,6 +50,73 @@ export const ApproveRequests: React.FC = () => {
       fetchPendingRequests();
     }
   }, [userProfile]);
+
+  
+  // Fetch group booking batches pending approval for the club
+  const fetchPendingBatches = async () => {
+    try {
+      // Determine current user's club_id via a simple query
+      // Assumes authStore provides userProfile for club users
+      if (!userProfile || !userProfile.id) return;
+
+      // Find the club row for this auth user
+      const { data: clubRows, error: clubErr } = await supabase
+        .from('club_users')
+        .select('id')
+        .eq('user_id', userProfile.user_id || userProfile.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (clubErr) throw clubErr;
+      if (!clubRows) {
+        setPendingBatches([]);
+        return;
+      }
+
+      const clubId = clubRows.id;
+
+      // Fetch batches for this club with pending status
+      const { data, error } = await supabase
+        .from('booking_batches')
+        .select(`
+          id,
+          status,
+          booking_month,
+          total_amount,
+          booking_count,
+          notes,
+          group_id,
+          club_id,
+          created_at,
+          group_users!left(
+            group_name
+          )
+        `)
+        .eq('club_id', clubId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const mapped: GroupBatchRequest[] = (data || []).map((row: any) => ({
+        batch_id: row.id,
+        status: row.status,
+        booking_month: row.booking_month,
+        total_amount: row.total_amount || 0,
+        booking_count: row.booking_count || 0,
+        notes: row.notes ?? null,
+        group_id: row.group_id ?? null,
+        group_name: row.group_users?.group_name ?? null,
+        club_id: row.club_id,
+        created_at: row.created_at
+      }));
+
+      setPendingBatches(mapped);
+    } catch (e) {
+      console.error('Error fetching pending group batches:', e);
+      setPendingBatches([]);
+    }
+  };
 
   const fetchPendingRequests = async () => {
     if (!userProfile) return;
@@ -108,7 +189,62 @@ export const ApproveRequests: React.FC = () => {
     }
   };
 
-  return (
+
+  const approveBatch = async (batch: GroupBatchRequest) => {
+    if (!confirm(`Approve group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`)) return;
+    setProcessingBatchId(batch.batch_id);
+    try {
+      // Prefer secure RPC if available
+      const { data, error } = await supabase.rpc('approve_booking_batch', {
+        p_batch_id: batch.batch_id
+      });
+
+      if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Batch approval failed');
+      }
+
+      alert('Group batch approved successfully!');
+      // Refresh both views to keep in sync
+      fetchPendingBatches();
+      fetchPendingRequests();
+    } catch (err) {
+      console.error('Error approving batch:', err);
+      alert('Error approving batch. Please check policies/RPC and try again.');
+    } finally {
+      setProcessingBatchId(null);
+    }
+  };
+
+  const rejectBatch = async (batch: GroupBatchRequest) => {
+    if (!confirm(`Reject group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`)) return;
+    setProcessingBatchId(batch.batch_id);
+    try {
+      const { data, error } = await supabase.rpc('reject_booking_batch', {
+        p_batch_id: batch.batch_id
+      });
+
+      if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Batch rejection failed');
+      }
+
+      alert('Group batch rejected.');
+      fetchPendingBatches();
+      fetchPendingRequests();
+    } catch (err) {
+      console.error('Error rejecting batch:', err);
+      alert('Error rejecting batch. Please check policies/RPC and try again.');
+    } finally {
+      setProcessingBatchId(null);
+    }
+  };
+
+
+
+  
+  useEffect(() => { if (viewMode==='group') { fetchPendingBatches(); } else { fetchPendingRequests(); } }, [viewMode]);
+return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -126,6 +262,7 @@ export const ApproveRequests: React.FC = () => {
       </div>
 
       {loading ? (
+
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
         </div>
@@ -134,6 +271,55 @@ export const ApproveRequests: React.FC = () => {
           <CheckCircle className="h-12 w-12 text-primary-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-text-primary mb-2">All caught up!</h3>
           <p className="text-text-secondary">No pending booking requests at the moment.</p>
+        </div>
+      ) : viewMode === 'group' ? (
+        <div className="grid gap-6">
+          {pendingBatches.length === 0 ? (
+            <div className="bg-background rounded-xl shadow-sm border border-background-subtle p-12 text-center">
+              <AlertCircle className="h-12 w-12 text-text-secondary mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-text-primary mb-2">No pending group batches</h3>
+              <p className="text-text-secondary">You're all set.</p>
+            </div>
+          ) : (
+            pendingBatches.map((batch) => (
+              <div key={batch.batch_id} className="bg-background rounded-xl shadow-sm border border-background-subtle overflow-hidden hover:shadow-md transition-shadow">
+                <div className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <User className="h-5 w-5 text-text-secondary" />
+                        <h3 className="text-lg font-semibold text-text-primary">
+                          {batch.group_name || 'Group'} • {new Date(batch.created_at).toLocaleDateString()}
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-text-secondary">
+                        <div className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Month: {new Date(batch.booking_month).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</div>
+                        <div className="flex items-center gap-2"><Clock className="h-4 w-4" /> Slots: {batch.booking_count ?? 0}</div>
+                        <div className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Total: {formatPrice(batch.total_amount || 0)}</div>
+                      </div>
+                      {batch.notes && <p className="text-sm text-text-secondary mt-2">Notes: {batch.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => rejectBatch(batch)}
+                        disabled={processingBatchId === batch.batch_id}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <XCircle className="h-4 w-4" /> Reject
+                      </button>
+                      <button
+                        onClick={() => approveBatch(batch)}
+                        disabled={processingBatchId === batch.batch_id}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <CheckCircle className="h-4 w-4" /> Approve
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       ) : (
         <div className="grid gap-6">
