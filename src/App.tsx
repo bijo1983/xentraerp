@@ -9,6 +9,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { PlayerDashboard } from './components/dashboard/PlayerDashboard';
 import { ClubDashboard } from './components/dashboard/ClubDashboard';
 import { OrganizerDashboard } from './components/dashboard/OrganizerDashboard';
+import { GroupDashboard } from './components/dashboard/GroupDashboard';
 import { BookCourt } from './components/courts/BookCourt';
 // ❌ Removed: QueryProvider (belongs in main.tsx)
 import { ManageCourts } from './components/courts/ManageCourts';
@@ -148,6 +149,8 @@ function AppContent() {
             return <ClubDashboard />;
           case 'Organizer':
             return <OrganizerDashboard />;
+          case 'Group':
+            return <GroupDashboard />;
           default:
             return <PlayerDashboard />;
         }
