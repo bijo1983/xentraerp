@@ -43,7 +43,6 @@ type GroupBatchRow = {
 type ClubOption = {
   id: string;
   club_name: string;
-  city?: string | null;
   countries?: {
     name?: string | null;
   } | null;
@@ -165,7 +164,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
   };
 
   const resolveLocation = (club: ClubOption) =>
-    [club.city, club.countries?.name].filter(Boolean).join(', ') || null;
+    [club.countries?.name].filter(Boolean).join(', ') || null;
 
   const searchClubs = async () => {
     setSearchingClubs(true);
@@ -174,7 +173,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
       const trimmed = clubSearchTerm.trim();
       let query = supabase
         .from('club_users')
-        .select('id, club_name, city, countries (name)')
+        .select('id, club_name, countries (name)')
         .eq('approval_status', 'approved')
         .eq('is_visible', true)
         .order('club_name', { ascending: true });
@@ -408,7 +407,7 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
             <h2 className="text-lg font-semibold text-gray-900">Recent booking batches</h2>
             {loadingData && <span className="text-xs text-gray-500">Refreshing…</span>}
           </div>
-          {batches.length === 0 ? (
+        {batches.length === 0 ? (
             <p className="text-sm text-gray-600">No batch submissions yet.</p>
           ) : (
             <ul className="space-y-3">
