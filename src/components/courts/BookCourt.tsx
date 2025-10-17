@@ -309,8 +309,29 @@ const handleBooking = async () => {
     return isBefore(startOfDay(date), startOfDay(new Date()));
   };
 
-  if (error) {
+  const renderForGroup = (content: React.ReactNode) => {
+    if (userProfile?.type !== 'Group') {
+      return content;
+    }
+
     return (
+      <div className="space-y-10">
+        <GroupBookingPage />
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <h2 className="text-xl font-semibold text-gray-900">Explore clubs in your country</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Browse available slots across any club in your country—just like individual players do.
+            </p>
+          </div>
+          {content}
+        </div>
+      </div>
+    );
+  };
+
+  if (error) {
+    const errorView = (
       <div className="max-w-2xl mx-auto text-center py-12">
         <div className="bg-red-50 border border-red-200 rounded-xl p-8">
           <h2 className="text-2xl font-bold text-red-900 mb-2">Error Loading Page</h2>
@@ -324,10 +345,11 @@ const handleBooking = async () => {
         </div>
       </div>
     );
+    return renderForGroup(errorView);
   }
 
   if (bookingSuccess) {
-    return (
+    const successView = (
       <div className="max-w-2xl mx-auto text-center py-12">
         <div className="bg-green-50 border border-green-200 rounded-xl p-8">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -353,12 +375,15 @@ const handleBooking = async () => {
         </div>
       </div>
     );
+    return renderForGroup(successView);
   }
 
-  return (
+  const standardView = (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-text-primary">Book a Court</h1>
+        <h1 className="text-3xl font-bold text-text-primary">
+          {userProfile?.type === 'Group' ? 'Search club availability' : 'Book a Court'}
+        </h1>
         <div className="hidden md:block">
           <CurrencySelector />
         </div>
@@ -720,4 +745,6 @@ const handleBooking = async () => {
       )}
     </div>
   );
+
+  return renderForGroup(standardView);
 };

@@ -14,13 +14,21 @@ interface GroupDashboardStats {
   nextBooking: string | null;
 }
 
+interface GroupRecord {
+  id: string;
+  group_name: string | null;
+  club_users: { club_name: string | null } | null;
+}
+
 export const GroupDashboard: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
 
-  const [groupName, setGroupName] = useState('');
-  const [clubName, setClubName] = useState('');
-  const [groupId, setGroupId] = useState<string>('');
+  const [groupContext, setGroupContext] = useState<{
+    id: string;
+    name: string;
+    clubName: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<GroupDashboardStats | null>(null);
 
@@ -33,38 +41,43 @@ export const GroupDashboard: React.FC = () => {
 
       setLoading(true);
       try {
-        const { data: groupRow, error } = await supabase
+        const { data: groupRecord, error: groupError } = await supabase
           .from('group_users')
           .select('id, group_name, club_users (club_name)')
           .eq('user_id', userProfile.user_id)
           .maybeSingle();
 
-        if (error) {
-          console.error('[GroupDashboard] load group error', error);
+        if (groupError) {
+          console.error('[GroupDashboard] load group error', groupError);
           setLoading(false);
           return;
         }
 
-        if (!groupRow) {
+        if (!groupRecord) {
           setLoading(false);
           return;
         }
 
-        setGroupId(groupRow.id as string);
-        setGroupName((groupRow as any).group_name ?? 'Group');
-        setClubName((groupRow as any).club_users?.club_name ?? 'Club');
+        const typedGroup = groupRecord as GroupRecord;
+        const clubName = typedGroup.club_users?.club_name ?? null;
+
+        setGroupContext({
+          id: typedGroup.id,
+          name: typedGroup.group_name ?? 'Group',
+          clubName,
+        });
 
         const [{ data: bookingRows }, { data: batchRows }] = await Promise.all([
           supabase
             .from('bookings')
             .select('status, court_slots (date)')
-            .eq('group_id', groupRow.id)
+            .eq('group_id', typedGroup.id)
             .order('booking_date', { ascending: true })
             .limit(25),
           supabase
             .from('booking_batches')
             .select('total_amount, booking_month')
-            .eq('group_id', groupRow.id)
+            .eq('group_id', typedGroup.id)
             .order('created_at', { ascending: false })
             .limit(1),
         ]);
@@ -94,6 +107,11 @@ export const GroupDashboard: React.FC = () => {
     void loadDashboard();
   }, [userProfile?.user_id]);
 
+  const groupId = groupContext?.id ?? '';
+  const groupName = groupContext?.name ?? 'Group';
+  const clubName = groupContext?.clubName ?? 'No club assigned';
+  const clubAssigned = Boolean(groupContext?.clubName);
+
   if (loading) {
     return <div className="p-6 text-center text-gray-600">Loading dashboard…</div>;
   }
@@ -111,9 +129,19 @@ export const GroupDashboard: React.FC = () => {
       <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Welcome, {groupName}</h1>
-          <p className="text-gray-600">Plan your monthly schedule and track approvals.</p>
+          <p className="text-gray-600">
+            {clubAssigned
+              ? 'Plan your monthly schedule and track approvals.'
+              : 'Browse clubs in your country and connect with an administrator to start planning together.'}
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-sm">
+        <div
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm border ${
+            clubAssigned
+              ? 'text-green-700 bg-green-50 border-green-200'
+              : 'text-yellow-700 bg-yellow-50 border-yellow-200'
+          }`}
+        >
           <MapPin className="h-4 w-4" /> {clubName}
         </div>
       </div>
@@ -145,14 +173,22 @@ export const GroupDashboard: React.FC = () => {
         {stats?.nextBooking ? (
           <p className="text-gray-700">Next slot scheduled on {format(new Date(stats.nextBooking), 'dd MMM yyyy')}.</p>
         ) : (
-          <p className="text-gray-500 text-sm">No upcoming slots. Submit your monthly plan to secure timings.</p>
+          <p className="text-gray-500 text-sm">
+            {clubAssigned
+              ? 'No upcoming slots. Submit your monthly plan to secure timings.'
+              : 'Link your group to a club to submit a monthly plan. You can still explore all available slots below.'}
+          </p>
         )}
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex gap-3 flex-wrap">
           <a
             href="/book-court"
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
+              clubAssigned
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+            }`}
           >
-            Plan monthly slots
+            {clubAssigned ? 'Plan monthly slots' : 'Browse clubs & slots'}
           </a>
           <a
             href="/my-bookings"

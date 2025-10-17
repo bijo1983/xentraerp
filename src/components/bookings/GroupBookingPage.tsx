@@ -9,7 +9,7 @@ import { useCurrency } from '../../hooks/useCurrency';
 type GroupProfile = {
   id: string;
   group_name: string;
-  club_id: string;
+  club_id: string | null;
   club_users?: {
     club_name: string;
   } | null;
@@ -87,8 +87,9 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
           return;
         }
 
-        setGroupInfo(data as GroupProfile);
-        await refreshData((data as GroupProfile).id);
+        const profile = data as GroupProfile;
+        setGroupInfo(profile);
+        await refreshData(profile.id);
       } catch (err) {
         console.error('[GroupBookingPage] load group exception', err);
         setGroupError('Unable to load group profile.');
@@ -151,7 +152,37 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
     );
   }
 
-  const clubName = groupInfo.club_users?.club_name ?? 'Club';
+  const clubName = groupInfo.club_users?.club_name ?? 'No club assigned';
+  const hasClubAssigned = Boolean(groupInfo.club_id);
+
+  const plannerSection = showPlanner ? (
+    hasClubAssigned ? (
+      <GroupMonthlyBooking
+        clubId={groupInfo.club_id!}
+        groupId={groupInfo.id}
+        groupName={groupInfo.group_name}
+        mode="group"
+        onSubmitted={() => void refreshData(groupInfo.id)}
+      />
+    ) : (
+      <div className="space-y-4">
+        <div className="bg-white border border-yellow-200 rounded-xl p-6 text-sm text-yellow-800">
+          <p className="font-medium">No club assigned yet</p>
+          <p className="mt-2">
+            Your group hasn't been linked to a club. Use the court search below to explore clubs in your country or ask a
+            club administrator to connect your profile for monthly planning.
+          </p>
+        </div>
+        <GroupMonthlyBooking
+          clubId=""
+          groupId={groupInfo.id}
+          groupName={groupInfo.group_name}
+          mode="group"
+          disabled
+        />
+      </div>
+    )
+  ) : null;
 
   return (
     <div className="space-y-8">
@@ -160,23 +191,25 @@ export const GroupBookingPage: React.FC<GroupBookingPageProps> = ({ showPlanner 
           <h1 className="text-2xl font-bold text-gray-900">Monthly group bookings</h1>
           <p className="text-gray-600">Reserve recurring slots on behalf of your group.</p>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-          <p className="text-sm text-green-700 font-medium flex items-center gap-2">
+        <div
+          className={`rounded-lg px-4 py-3 border ${
+            hasClubAssigned ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'
+          }`}
+        >
+          <p
+            className={`text-sm font-medium flex items-center gap-2 ${
+              hasClubAssigned ? 'text-green-700' : 'text-yellow-800'
+            }`}
+          >
             <MapPin className="h-4 w-4" /> {clubName}
           </p>
-          <p className="text-xs text-green-600">Group: {groupInfo.group_name}</p>
+          <p className={`text-xs ${hasClubAssigned ? 'text-green-600' : 'text-yellow-700'}`}>
+            Group: {groupInfo.group_name}
+          </p>
         </div>
       </div>
 
-      {showPlanner && (
-        <GroupMonthlyBooking
-          clubId={groupInfo.club_id}
-          groupId={groupInfo.id}
-          groupName={groupInfo.group_name}
-          mode="group"
-          onSubmitted={() => void refreshData(groupInfo.id)}
-        />
-      )}
+      {plannerSection}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border border-gray-200 rounded-xl p-6">

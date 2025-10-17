@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { addMonths, format, startOfMonth } from 'date-fns';
-import { Calendar, CheckCircle, Loader2, RefreshCw, XCircle } from 'lucide-react';
+import { Calendar, CheckCircle, Info, Loader2, RefreshCw, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useCurrency } from '../../hooks/useCurrency';
 
@@ -48,9 +48,15 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const effectiveModeLabel = mode === 'group' ? 'Your group' : 'Club-managed';
+  const plannerDisabled = disabled || !clubId || !groupId;
+  const disabledReason = !clubId
+    ? 'Connect your group profile to a club to unlock the monthly planner.'
+    : disabled
+    ? 'Monthly planning is currently disabled.'
+    : null;
 
   useEffect(() => {
-    if (!clubId || !groupId || disabled) {
+    if (plannerDisabled) {
       setSlots([]);
       setSelectedSlotIds([]);
       return;
@@ -85,7 +91,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
     };
 
     void loadSlots();
-  }, [clubId, groupId, selectedMonth, disabled]);
+  }, [clubId, groupId, selectedMonth, plannerDisabled]);
 
   const selectedSlots = useMemo(
     () => slots.filter((slot) => selectedSlotIds.includes(slot.slot_id)),
@@ -100,6 +106,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   const bookingCount = selectedSlotIds.length;
 
   const toggleSlot = (slotId: string) => {
+    if (plannerDisabled) return;
     setSelectedSlotIds((prev) =>
       prev.includes(slotId) ? prev.filter((id) => id !== slotId) : [...prev, slotId]
     );
@@ -113,6 +120,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   };
 
   const handleSubmit = async () => {
+    if (plannerDisabled) return;
     if (!bookingCount) {
       setFeedback({ type: 'error', message: 'Please choose at least one slot to continue.' });
       return;
@@ -173,7 +181,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
       ? 'Share any special instructions for the club (optional)'
       : 'Add notes for this group submission (optional)';
 
-  if (!clubId || !groupId) {
+  if (!groupId) {
     return (
       <div className="p-6 bg-white border border-gray-200 rounded-xl text-center text-sm text-gray-600">
         Select a valid group to view available slots.
@@ -194,8 +202,8 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           <button
             type="button"
             onClick={() => shiftMonth('prev')}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
-            disabled={loadingSlots || submitting}
+            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loadingSlots || submitting || plannerDisabled}
           >
             <RefreshCw className="h-4 w-4 mr-1 inline-block rotate-180" /> Prev
           </button>
@@ -206,13 +214,20 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           <button
             type="button"
             onClick={() => shiftMonth('next')}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
-            disabled={loadingSlots || submitting}
+            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loadingSlots || submitting || plannerDisabled}
           >
             Next <RefreshCw className="h-4 w-4 ml-1 inline-block" />
           </button>
         </div>
       </div>
+
+      {disabledReason && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700">
+          <Info className="h-4 w-4 text-blue-500" />
+          <span>{disabledReason}</span>
+        </div>
+      )}
 
       {feedback && (
         <div
@@ -241,7 +256,11 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           )}
         </div>
         <div className="p-6">
-          {slots.length === 0 ? (
+          {plannerDisabled ? (
+            <div className="text-center text-sm text-blue-700">
+              Monthly planning will become available once your group is linked to an active club.
+            </div>
+          ) : slots.length === 0 ? (
             <div className="text-center text-sm text-gray-600">
               No free slots were found for this month. Try another month or check back later.
             </div>
@@ -278,7 +297,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
                             className="h-4 w-4 text-green-600 rounded border-gray-300"
                             checked={selected}
                             onChange={() => toggleSlot(slot.slot_id)}
-                            disabled={submitting}
+                            disabled={submitting || plannerDisabled}
                           />
                         </td>
                       </tr>
@@ -311,7 +330,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
             onChange={(e) => setNotes(e.target.value)}
             placeholder={notesPlaceholder}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            disabled={submitting}
+            disabled={submitting || plannerDisabled}
           />
         </div>
 
@@ -319,10 +338,10 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || bookingCount === 0}
+            disabled={submitting || bookingCount === 0 || plannerDisabled}
             className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Submitting…' : 'Submit group booking'}
+            {submitting ? 'Submitting…' : 'Submit monthly plan'}
           </button>
         </div>
       </div>

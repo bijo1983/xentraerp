@@ -122,7 +122,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     const loadClubsForCountry = async () => {
       if (isLogin || formData.userType !== 'Group' || !formData.country) {
         setClubs([]);
-        if (formData.clubId) setFormData((prev) => ({ ...prev, clubId: '' }));
+        if (formData.clubId || formData.notes) {
+          setFormData((prev) => ({ ...prev, clubId: '', notes: '' }));
+        }
         return;
       }
 
@@ -198,7 +200,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
             name: formData.name,
             phone_number: formData.phone || null,
             country_id: requiresCountry ? formData.country : null,
-            club_id: selectedType === 'Group' ? formData.clubId : null,
+            club_id: selectedType === 'Group' ? formData.clubId || null : null,
             notes: selectedType === 'Group' ? formData.notes || null : null,
           });
 
@@ -312,7 +314,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
         name: formData.name,
         phone_number: formData.phone || null,
         country_id: requiresCountry ? formData.country : null,
-        club_id: selectedType === 'Group' ? formData.clubId : null,
+        club_id: selectedType === 'Group' ? formData.clubId || null : null,
         notes: selectedType === 'Group' ? formData.notes || null : null,
       });
     } catch (err: any) {
@@ -479,6 +481,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                       ...prev,
                       userType: nextType,
                       clubId: nextType === 'Group' ? prev.clubId : '',
+                      notes: nextType === 'Group' ? prev.notes : '',
                     }));
                   }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -558,14 +561,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-text-primary mb-2">
-                      Select Club *
+                      Select Club (Optional)
                     </label>
                     <select
                       value={formData.clubId}
                       onChange={(e) => setFormData({ ...formData, clubId: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       disabled={clubsLoading || !formData.country}
-                      required
                     >
                       <option value="">
                         {clubsLoading

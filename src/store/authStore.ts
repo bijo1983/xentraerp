@@ -63,15 +63,15 @@ interface AuthState {
 const pendingPasswords = new Map<string, string>();
 const pendingMetas     = new Map<string, SignupMeta>();
 
-const PROFILE_ID_CACHE = new Map<UserType, string>([
-  ['Player', 'c5289148-8bcd-4b49-8c7a-834b1947ddae'],
-  ['Club', 'c0f272d3-dedd-4480-b45d-46e0a1a14f27'],
-  ['Organizer', '51de8f1e-02f6-4bbd-b628-5b831dff6350'],
-  ['Administrator', '484435eb-ffde-450b-a3f5-0915b24e1907'],
-]);
+const PROFILE_ID_MAP: Partial<Record<UserType, string>> = {
+  Player: 'c5289148-8bcd-4b49-8c7a-834b1947ddae',
+  Club: 'c0f272d3-dedd-4480-b45d-46e0a1a14f27',
+  Organizer: '51de8f1e-02f6-4bbd-b628-5b831dff6350',
+  Administrator: '484435eb-ffde-450b-a3f5-0915b24e1907',
+};
 
 async function getProfileIdByName(name: UserType): Promise<string> {
-  const cached = PROFILE_ID_CACHE.get(name);
+  const cached = PROFILE_ID_MAP[name];
   if (cached) return cached;
 
   const { data, error } = await supabase
@@ -84,7 +84,7 @@ async function getProfileIdByName(name: UserType): Promise<string> {
     throw new Error(`Profile id not configured for "${name}"`);
   }
 
-  PROFILE_ID_CACHE.set(name, data.id);
+  PROFILE_ID_MAP[name] = data.id;
   return data.id;
 }
 
@@ -118,9 +118,6 @@ async function createRoleRowForUser(
 ): Promise<void> {
   const requiresCountry =
     userType === 'Player' || userType === 'Club' || userType === 'Organizer' || userType === 'Group';
-  if (userType === 'Group' && !meta.club_id) {
-    throw new Error('Club is required for group accounts.');
-  }
   if (requiresCountry && !meta.country_id) {
     throw new Error('Country is required for player, club, organizer, and group accounts.');
   }
@@ -168,7 +165,7 @@ async function createRoleRowForUser(
       await upsertRoleRow('group_users', {
         ...base,
         group_name: meta.name ?? (user.user_metadata as any)?.name ?? null,
-        club_id: meta.club_id,
+        club_id: meta.club_id ?? null,
         notes: meta.notes ?? null,
       });
       return;
