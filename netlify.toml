@@ -5,7 +5,9 @@
 [build.environment]
   NODE_VERSION = "18.20.8"
   NPM_CONFIG_PRODUCTION = "false"
-  SECRETS_SCAN_ENABLED = "false"         # ⬅️ turn off secret scanning for this site
+  # Disable Netlify's secret scanning extension and extension API lookups.
+  SECRETS_SCAN_ENABLED = "false"
+  NETLIFY_USE_EXTENSION_API = "false"
 
 [[redirects]]
   from = "/*"
