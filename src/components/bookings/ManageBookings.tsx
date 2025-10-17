@@ -1,5 +1,5 @@
 // src/pages/club/ManageBookings.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Clock, Plus, Search as SearchIcon, Users } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { supabase } from '../../lib/supabase';
@@ -89,6 +89,11 @@ export const ManageBookings: React.FC = () => {
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupsError, setGroupsError] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState('');
+
+  const selectedGroup = useMemo(
+    () => groups.find((group) => group.id === selectedGroupId) ?? null,
+    [groups, selectedGroupId]
+  );
 
   const [selectedSlot, setSelectedSlot] = useState<EnrichedSlot | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string>('');
