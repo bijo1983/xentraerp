@@ -51,6 +51,7 @@ type GroupMonthlyBookingProps = {
   mode: 'group' | 'club';
   disabled?: boolean;
   onSubmitted?: (result: SubmissionResult) => void;
+  noClubMessage?: string;
 };
 
 export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
@@ -60,6 +61,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
   mode,
   disabled = false,
   onSubmitted,
+  noClubMessage,
 }) => {
   const { formatPrice } = useCurrency();
 
@@ -358,7 +360,7 @@ export const GroupMonthlyBooking: React.FC<GroupMonthlyBookingProps> = ({
         <div className="p-6">
           {basePlannerDisabled ? (
             <div className="text-center text-sm text-blue-700">
-              Monthly planning will become available once your group is linked to an active club.
+              {disabledReason ?? 'Monthly planning is currently unavailable.'}
             </div>
           ) : plannerRestriction ? (
             <div className="text-center text-sm text-amber-700">{plannerRestriction}</div>
