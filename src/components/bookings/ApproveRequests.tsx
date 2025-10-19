@@ -115,7 +115,7 @@ export const ApproveRequests: React.FC = () => {
     }
 
     const cachedSlots = batchSlotCache[viewingBatchId];
-    if (cachedSlots !== undefined) {
+    if (cachedSlots && cachedSlots.length > 0) {
       setViewingBatchSlots(cachedSlots);
       setViewingBatchError(null);
       setViewingBatchLoading(false);
