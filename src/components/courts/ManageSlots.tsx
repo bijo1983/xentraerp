@@ -1,9 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, Plus, Trash2, Save, DollarSign, Edit } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
-import { format, addDays, startOfDay } from 'date-fns';
+import { format, addDays, parse } from 'date-fns';
+
+const createDefaultNewSlot = () => ({
+  start_time: '09:00',
+  end_time: '10:00',
+});
+
+const createDefaultBulkSlotSettings = () => ({
+  start_time: '06:00',
+  end_time: '22:00',
+  from_date: format(new Date(), 'yyyy-MM-dd'),
+  to_date: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
+  exclude_dates: [] as string[],
+});
 
 export const ManageSlots: React.FC = () => {
   const { userProfile } = useAuthStore();
@@ -17,18 +30,98 @@ export const ManageSlots: React.FC = () => {
   const [slotInterval, setSlotInterval] = useState(60); // Default 60 minutes
   const [slotCreationMode, setSlotCreationMode] = useState<'individual' | 'bulk'>('individual');
 
-  const [newSlot, setNewSlot] = useState({
-    start_time: '09:00',
-    end_time: '10:00',
-  });
+  const [newSlot, setNewSlot] = useState(createDefaultNewSlot);
 
-  const [bulkSlotSettings, setBulkSlotSettings] = useState({
-    start_time: '06:00',
-    end_time: '22:00',
-    from_date: format(new Date(), 'yyyy-MM-dd'),
-    to_date: format(addDays(new Date(), 7), 'yyyy-MM-dd'),
-    exclude_dates: [] as string[],
-  });
+  const [bulkSlotSettings, setBulkSlotSettings] = useState(createDefaultBulkSlotSettings);
+
+  const canUseSessionStorage = typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
+
+  const storageKey = useMemo(
+    () => (userProfile ? `manageSlotsState:${userProfile.user_id}` : null),
+    [userProfile?.user_id]
+  );
+
+  useEffect(() => {
+    if (!storageKey || !canUseSessionStorage) return;
+
+    try {
+      const raw = window.sessionStorage.getItem(storageKey);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+
+      if (typeof parsed.selectedCourt === 'string') {
+        setSelectedCourt(parsed.selectedCourt);
+      }
+
+      if (typeof parsed.selectedDate === 'string') {
+        const restoredDate = parse(parsed.selectedDate, 'yyyy-MM-dd', new Date());
+        if (!Number.isNaN(restoredDate.getTime())) {
+          setSelectedDate(restoredDate);
+        }
+      }
+
+      if (
+        parsed.newSlot &&
+        typeof parsed.newSlot.start_time === 'string' &&
+        typeof parsed.newSlot.end_time === 'string'
+      ) {
+        setNewSlot(parsed.newSlot);
+      }
+
+      if (parsed.slotCreationMode === 'individual' || parsed.slotCreationMode === 'bulk') {
+        setSlotCreationMode(parsed.slotCreationMode);
+      }
+
+      const intervalValue =
+        typeof parsed.slotInterval === 'number'
+          ? parsed.slotInterval
+          : Number(parsed.slotInterval);
+      if (!Number.isNaN(intervalValue) && intervalValue > 0) {
+        setSlotInterval(intervalValue);
+      }
+
+      if (parsed.bulkSlotSettings) {
+        setBulkSlotSettings((prev) => ({
+          ...prev,
+          ...parsed.bulkSlotSettings,
+          exclude_dates: Array.isArray(parsed.bulkSlotSettings.exclude_dates)
+            ? parsed.bulkSlotSettings.exclude_dates
+            : [],
+        }));
+      }
+    } catch (error) {
+      console.warn('Failed to restore slot manager state from sessionStorage', error);
+    }
+  }, [storageKey, canUseSessionStorage]);
+
+  useEffect(() => {
+    if (!storageKey || !canUseSessionStorage) return;
+
+    const payload = {
+      selectedCourt,
+      selectedDate: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null,
+      newSlot,
+      slotInterval,
+      slotCreationMode,
+      bulkSlotSettings,
+    };
+
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Failed to persist slot manager state to sessionStorage', error);
+    }
+  }, [
+    storageKey,
+    canUseSessionStorage,
+    selectedCourt,
+    selectedDate,
+    newSlot,
+    slotInterval,
+    slotCreationMode,
+    bulkSlotSettings,
+  ]);
 
   const [editingSlot, setEditingSlot] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -196,7 +289,7 @@ export const ManageSlots: React.FC = () => {
       if (error) throw error;
 
       fetchSlots();
-      setNewSlot({ start_time: '09:00', end_time: '10:00' });
+      setNewSlot(createDefaultNewSlot());
     } catch (error) {
       console.error('Error adding slot:', error);
       alert('Unable to add slot. Please try again.');
