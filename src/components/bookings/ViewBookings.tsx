@@ -15,6 +15,7 @@ export const ViewBookings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [bookingTypeFilter, setBookingTypeFilter] = useState<'all' | 'players' | 'groups'>('all');
   const [selectedBookingIds, setSelectedBookingIds] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (userProfile) {
@@ -133,13 +134,23 @@ export const ViewBookings: React.FC = () => {
   }, [bookings, bookingTypeFilter]);
 
   const filteredBookings = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
     return bookings.filter((booking) => {
       const isGroupBooking = Boolean(booking.group);
       if (bookingTypeFilter === 'groups') return isGroupBooking;
       if (bookingTypeFilter === 'players') return !isGroupBooking;
-      return true;
+      if (!normalizedSearch) return true;
+
+      const playerName = booking.player_users?.full_name?.toLowerCase?.() || '';
+      const groupName = booking.group?.name?.toLowerCase?.() || '';
+
+      return (
+        playerName.includes(normalizedSearch) ||
+        groupName.includes(normalizedSearch)
+      );
     });
-  }, [bookings, bookingTypeFilter]);
+  }, [bookings, bookingTypeFilter, searchTerm]);
 
   const totalSelectedAmount = useMemo(() => {
     return selectedBookingIds.reduce((sum, id) => {
@@ -448,6 +459,13 @@ export const ViewBookings: React.FC = () => {
                 <option value="players">Players</option>
                 <option value="groups">Groups</option>
               </select>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by player or group name"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
               <button
                 onClick={handleDownloadExcel}
                 className="inline-flex items-center justify-center px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
