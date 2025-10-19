@@ -387,11 +387,18 @@ export const ApproveRequests: React.FC = () => {
       setPendingBatches(mapped);
       setBatchSlotCacheState((prev) => {
         const next = { ...prev };
-        mapped.forEach((batch) => {
-          if (batch.slots.length > 0) {
-            next[batch.batch_id] = batch.slots;
+        const activeBatchIds = new Set(mapped.map((batch) => batch.batch_id));
+
+        Object.keys(next).forEach((key) => {
+          if (!activeBatchIds.has(key)) {
+            delete next[key];
           }
         });
+
+        mapped.forEach((batch) => {
+          next[batch.batch_id] = batch.slots.length > 0 ? batch.slots : [];
+        });
+
         return next;
       });
       return mapped;
