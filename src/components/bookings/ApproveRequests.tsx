@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, User, DollarSign, CheckCircle, XCircle, AlertCircle, MapPin, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
+import { format } from 'date-fns';
 
 interface BookingRequest {
   booking_id: string;
@@ -34,6 +35,7 @@ interface GroupBatchSlot {
   slot_end_time: string | null;
   court_id: string | null;
   court_name: string | null;
+  slot_price: number | null;
 }
 
 interface GroupBatchRequest {
@@ -49,6 +51,26 @@ interface GroupBatchRequest {
   created_at: string;
   slots: GroupBatchSlot[];
 }
+
+const sortSlots = (slots: GroupBatchSlot[]): GroupBatchSlot[] => {
+  return [...slots].sort((a, b) => {
+    if (a.slot_date && b.slot_date) {
+      const diff = new Date(a.slot_date).getTime() - new Date(b.slot_date).getTime();
+      if (diff !== 0) return diff;
+    } else if (a.slot_date) {
+      return -1;
+    } else if (b.slot_date) {
+      return 1;
+    }
+
+    const startA = a.slot_start_time ?? '';
+    const startB = b.slot_start_time ?? '';
+    if (startA < startB) return -1;
+    if (startA > startB) return 1;
+    return 0;
+  });
+};
+
 export const ApproveRequests: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
@@ -62,10 +84,106 @@ export const ApproveRequests: React.FC = () => {
   const [pendingBatches, setPendingBatches] = useState<GroupBatchRequest[]>([]);
   const [groupLoading, setGroupLoading] = useState(false);
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
-  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+  const [viewingBatchId, setViewingBatchId] = useState<string | null>(null);
+  const [batchSlotCache, setBatchSlotCache] = useState<Record<string, GroupBatchSlot[]>>({});
+  const [batchSlotLoadingId, setBatchSlotLoadingId] = useState<string | null>(null);
+  const [batchSlotErrors, setBatchSlotErrors] = useState<Record<string, string>>({});
 
-  const toggleBatchDetails = (batchId: string) => {
-    setExpandedBatchId((current) => (current === batchId ? null : batchId));
+  const closeBatchDetails = () => setViewingBatchId(null);
+
+  const viewingBatch = useMemo(() => {
+    if (!viewingBatchId) return null;
+    return pendingBatches.find((batch) => batch.batch_id === viewingBatchId) ?? null;
+  }, [pendingBatches, viewingBatchId]);
+
+  const sortedViewingSlots = useMemo(() => {
+    if (!viewingBatch) return [];
+
+    const cached = batchSlotCache[viewingBatch.batch_id];
+    if (cached) {
+      return sortSlots(cached);
+    }
+
+    return sortSlots(viewingBatch.slots);
+  }, [batchSlotCache, viewingBatch]);
+
+  const ensureBatchSlots = async (batch: GroupBatchRequest) => {
+    const cached = batchSlotCache[batch.batch_id];
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+
+    setBatchSlotLoadingId(batch.batch_id);
+    setBatchSlotErrors((prev) => {
+      const next = { ...prev };
+      delete next[batch.batch_id];
+      return next;
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(
+          `
+          id,
+          total_amount,
+          slot_id,
+          booking_batch_id,
+          court_slots (
+            date,
+            start_time,
+            end_time,
+            court_id,
+            courts (
+              id,
+              name
+            )
+          )
+        `
+        )
+        .eq('booking_batch_id', batch.batch_id);
+
+      if (error) throw error;
+
+      const slots = Array.isArray(data)
+        ? data.map((booking: any) => ({
+            booking_id: booking.id,
+            slot_id: booking.slot_id ?? '',
+            slot_date: booking.court_slots?.date ?? null,
+            slot_start_time: booking.court_slots?.start_time ?? null,
+            slot_end_time: booking.court_slots?.end_time ?? null,
+            court_id: booking.court_slots?.court_id ?? booking.court_slots?.courts?.id ?? null,
+            court_name: booking.court_slots?.courts?.name ?? null,
+            slot_price:
+              booking.total_amount !== undefined && booking.total_amount !== null
+                ? Number(booking.total_amount)
+                : null,
+          }))
+        : [];
+
+      const sorted = sortSlots(slots);
+
+      setBatchSlotCache((prev) => ({ ...prev, [batch.batch_id]: sorted }));
+      setPendingBatches((prev) =>
+        prev.map((item) => (item.batch_id === batch.batch_id ? { ...item, slots: sorted } : item))
+      );
+
+      return sorted;
+    } catch (err) {
+      console.error('Error loading batch slots', err);
+      setBatchSlotErrors((prev) => ({
+        ...prev,
+        [batch.batch_id]: 'Unable to load slot details. Please try again.',
+      }));
+      return [];
+    } finally {
+      setBatchSlotLoadingId(null);
+    }
+  };
+
+  const handleViewBatch = (batch: GroupBatchRequest) => {
+    setViewingBatchId(batch.batch_id);
+    void ensureBatchSlots(batch);
   };
 
   useEffect(() => {
@@ -121,6 +239,7 @@ export const ApproveRequests: React.FC = () => {
           ),
           bookings (
             id,
+            total_amount,
             slot_id,
             court_slots (
               date,
@@ -150,6 +269,7 @@ export const ApproveRequests: React.FC = () => {
           .select(`
             id,
             booking_batch_id,
+            total_amount,
             slot_id,
             court_slots (
               date,
@@ -179,6 +299,10 @@ export const ApproveRequests: React.FC = () => {
               slot_end_time: booking.court_slots?.end_time ?? null,
               court_id: booking.court_slots?.court_id ?? null,
               court_name: booking.court_slots?.courts?.name ?? null,
+              slot_price:
+                booking.total_amount !== undefined && booking.total_amount !== null
+                  ? Number(booking.total_amount)
+                  : null,
             };
 
             if (!acc[batchId]) {
@@ -206,8 +330,15 @@ export const ApproveRequests: React.FC = () => {
               slot_end_time: booking.court_slots?.end_time ?? null,
               court_id: booking.court_slots?.court_id ?? null,
               court_name: booking.court_slots?.courts?.name ?? null,
+              slot_price:
+                booking.total_amount !== undefined && booking.total_amount !== null
+                  ? Number(booking.total_amount)
+                  : null,
             }))
           : [];
+
+        const combinedSlots = slotsByBatch[row.id] ?? directSlots;
+        const sortedSlots = sortSlots(combinedSlots);
 
         return {
           batch_id: row.id,
@@ -220,11 +351,20 @@ export const ApproveRequests: React.FC = () => {
           group_name: derivedGroupName,
           club_id: row.club_id,
           created_at: row.created_at,
-          slots: slotsByBatch[row.id] ?? directSlots,
+          slots: sortedSlots,
         };
       });
 
       setPendingBatches(mapped);
+      setBatchSlotCache((prev) => {
+        const next = { ...prev };
+        mapped.forEach((batch) => {
+          if (batch.slots.length > 0) {
+            next[batch.batch_id] = batch.slots;
+          }
+        });
+        return next;
+      });
       return mapped;
     } catch (e) {
       console.error('Error fetching pending group batches:', e);
@@ -409,6 +549,100 @@ export const ApproveRequests: React.FC = () => {
         )}
       </div>
 
+      {viewingBatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={closeBatchDetails}
+            role="presentation"
+          />
+          <div className="relative z-10 w-full max-w-3xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                <h3 className="text-xl font-semibold text-text-primary">
+                  {viewingBatch.group_name || 'Group'} –{' '}
+                  {viewingBatch.booking_month
+                    ? format(new Date(viewingBatch.booking_month), 'MMMM yyyy')
+                    : 'Requested schedule'}
+                </h3>
+                <p className="text-sm text-text-secondary">
+                  {viewingBatch.booking_count ?? 0} slots · Total {formatPrice(viewingBatch.total_amount || 0)}
+                </p>
+                {viewingBatch.notes && (
+                  <p className="mt-1 text-sm text-text-secondary">Notes: {viewingBatch.notes}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={closeBatchDetails}
+                className="rounded-full border border-gray-300 px-3 py-1 text-sm text-text-secondary hover:bg-gray-100"
+              >
+                Close
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
+              {batchSlotLoadingId === viewingBatch.batch_id ? (
+                <div className="flex justify-center py-10">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+                </div>
+              ) : sortedViewingSlots.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium text-text-secondary">Date &amp; Day</th>
+                        <th className="px-4 py-2 text-left font-medium text-text-secondary">Time</th>
+                        <th className="px-4 py-2 text-left font-medium text-text-secondary">Court</th>
+                        <th className="px-4 py-2 text-right font-medium text-text-secondary">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {sortedViewingSlots.map((slot) => {
+                        const key = `${slot.booking_id}-${slot.slot_id}`;
+                        const dateLabel = slot.slot_date
+                          ? format(new Date(slot.slot_date), 'EEE, dd MMM yyyy')
+                          : 'Date TBD';
+                        const timeLabel = `${slot.slot_start_time ?? '—'} – ${slot.slot_end_time ?? '—'}`;
+                        return (
+                          <tr key={key}>
+                            <td className="px-4 py-3 text-text-primary font-medium">
+                              {dateLabel}
+                              {slot.slot_price !== null && (
+                                <span className="ml-2 text-xs font-semibold text-text-secondary">
+                                  ({formatPrice(slot.slot_price)})
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-text-secondary">{timeLabel}</td>
+                            <td className="px-4 py-3 text-text-secondary">{slot.court_name ?? 'Court'}</td>
+                            <td className="px-4 py-3 text-right text-text-primary font-semibold">
+                              {slot.slot_price !== null ? formatPrice(slot.slot_price) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-background-subtle bg-background-subtle px-4 py-6 text-center text-sm text-text-secondary">
+                  {batchSlotErrors[viewingBatch.batch_id] ?? 'Slot details are not available for this batch.'}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-background px-6 py-4">
+              <button
+                type="button"
+                onClick={closeBatchDetails}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-text-secondary hover:bg-gray-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {currentLoading ? (
 
         <div className="flex justify-center items-center py-12">
@@ -424,7 +658,6 @@ export const ApproveRequests: React.FC = () => {
             </div>
           ) : (
             pendingBatches.map((batch) => {
-              const expanded = expandedBatchId === batch.batch_id;
               return (
                 <div
                   key={batch.batch_id}
@@ -461,14 +694,10 @@ export const ApproveRequests: React.FC = () => {
                       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <button
                           type="button"
-                          onClick={() => toggleBatchDetails(batch.batch_id)}
-                          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
-                            expanded
-                              ? 'border-secondary-500 text-secondary-600 bg-secondary-50'
-                              : 'border-secondary-200 text-secondary-600 hover:bg-secondary-50'
-                          }`}
+                          onClick={() => handleViewBatch(batch)}
+                          className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-secondary-200 text-secondary-600 hover:bg-secondary-50 transition-colors"
                         >
-                          <Eye className="h-4 w-4" /> {expanded ? 'Hide slots' : 'View slots'}
+                          <Eye className="h-4 w-4" /> View slots
                         </button>
                         <button
                           onClick={() => rejectBatch(batch)}
@@ -488,35 +717,6 @@ export const ApproveRequests: React.FC = () => {
                       {batch.notes && <p className="text-sm text-text-secondary mt-2">Notes: {batch.notes}</p>}
                     </div>
                   </div>
-                  {expanded && (
-                    <div className="mt-6 border-t border-background-subtle pt-4">
-                      <h4 className="text-sm font-semibold text-text-primary mb-3">Requested schedule</h4>
-                      {batch.slots.length > 0 ? (
-                        <div className="space-y-2 text-sm">
-                          {batch.slots.map((slot) => {
-                            const dateLabel = slot.slot_date
-                              ? new Date(slot.slot_date).toLocaleDateString()
-                              : 'Date TBD';
-                            const start = slot.slot_start_time ?? '—';
-                            const end = slot.slot_end_time ?? '—';
-                            const court = slot.court_name ?? 'Court';
-                            return (
-                              <div
-                                key={`${slot.booking_id}-${slot.slot_id}`}
-                                className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-secondary"
-                              >
-                                <span className="font-medium text-text-primary">{dateLabel}</span>
-                                <span>| {start} - {end}</span>
-                                <span>| {court}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-text-secondary">Slot details are not available for this batch.</p>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })
