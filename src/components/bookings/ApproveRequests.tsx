@@ -85,7 +85,7 @@ export const ApproveRequests: React.FC = () => {
   const [groupLoading, setGroupLoading] = useState(false);
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
   const [viewingBatchId, setViewingBatchId] = useState<string | null>(null);
-  const [batchSlotCache, setBatchSlotCache] = useState<Record<string, GroupBatchSlot[]>>({});
+  const [batchSlotCache, setBatchSlotCacheState] = useState<Record<string, GroupBatchSlot[]>>({});
   const [viewingBatchSlots, setViewingBatchSlots] = useState<GroupBatchSlot[]>([]);
   const [viewingBatchLoading, setViewingBatchLoading] = useState(false);
   const [viewingBatchError, setViewingBatchError] = useState<string | null>(null);
@@ -127,7 +127,7 @@ export const ApproveRequests: React.FC = () => {
       setViewingBatchSlots(preloaded);
       setViewingBatchError(null);
       setViewingBatchLoading(false);
-      setBatchSlotCache((prev) => ({ ...prev, [viewingBatch.batch_id]: preloaded }));
+      setBatchSlotCacheState((prev) => ({ ...prev, [viewingBatch.batch_id]: preloaded }));
       return;
     }
 
@@ -178,7 +178,7 @@ export const ApproveRequests: React.FC = () => {
 
         const sorted = sortSlots(fetchedSlots);
         setViewingBatchSlots(sorted);
-        setBatchSlotCache((prev) => ({ ...prev, [currentBatchId]: sorted }));
+        setBatchSlotCacheState((prev) => ({ ...prev, [currentBatchId]: sorted }));
         setViewingBatchError(null);
       } catch (error) {
         console.error('Error loading batch slots:', error);
@@ -385,7 +385,7 @@ export const ApproveRequests: React.FC = () => {
       });
 
       setPendingBatches(mapped);
-      setBatchSlotCache((prev) => {
+      setBatchSlotCacheState((prev) => {
         const next = { ...prev };
         mapped.forEach((batch) => {
           if (batch.slots.length > 0) {
