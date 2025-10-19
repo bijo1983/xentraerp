@@ -490,55 +490,52 @@ export const ApproveRequests: React.FC = () => {
   };
 
 
-  const approveBatch = async (batch: GroupBatchRequest) => {
-    if (!confirm(`Approve group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`)) return;
+  const handleBatchDecision = async (
+    batch: GroupBatchRequest,
+    action: 'approve' | 'reject'
+  ) => {
+    const isApprove = action === 'approve';
+    const confirmationMessage = isApprove
+      ? `Approve group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`
+      : `Reject group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`;
+
+    if (!confirm(confirmationMessage)) return;
+
     setProcessingBatchId(batch.batch_id);
+
     try {
-      // Prefer secure RPC if available
-      const { data, error } = await supabase.rpc('approve_booking_batch', {
+      const rpcName = isApprove ? 'approve_booking_batch' : 'reject_booking_batch';
+      const { data, error } = await supabase.rpc(rpcName, {
         p_batch_id: batch.batch_id
       });
 
       if (error) throw error;
       if (data && data.success === false) {
-        throw new Error(data.message || 'Batch approval failed');
+        throw new Error(
+          data.message || (isApprove ? 'Batch approval failed' : 'Batch rejection failed')
+        );
       }
 
-      alert('Group batch approved successfully!');
-      // Refresh both views to keep in sync
+      alert(isApprove ? 'Group batch approved successfully!' : 'Group batch rejected.');
       await fetchPendingBatches();
       await fetchPendingRequests({ skipLoading: true });
     } catch (err) {
-      console.error('Error approving batch:', err);
-      alert('Error approving batch. Please check policies/RPC and try again.');
+      console.error(
+        `Error ${isApprove ? 'approving' : 'rejecting'} batch:`,
+        err
+      );
+      alert(
+        isApprove
+          ? 'Error approving batch. Please check policies/RPC and try again.'
+          : 'Error rejecting batch. Please check policies/RPC and try again.'
+      );
     } finally {
       setProcessingBatchId(null);
     }
   };
 
-  const rejectBatch = async (batch: GroupBatchRequest) => {
-    if (!confirm(`Reject group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`)) return;
-    setProcessingBatchId(batch.batch_id);
-    try {
-      const { data, error } = await supabase.rpc('reject_booking_batch', {
-        p_batch_id: batch.batch_id
-      });
-
-      if (error) throw error;
-      if (data && data.success === false) {
-        throw new Error(data.message || 'Batch rejection failed');
-      }
-
-      alert('Group batch rejected.');
-      await fetchPendingBatches();
-      await fetchPendingRequests({ skipLoading: true });
-    } catch (err) {
-      console.error('Error rejecting batch:', err);
-      alert('Error rejecting batch. Please check policies/RPC and try again.');
-    } finally {
-      setProcessingBatchId(null);
-    }
-  };
+  const approveBatch = (batch: GroupBatchRequest) => handleBatchDecision(batch, 'approve');
+  const rejectBatch = (batch: GroupBatchRequest) => handleBatchDecision(batch, 'reject');
   const isGroupView = viewMode === 'group';
   const currentLoading = isGroupView ? groupLoading : loading;
   const pendingCount = isGroupView ? pendingBatches.length : pendingRequests.length;
