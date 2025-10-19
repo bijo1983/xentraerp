@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 
-type Tournament = {
+export type TournamentSummary = {
   id: string;
   name: string;
-  currency_code: string;
+  currency_code?: string | null;
 };
 
 type TournamentEvent = {
@@ -118,7 +118,7 @@ const CATEGORY_PRESETS: CategoryPreset[] = [
 interface DropdownOption { value: string; label: string; }
 
 interface Props {
-  tournament: Tournament;
+  tournament: TournamentSummary;
 }
 
 const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
@@ -437,7 +437,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
           </select>
         </label>
         <label>
-          Registration Fee ({tournament.currency_code})
+          Registration Fee ({currencyCode})
           <input
             type="number"
             min={0}
@@ -481,7 +481,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
                 {ev.age_group && ` – ${ev.age_group}`}
                 {ev.gender && ` – ${ev.gender}`}
                 {ev.skill_level && ` – ${ev.skill_level}`}
-                {` (Fee: ${tournament.currency_code} ${ev.registration_fee})`}
+                {` (Fee: ${currencyCode} ${ev.registration_fee})`}
               </span>
               <button
                 className="ml-2 bg-red-500 text-white px-3 py-1 rounded"
