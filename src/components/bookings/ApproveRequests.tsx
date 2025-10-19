@@ -85,8 +85,17 @@ export const ApproveRequests: React.FC = () => {
   const [groupLoading, setGroupLoading] = useState(false);
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
   const [viewingBatchId, setViewingBatchId] = useState<string | null>(null);
+  const [batchSlotCache, setBatchSlotCache] = useState<Record<string, GroupBatchSlot[]>>({});
+  const [viewingBatchSlots, setViewingBatchSlots] = useState<GroupBatchSlot[]>([]);
+  const [viewingBatchLoading, setViewingBatchLoading] = useState(false);
+  const [viewingBatchError, setViewingBatchError] = useState<string | null>(null);
 
-  const closeBatchDetails = () => setViewingBatchId(null);
+  const closeBatchDetails = () => {
+    setViewingBatchId(null);
+    setViewingBatchSlots([]);
+    setViewingBatchError(null);
+    setViewingBatchLoading(false);
+  };
 
   const viewingBatch = useMemo(() => {
     if (!viewingBatchId) return null;
@@ -94,25 +103,102 @@ export const ApproveRequests: React.FC = () => {
   }, [pendingBatches, viewingBatchId]);
 
   const sortedViewingSlots = useMemo(() => {
-    if (!viewingBatch) return [];
+    return sortSlots(viewingBatchSlots);
+  }, [viewingBatchSlots]);
 
-    return [...viewingBatch.slots].sort((a, b) => {
-      if (a.slot_date && b.slot_date) {
-        const diff = new Date(a.slot_date).getTime() - new Date(b.slot_date).getTime();
-        if (diff !== 0) return diff;
-      } else if (a.slot_date) {
-        return -1;
-      } else if (b.slot_date) {
-        return 1;
+  useEffect(() => {
+    if (!viewingBatchId) {
+      setViewingBatchSlots([]);
+      setViewingBatchError(null);
+      setViewingBatchLoading(false);
+      return;
+    }
+
+    const cachedSlots = batchSlotCache[viewingBatchId];
+    if (cachedSlots && cachedSlots.length > 0) {
+      setViewingBatchSlots(cachedSlots);
+      setViewingBatchError(null);
+      setViewingBatchLoading(false);
+      return;
+    }
+
+    if (viewingBatch && viewingBatch.slots?.length) {
+      const preloaded = sortSlots(viewingBatch.slots);
+      setViewingBatchSlots(preloaded);
+      setViewingBatchError(null);
+      setViewingBatchLoading(false);
+      setBatchSlotCache((prev) => ({ ...prev, [viewingBatch.batch_id]: preloaded }));
+      return;
+    }
+
+    let isCancelled = false;
+    const currentBatchId = viewingBatchId;
+    setViewingBatchLoading(true);
+    setViewingBatchSlots([]);
+    setViewingBatchError(null);
+
+    const loadSlots = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            slot_id,
+            total_amount,
+            court_slots (
+              date,
+              start_time,
+              end_time,
+              court_id,
+              courts (
+                id,
+                name
+              )
+            )
+          `)
+          .eq('booking_batch_id', currentBatchId);
+
+        if (error) throw error;
+
+        const fetchedSlots: GroupBatchSlot[] = (data || []).map((booking: any) => ({
+          booking_id: booking.id,
+          slot_id: booking.slot_id ?? '',
+          slot_date: booking.court_slots?.date ?? null,
+          slot_start_time: booking.court_slots?.start_time ?? null,
+          slot_end_time: booking.court_slots?.end_time ?? null,
+          court_id: booking.court_slots?.court_id ?? null,
+          court_name: booking.court_slots?.courts?.name ?? null,
+          slot_price:
+            booking.total_amount !== undefined && booking.total_amount !== null
+              ? Number(booking.total_amount)
+              : null,
+        }));
+
+        if (isCancelled) return;
+
+        const sorted = sortSlots(fetchedSlots);
+        setViewingBatchSlots(sorted);
+        setBatchSlotCache((prev) => ({ ...prev, [currentBatchId]: sorted }));
+        setViewingBatchError(null);
+      } catch (error) {
+        console.error('Error loading batch slots:', error);
+        if (!isCancelled) {
+          setViewingBatchSlots([]);
+          setViewingBatchError('Unable to load slot details. Please try again.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setViewingBatchLoading(false);
+        }
       }
+    };
 
-      const startA = a.slot_start_time ?? '';
-      const startB = b.slot_start_time ?? '';
-      if (startA < startB) return -1;
-      if (startA > startB) return 1;
-      return 0;
-    });
-  }, [viewingBatch]);
+    void loadSlots();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [viewingBatchId, viewingBatch, batchSlotCache]);
 
   useEffect(() => {
     if (!userProfile) return;
@@ -524,7 +610,13 @@ export const ApproveRequests: React.FC = () => {
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
-              {sortedViewingSlots.length > 0 ? (
+              {viewingBatchLoading ? (
+                <div className="py-12 text-center text-sm text-text-secondary">Loading slot details…</div>
+              ) : viewingBatchError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
+                  {viewingBatchError}
+                </div>
+              ) : sortedViewingSlots.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-gray-50">
@@ -540,14 +632,14 @@ export const ApproveRequests: React.FC = () => {
                         const key = `${slot.booking_id}-${slot.slot_id}`;
                         const dateLabel = slot.slot_date ? format(new Date(slot.slot_date), 'EEE, dd MMM') : 'Date TBD';
                         const timeLabel = `${slot.slot_start_time ?? '—'} – ${slot.slot_end_time ?? '—'}`;
+                        const courtLabel = slot.court_name ?? slot.court_id ?? 'Court';
+                        const priceLabel = slot.slot_price !== null ? formatPrice(slot.slot_price) : '—';
                         return (
                           <tr key={key}>
                             <td className="px-4 py-3 text-text-primary font-medium">{dateLabel}</td>
                             <td className="px-4 py-3 text-text-secondary">{timeLabel}</td>
-                            <td className="px-4 py-3 text-text-secondary">{slot.court_name ?? 'Court'}</td>
-                            <td className="px-4 py-3 text-right text-text-primary font-semibold">
-                              {slot.slot_price !== null ? formatPrice(slot.slot_price) : '—'}
-                            </td>
+                            <td className="px-4 py-3 text-text-secondary">{courtLabel}</td>
+                            <td className="px-4 py-3 text-right text-text-primary font-semibold">{priceLabel}</td>
                           </tr>
                         );
                       })}
