@@ -51,6 +51,26 @@ interface GroupBatchRequest {
   created_at: string;
   slots: GroupBatchSlot[];
 }
+
+const sortSlots = (slots: GroupBatchSlot[]): GroupBatchSlot[] => {
+  return [...slots].sort((a, b) => {
+    if (a.slot_date && b.slot_date) {
+      const diff = new Date(a.slot_date).getTime() - new Date(b.slot_date).getTime();
+      if (diff !== 0) return diff;
+    } else if (a.slot_date) {
+      return -1;
+    } else if (b.slot_date) {
+      return 1;
+    }
+
+    const startA = a.slot_start_time ?? '';
+    const startB = b.slot_start_time ?? '';
+    if (startA < startB) return -1;
+    if (startA > startB) return 1;
+    return 0;
+  });
+};
+
 export const ApproveRequests: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
@@ -279,6 +299,15 @@ export const ApproveRequests: React.FC = () => {
       });
 
       setPendingBatches(mapped);
+      setBatchSlotCache((prev) => {
+        const next = { ...prev };
+        mapped.forEach((batch) => {
+          if (batch.slots.length > 0) {
+            next[batch.batch_id] = batch.slots;
+          }
+        });
+        return next;
+      });
       return mapped;
     } catch (e) {
       console.error('Error fetching pending group batches:', e);
