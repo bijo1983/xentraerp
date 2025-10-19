@@ -76,6 +76,7 @@ function AppContent() {
   const navigate = useNavigate();
 
   const [activeView, setActiveView] = React.useState(() => getViewFromPath(location.pathname));
+  const [mountedViews, setMountedViews] = React.useState<string[]>(() => [getViewFromPath(location.pathname)]);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
   const Spinner = (
@@ -97,6 +98,15 @@ function AppContent() {
       setActiveView(viewFromLocation);
     }
   }, [location.pathname, activeView]);
+
+  React.useEffect(() => {
+    setMountedViews((prev) => {
+      if (prev.includes(activeView)) {
+        return prev;
+      }
+      return [...prev, activeView];
+    });
+  }, [activeView]);
 
   const handleViewChange = React.useCallback(
     (view: string) => {
@@ -140,8 +150,8 @@ function AppContent() {
     );
   }
 
-  const renderMainContent = () => {
-    switch (activeView) {
+  const renderView = (view: string) => {
+    switch (view) {
       case 'dashboard': {
         switch (userProfile?.type) {
           case 'Player':
@@ -205,7 +215,13 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)}
         />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">{renderMainContent()}</div>
+          <div className="max-w-7xl mx-auto">
+            {mountedViews.map((view) => (
+              <div key={view} style={{ display: view === activeView ? 'block' : 'none' }}>
+                {renderView(view)}
+              </div>
+            ))}
+          </div>
         </main>
       </div>
       <Footer />

@@ -25,8 +25,6 @@ interface BookingRequest {
   club_name: string;
 }
 
-
-
 interface GroupBatchSlot {
   booking_id: string;
   slot_id: string;
@@ -74,16 +72,20 @@ const sortSlots = (slots: GroupBatchSlot[]): GroupBatchSlot[] => {
 export const ApproveRequests: React.FC = () => {
   const { userProfile } = useAuthStore();
   const { formatPrice } = useCurrency();
+
+  const [viewMode, setViewMode] = useState<'individual' | 'group'>('individual');
+
+  // Individual
   const [pendingRequests, setPendingRequests] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // View mode: individual bookings vs group batches
-  const [viewMode, setViewMode] = useState<'individual' | 'group'>('individual');
-  // Group batches
+  // Group
   const [pendingBatches, setPendingBatches] = useState<GroupBatchRequest[]>([]);
   const [groupLoading, setGroupLoading] = useState(false);
   const [processingBatchId, setProcessingBatchId] = useState<string | null>(null);
+
+  // View batch modal (rich version)
   const [viewingBatch, setViewingBatch] = useState<GroupBatchRequest | null>(null);
   const [viewingBatchSlots, setViewingBatchSlots] = useState<GroupBatchSlot[]>([]);
   const [viewingBatchLoading, setViewingBatchLoading] = useState(false);
@@ -98,21 +100,16 @@ export const ApproveRequests: React.FC = () => {
     setViewingBatchLoading(false);
   };
 
-  const sortedViewingSlots = useMemo(() => {
-    return sortSlots(viewingBatchSlots);
-  }, [viewingBatchSlots]);
+  const sortedViewingSlots = useMemo(() => sortSlots(viewingBatchSlots), [viewingBatchSlots]);
 
   useEffect(() => {
     if (!viewingBatch) return;
     const stillPending = pendingBatches.some((batch) => batch.batch_id === viewingBatch.batch_id);
-    if (!stillPending) {
-      closeBatchDetails();
-    }
+    if (!stillPending) closeBatchDetails();
   }, [pendingBatches, viewingBatch]);
 
   const mapBookingRowsToSlots = (rows: any[] | null | undefined): GroupBatchSlot[] => {
     if (!Array.isArray(rows)) return [];
-
     return rows.map((booking) => ({
       booking_id: booking.id ?? booking.booking_id ?? booking.slot_id ?? '',
       slot_id: booking.slot_id ?? '',
@@ -135,25 +132,20 @@ export const ApproveRequests: React.FC = () => {
     secondary: GroupBatchSlot[] = []
   ): GroupBatchSlot[] => {
     const byKey = new Map<string, GroupBatchSlot>();
-
     const addSlots = (slots: GroupBatchSlot[]) => {
       slots.forEach((slot) => {
         const key = `${slot.slot_id}:${slot.slot_date ?? ''}:${slot.slot_start_time ?? ''}:${slot.slot_end_time ?? ''}`;
         byKey.set(key, slot);
       });
     };
-
     addSlots(primary);
     addSlots(secondary);
-
     return Array.from(byKey.values());
   };
 
   const loadBatchSlots = async (batchIds: string | string[]) => {
     const ids = (Array.isArray(batchIds) ? batchIds : [batchIds]).filter(Boolean);
-    if (ids.length === 0) {
-      return {} as Record<string, GroupBatchSlot[]>;
-    }
+    if (ids.length === 0) return {} as Record<string, GroupBatchSlot[]>;
 
     const [bookingsResponse, batchItemsResponse] = await Promise.all([
       supabase
@@ -164,10 +156,7 @@ export const ApproveRequests: React.FC = () => {
             start_time,
             end_time,
             court_id,
-            courts (
-              id,
-              name
-            )
+            courts ( id, name )
           )`
         )
         .in('booking_batch_id', ids),
@@ -179,10 +168,7 @@ export const ApproveRequests: React.FC = () => {
             start_time,
             end_time,
             court_id,
-            courts (
-              id,
-              name
-            )
+            courts ( id, name )
           )`
         )
         .in('batch_id', ids),
@@ -190,13 +176,8 @@ export const ApproveRequests: React.FC = () => {
 
     const result: Record<string, GroupBatchSlot[]> = {};
 
-    if (bookingsResponse.error) {
-      console.error('Error fetching batch bookings:', bookingsResponse.error);
-    }
-
-    if (batchItemsResponse.error) {
-      console.error('Error fetching booking batch items:', batchItemsResponse.error);
-    }
+    if (bookingsResponse.error) console.error('Error fetching batch bookings:', bookingsResponse.error);
+    if (batchItemsResponse.error) console.error('Error fetching booking batch items:', batchItemsResponse.error);
 
     if (Array.isArray(bookingsResponse.data)) {
       bookingsResponse.data.forEach((row: any) => {
@@ -244,14 +225,12 @@ export const ApproveRequests: React.FC = () => {
     const loadSlots = async () => {
       try {
         const slotResults = await loadBatchSlots(requestId);
-
-        if (latestBatchRequestRef.current !== requestId) {
-          return;
-        }
+        if (latestBatchRequestRef.current !== requestId) return;
 
         const sorted = slotResults[requestId] ?? [];
         setViewingBatchSlots(sorted);
         setViewingBatchError(null);
+
         setPendingBatches((prev) =>
           prev.map((existing) =>
             existing.batch_id === requestId ? { ...existing, slots: sorted } : existing
@@ -264,9 +243,7 @@ export const ApproveRequests: React.FC = () => {
         console.error('Error loading batch slots:', error);
         if (latestBatchRequestRef.current === requestId) {
           setViewingBatchError('Unable to load slot details. Please try again.');
-          if (preloaded.length === 0) {
-            setViewingBatchSlots([]);
-          }
+          if (preloaded.length === 0) setViewingBatchSlots([]);
         }
       } finally {
         if (latestBatchRequestRef.current === requestId) {
@@ -280,7 +257,6 @@ export const ApproveRequests: React.FC = () => {
 
   useEffect(() => {
     if (!userProfile) return;
-
     if (viewMode === 'group') {
       void fetchPendingBatches();
     } else {
@@ -289,26 +265,18 @@ export const ApproveRequests: React.FC = () => {
   }, [userProfile, viewMode]);
 
   useEffect(() => {
-    if (viewMode !== 'group') {
-      closeBatchDetails();
-    }
+    if (viewMode !== 'group') closeBatchDetails();
   }, [viewMode]);
 
-  
-  // Fetch group booking batches pending approval for the club
   const fetchPendingBatches = async () => {
     if (!userProfile) return;
 
     setGroupLoading(true);
-
     try {
-      // Determine current user's club_id via a simple query
-      // Assumes authStore provides userProfile for club users
-      // Find the club row for this auth user
       const { data: clubRows, error: clubErr } = await supabase
         .from('club_users')
         .select('id')
-        .eq('user_id', userProfile.user_id || userProfile.id)
+        .eq('user_id', (userProfile as any).user_id || (userProfile as any).id)
         .limit(1)
         .maybeSingle();
 
@@ -319,7 +287,6 @@ export const ApproveRequests: React.FC = () => {
       }
 
       const clubId = clubRows.id;
-
       const { data, error } = await supabase
         .from('booking_batches')
         .select(`
@@ -332,9 +299,7 @@ export const ApproveRequests: React.FC = () => {
           group_id,
           club_id,
           created_at,
-          group_users!left(
-            group_name
-          )
+          group_users!left( group_name )
         `)
         .eq('club_id', clubId)
         .eq('status', 'pending')
@@ -343,7 +308,6 @@ export const ApproveRequests: React.FC = () => {
       if (error) throw error;
 
       const batchIds = Array.isArray(data) ? data.map((row) => row.id).filter(Boolean) : [];
-
       const slotsByBatch = await loadBatchSlots(batchIds);
 
       const mapped: GroupBatchRequest[] = (data || []).map((row: any) => {
@@ -372,13 +336,14 @@ export const ApproveRequests: React.FC = () => {
       setPendingBatches(mapped);
       setViewingBatch((current) => {
         if (!current) return current;
-        const updated = mapped.find((batch) => batch.batch_id === current.batch_id);
+        const updated = mapped.find((b) => b.batch_id === current.batch_id);
         if (updated) {
           setViewingBatchSlots(sortSlots(updated.slots ?? []));
           return updated;
         }
         return current;
       });
+
       return mapped;
     } catch (e) {
       console.error('Error fetching pending group batches:', e);
@@ -390,18 +355,9 @@ export const ApproveRequests: React.FC = () => {
 
   const fetchPendingRequests = async ({ skipLoading = false }: { skipLoading?: boolean } = {}): Promise<BookingRequest[]> => {
     if (!userProfile) return [];
-
-    if (!skipLoading) {
-      setLoading(true);
-    }
+    if (!skipLoading) setLoading(true);
     try {
-      console.log('ApproveRequests - Fetching pending bookings...');
-      console.log('ApproveRequests - Current user:', userProfile);
-
       const { data, error } = await supabase.rpc('get_club_pending_bookings');
-
-      console.log('ApproveRequests - RPC Response:', { data, error });
-
       if (error) throw error;
       const sanitized = (data || []) as BookingRequest[];
       setPendingRequests(sanitized);
@@ -411,27 +367,17 @@ export const ApproveRequests: React.FC = () => {
       setPendingRequests([]);
       return [];
     } finally {
-      if (!skipLoading) {
-        setLoading(false);
-      }
+      if (!skipLoading) setLoading(false);
     }
   };
 
   const approveBooking = async (booking: BookingRequest) => {
     if (!confirm(`Approve booking for ${booking.player_name}?`)) return;
-
     setProcessingId(booking.booking_id);
     try {
-      const { data, error } = await supabase.rpc('approve_booking', {
-        p_booking_id: booking.booking_id
-      });
-
+      const { data, error } = await supabase.rpc('approve_booking', { p_booking_id: booking.booking_id });
       if (error) throw error;
-
-      if (data && !data.success) {
-        throw new Error(data.error || 'Failed to approve booking');
-      }
-
+      if (data && !data.success) throw new Error(data.error || 'Failed to approve booking');
       alert('Booking approved successfully!');
       await fetchPendingRequests();
     } catch (error) {
@@ -444,19 +390,11 @@ export const ApproveRequests: React.FC = () => {
 
   const rejectBooking = async (booking: BookingRequest) => {
     if (!confirm(`Reject booking for ${booking.player_name}?`)) return;
-
     setProcessingId(booking.booking_id);
     try {
-      const { data, error } = await supabase.rpc('reject_booking', {
-        p_booking_id: booking.booking_id
-      });
-
+      const { data, error } = await supabase.rpc('reject_booking', { p_booking_id: booking.booking_id });
       if (error) throw error;
-
-      if (data && !data.success) {
-        throw new Error(data.error || 'Failed to reject booking');
-      }
-
+      if (data && !data.success) throw new Error(data.error || 'Failed to reject booking');
       alert('Booking rejected successfully!');
       await fetchPendingRequests();
     } catch (error) {
@@ -467,56 +405,40 @@ export const ApproveRequests: React.FC = () => {
     }
   };
 
+  const handleBatchDecision = async (batch: GroupBatchRequest, action: 'approve' | 'reject') => {
+    const isApprove = action === 'approve';
+    const confirmationMessage = isApprove
+      ? `Approve group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`
+      : `Reject group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`;
 
-  const approveBatch = async (batch: GroupBatchRequest) => {
-    if (!confirm(`Approve group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`)) return;
+    if (!confirm(confirmationMessage)) return;
+
     setProcessingBatchId(batch.batch_id);
     try {
-      // Prefer secure RPC if available
-      const { data, error } = await supabase.rpc('approve_booking_batch', {
-        p_batch_id: batch.batch_id
-      });
-
+      const rpcName = isApprove ? 'approve_booking_batch' : 'reject_booking_batch';
+      const { data, error } = await supabase.rpc(rpcName, { p_batch_id: batch.batch_id });
       if (error) throw error;
       if (data && data.success === false) {
-        throw new Error(data.message || 'Batch approval failed');
+        throw new Error(data.message || (isApprove ? 'Batch approval failed' : 'Batch rejection failed'));
       }
-
-      alert('Group batch approved successfully!');
-      // Refresh both views to keep in sync
+      alert(isApprove ? 'Group batch approved successfully!' : 'Group batch rejected.');
       await fetchPendingBatches();
       await fetchPendingRequests({ skipLoading: true });
     } catch (err) {
-      console.error('Error approving batch:', err);
-      alert('Error approving batch. Please check policies/RPC and try again.');
+      console.error(`Error ${isApprove ? 'approving' : 'rejecting'} batch:`, err);
+      alert(
+        isApprove
+          ? 'Error approving batch. Please check policies/RPC and try again.'
+          : 'Error rejecting batch. Please check policies/RPC and try again.'
+      );
     } finally {
       setProcessingBatchId(null);
     }
   };
 
-  const rejectBatch = async (batch: GroupBatchRequest) => {
-    if (!confirm(`Reject group batch${batch.group_name ? ' for ' + batch.group_name : ''}?`)) return;
-    setProcessingBatchId(batch.batch_id);
-    try {
-      const { data, error } = await supabase.rpc('reject_booking_batch', {
-        p_batch_id: batch.batch_id
-      });
+  const approveBatch = (batch: GroupBatchRequest) => handleBatchDecision(batch, 'approve');
+  const rejectBatch = (batch: GroupBatchRequest) => handleBatchDecision(batch, 'reject');
 
-      if (error) throw error;
-      if (data && data.success === false) {
-        throw new Error(data.message || 'Batch rejection failed');
-      }
-
-      alert('Group batch rejected.');
-      await fetchPendingBatches();
-      await fetchPendingRequests({ skipLoading: true });
-    } catch (err) {
-      console.error('Error rejecting batch:', err);
-      alert('Error rejecting batch. Please check policies/RPC and try again.');
-    } finally {
-      setProcessingBatchId(null);
-    }
-  };
   const isGroupView = viewMode === 'group';
   const currentLoading = isGroupView ? groupLoading : loading;
   const pendingCount = isGroupView ? pendingBatches.length : pendingRequests.length;
@@ -565,11 +487,7 @@ export const ApproveRequests: React.FC = () => {
 
       {viewingBatch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8">
-          <div
-            className="absolute inset-0 bg-black bg-opacity-50"
-            onClick={closeBatchDetails}
-            role="presentation"
-          />
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={closeBatchDetails} role="presentation" />
           <div className="relative z-10 w-full max-w-3xl rounded-xl bg-white shadow-xl">
             <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
               <div>
@@ -594,6 +512,7 @@ export const ApproveRequests: React.FC = () => {
                 Close
               </button>
             </div>
+
             <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
               {viewingBatchLoading && sortedViewingSlots.length === 0 ? (
                 <div className="py-12 text-center text-sm text-text-secondary">Loading slot details…</div>
@@ -644,6 +563,7 @@ export const ApproveRequests: React.FC = () => {
                 </div>
               )}
             </div>
+
             <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-background px-6 py-4">
               <button
                 type="button"
@@ -658,7 +578,6 @@ export const ApproveRequests: React.FC = () => {
       )}
 
       {currentLoading ? (
-
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
         </div>
@@ -807,7 +726,6 @@ export const ApproveRequests: React.FC = () => {
                     </div>
                   </div>
                 </div>
-
 
                 <div className="flex items-center justify-between pt-4 border-t border-background-subtle">
                   <p className="text-xs text-text-secondary">
