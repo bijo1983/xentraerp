@@ -341,8 +341,6 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
     }
   };
 
-  const currencyCode = tournament.currency_code || "INR";
-
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold mb-4">
