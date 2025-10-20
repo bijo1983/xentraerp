@@ -1,102 +1,166 @@
 // src/components/layout/Sidebar.tsx
 import React from 'react';
 import {
-  Home,
-  Calendar,
-  Trophy,
-  MapPin,
-  Users,
   BarChart3,
-  Settings,
-  Plus,
-  Clock,
-  List,
+  Calendar,
   CheckSquare,
-  BookOpen,
+  Clock,
+  Home,
+  List,
+  MapPin,
+  Plus,
+  Trophy,
+  Users,
   X,
+  Settings,
+  BookOpen,
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
-type Item = { label: string; path: string; icon: React.ComponentType<{ className?: string }> };
+type IconType = React.ComponentType<{ className?: string }>;
 
-export const Sidebar: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+type ViewKey =
+  | 'dashboard'
+  | 'book-court'
+  | 'my-bookings'
+  | 'approve-requests'
+  | 'courts'
+  | 'manage-slots'
+  | 'manage-bookings'
+  | 'view-bookings'
+  | 'tournaments'
+  | 'create-tournament'
+  | 'profile'
+  | 'find-clubs'
+  | 'analytics'
+  | 'admin-console';
+
+type Item = {
+  label: string;
+  view: ViewKey;
+  icon: IconType;
+};
+
+interface SidebarProps {
+  activeView: string;
+  onViewChange: (view: ViewKey) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const MENU_CONFIG_MAP = {
+  Administrator: [
+    { label: 'Dashboard', view: 'dashboard', icon: Home },
+    { label: 'Admin Console', view: 'admin-console', icon: Settings },
+    { label: 'Profile Settings', view: 'profile', icon: Users },
+    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+    { label: 'Analytics & Reports', view: 'analytics', icon: BarChart3 },
+  ],
+  Club: [
+    { label: 'Dashboard', view: 'dashboard', icon: Home },
+    { label: 'Create Courts', view: 'courts', icon: MapPin },
+    { label: 'Create Slots', view: 'manage-slots', icon: Clock },
+    { label: 'Manage Bookings', view: 'manage-bookings', icon: List },
+    { label: 'View Bookings', view: 'view-bookings', icon: Calendar },
+    { label: 'Approve Requests', view: 'approve-requests', icon: CheckSquare },
+    { label: 'Reports & Analytics', view: 'analytics', icon: BookOpen },
+    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+  ],
+  Organizer: [
+    { label: 'Dashboard', view: 'dashboard', icon: Home },
+    { label: 'Manage Bookings', view: 'manage-bookings', icon: List },
+    { label: 'Create Slots', view: 'manage-slots', icon: Clock },
+    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+    { label: 'Create Tournament', view: 'create-tournament', icon: Plus },
+    { label: 'Reports & Analytics', view: 'analytics', icon: BarChart3 },
+  ],
+  Player: [
+    { label: 'Dashboard', view: 'dashboard', icon: Home },
+    { label: 'Book Courts', view: 'book-court', icon: Plus },
+    { label: 'My Bookings', view: 'my-bookings', icon: Clock },
+    { label: 'Search Clubs', view: 'find-clubs', icon: MapPin },
+    { label: 'Join Tournaments', view: 'tournaments', icon: Trophy },
+  ],
+  Group: [
+    { label: 'Dashboard', view: 'dashboard', icon: Home },
+    { label: 'Manage Bookings', view: 'manage-bookings', icon: List },
+    { label: 'My Bookings', view: 'my-bookings', icon: Calendar },
+    { label: 'Reports & Analytics', view: 'analytics', icon: BarChart3 },
+    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+  ],
+} satisfies Record<string, Item[]>;
+
+type RoleKey = keyof typeof MENU_CONFIG_MAP;
+
+const MENU_CONFIG = MENU_CONFIG_MAP as Record<RoleKey, Item[]>;
+
+function normalizeRole(role?: string): RoleKey {
+  const key = role?.toLowerCase() ?? '';
+
+  if (['administrator', 'admin'].includes(key)) return 'Administrator';
+  if (['club', 'club_player', 'club_players', 'club-player', 'club-players'].includes(key)) return 'Club';
+  if (['organizer', 'organisers', 'organizer_user', 'organizer-users'].includes(key)) return 'Organizer';
+  if (['group', 'group_user', 'group-users'].includes(key)) return 'Group';
+  if (['player', 'user_player', 'user_players', 'player_user', 'player-users'].includes(key)) return 'Player';
+
+  return 'Player';
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  activeView,
+  onViewChange,
+  isOpen = false,
+  onClose,
+}) => {
   const { userProfile } = useAuthStore();
-  const role = userProfile?.type; // 'Administrator' | 'Club' | 'Organizer' | 'Player' | 'Group'
-  const [isOpen, setOpen] = React.useState(true);
+  const normalizedRole = normalizeRole(userProfile?.type);
+  const items = MENU_CONFIG[normalizedRole];
 
-  const adminItems: Item[] = [
-    { label: 'Home', path: '/', icon: Home },
-    { label: 'Admin Console', path: '/admin', icon: Settings },
-    { label: 'Tournaments', path: '/tournaments', icon: Trophy },
-    { label: 'Manage Dropdowns', path: '/admin/manage-dropdowns', icon: List }, // ADMIN ONLY
-    { label: 'Site Settings', path: '/admin/site', icon: Settings },
-  ];
+  const handleChange = (view: ViewKey) => {
+    onViewChange(view);
+    if (onClose) {
+      onClose();
+    }
+  };
 
-  const clubOrganizerItems: Item[] = [
-    { label: 'Home', path: '/', icon: Home },
-    { label: 'Dashboard', path: role === 'Club' ? '/club' : '/organizer', icon: BarChart3 },
-    { label: 'Courts', path: '/courts/manage', icon: MapPin },
-    { label: 'Approve Requests', path: '/bookings/approve', icon: CheckSquare },
-    { label: 'Tournaments', path: '/tournaments', icon: Trophy },
-    { label: 'Bookings', path: '/bookings', icon: Calendar },
-    { label: 'Reports', path: '/reports', icon: BookOpen },
-  ];
-
-  const playerGroupItems: Item[] = [
-    { label: 'Home', path: '/', icon: Home },
-    { label: 'Dashboard', path: role === 'Player' ? '/player' : '/group', icon: BarChart3 },
-    { label: 'Book Court', path: '/courts/book', icon: Plus },
-    { label: 'My Bookings', path: '/my/bookings', icon: Clock },
-    { label: 'Tournaments', path: '/tournaments', icon: Trophy },
-  ];
-
-  const items: Item[] =
-    role === 'Administrator' ? adminItems
-    : (role === 'Club' || role === 'Organizer') ? clubOrganizerItems
-    : playerGroupItems;
+  const isActive = (view: ViewKey) => activeView === view;
 
   return (
     <>
       {/* Mobile overlay */}
       <div
         className={`fixed inset-0 z-30 bg-black/30 lg:hidden ${isOpen ? '' : 'hidden'}`}
-        onClick={() => setOpen(false)}
+        onClick={onClose}
       />
       {/* Sidebar */}
       <div
         className={`fixed z-40 h-full w-72 transform bg-background shadow-xl transition-transform lg:static lg:translate-x-0 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="text-lg font-semibold">Menu</div>
-          <button className="rounded p-1 lg:hidden" onClick={() => setOpen(false)}>
+          <button className="rounded p-1 lg:hidden" onClick={onClose}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="p-3">
           <nav className="space-y-1">
-            {items.map(({ label, path, icon: Icon }) => {
-              const isActive = location.pathname === path || location.pathname.startsWith(path + '/');
-              return (
-                <button
-                  key={path}
-                  onClick={() => navigate(path)}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
-                  }`}
-                >
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-primary-500' : 'text-text-secondary'}`} />
-                  <span className="font-medium">{label}</span>
-                </button>
-              );
-            })}
+            {items.map(({ label, view, icon: Icon }) => (
+              <button
+                key={view}
+                onClick={() => handleChange(view)}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                  isActive(view)
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
+                }`}
+              >
+                <Icon className={`h-5 w-5 ${isActive(view) ? 'text-primary-500' : 'text-text-secondary'}`} />
+                <span className="font-medium">{label}</span>
+              </button>
+            ))}
           </nav>
         </div>
       </div>
