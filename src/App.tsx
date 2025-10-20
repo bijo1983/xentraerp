@@ -32,6 +32,10 @@ import { DatabaseConnection } from './components/debug/DatabaseConnection';
 import { useAuthStore } from './store/authStore';
 import { Login } from './components/auth/Login';
 import { AdminConsole } from './components/admin/AdminConsole';
+import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
+import { RequireRole } from './components/auth/RequireRole';
+import HomeRedirect from './components/HomeRedirect';
+
 
 const VIEW_TO_PATH: Record<string, string> = {
   dashboard: '/',
@@ -236,6 +240,15 @@ function App() {
         {/* Login & Auth */}
         <Route path="/login" element={<Login />} />
 
+         {/* Home -> redirect by role */}
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/home" element={<HomeRedirect />} />
+
+             {/* Tournaments list & details */}
+     <Route path="/tournaments" element={<TournamentsList />} />
+     <Route path="/tournaments/:id" element={<TournamentDetails />} />
+     <Route path="/tournaments/edit/:id" element={<EditTournament />} />       
+ 
         {/* Debug & Connection */}
         <Route path="/db-connection" element={<DatabaseConnection />} />
 
@@ -243,6 +256,9 @@ function App() {
         <Route path="/tournaments" element={<TournamentsList />} />
         <Route path="/tournaments/:id" element={<TournamentDetails />} />
         <Route path="/tournaments/edit/:id" element={<EditTournament />} />
+
+         {/* Admin-only: Manage dropdown options */}
+        <Route path="/admin/manage-dropdowns"   element={  <RequireRole roles={['Administrator']}> <ManageDropdownOptions /></RequireRole> }  />
 
         {/* Main entry point */}
         <Route path="/*" element={<AppContent />} />
