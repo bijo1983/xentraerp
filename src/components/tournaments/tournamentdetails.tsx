@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/components/tournaments/tournamentdetails.tsx
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
@@ -7,6 +8,8 @@ import TournamentFixturesPanel from "./modules/TournamentFixturesPanel";
 import TournamentRegistrationsPanel from "./modules/TournamentRegistrationsPanel";
 import TournamentScoreInputPanel from "./modules/TournamentScoreInputPanel";
 import TournamentResultsReviewPanel from "./modules/TournamentResultsReviewPanel";
+
+type ModuleKey = "overview" | "categories" | "fixtures" | "registrations" | "scores" | "results";
 
 interface Tournament {
   id: string;
@@ -20,269 +23,105 @@ interface Tournament {
   entry_fee?: number | null;
   prize_pool?: number | null;
   tournament_format?: string;
+  currency_code?: string | null;
   status?: string;
-  currency_code?: string;
   organizer_id: string;
-  organizer_type?: string;
+  hosted_by: "club" | "organizer";
 }
-
-type ModuleKey =
-  | "overview"
-  | "categories"
-  | "fixtures"
-  | "registrations"
-  | "scores"
-  | "results";
 
 const TournamentDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, userProfile } = useAuthStore();
+
   const [form, setForm] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const isAdmin = userProfile?.type === "Administrator";
   const [activeModule, setActiveModule] = useState<ModuleKey>("overview");
 
   useEffect(() => {
     const fetchTournament = async () => {
-      if (!userProfile?.id || !id) {
-        setError("Authentication and profile required");
-        setLoading(false);
-        return;
-      }
-
+      if (!id) return;
       setLoading(true);
-      const { data: tournamentData, error: tournamentError } = await supabase
-        .from("tournaments")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (tournamentError || !tournamentData) {
-        setError("Failed to load tournament");
-        setLoading(false);
-        return;
-      }
-
-      setForm(tournamentData);
-      setIsOwner(user?.id === tournamentData.organizer_id);
+      setError(null);
+      const { data, error } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
       setLoading(false);
+      if (error) { setError(error.message); return; }
+      if (!data) { setError("Tournament not found"); return; }
+      setForm(data as Tournament);
+      setIsOwner((data as Tournament).organizer_id === user?.id);
     };
-
     fetchTournament();
-  }, [id, userProfile?.id, user?.id]);
+  }, [id, user?.id]);
 
-  const handleChange = (e: React.ChangeEvent<any>) => {
-    if (!form) return;
-    const { name, value } = e.target;
-    const parsed = ["max_participants", "entry_fee", "prize_pool"].includes(name)
-      ? value === "" ? null : Number(value)
-      : value;
-    setForm({ ...form, [name]: parsed });
-    setError(null);
-    setSuccess(null);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
+  const handleOverviewSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form || !id || !userProfile?.type || !user?.id) return;
-
+    if (!form) return;
     setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    const updatePayload = {
-      ...form,
-      organizer_type: userProfile.type,
-    };
-
-    const { data, error } = await supabase
-      .from("tournaments")
-      .update(updatePayload)
-      .eq("id", id)
-      .eq("organizer_id", user.id)
-      .select();
-
-    if (error) {
-      setError("Failed to update tournament: " + error.message);
-    } else if (!data || data.length === 0) {
-      setError("No data returned or permission denied");
-    } else {
-      setSuccess("Tournament updated successfully!");
-      setForm(data[0]);
-      setTimeout(() => setSuccess(null), 3000);
-    }
+    const { error } = await supabase.from("tournaments").update(form).eq("id", form.id);
     setSaving(false);
+    if (error) { setError(error.message); return; }
+    setSuccess("Saved successfully");
+    setTimeout(() => setSuccess(null), 2000);
   };
 
-  const moduleButtons = useMemo(
-    () => [
-      {
-        id: "overview" as ModuleKey,
-        label: "Overview",
-        description: "Update tournament basics and status",
-      },
-      {
-        id: "categories" as ModuleKey,
-        label: "Categories",
-        description: "Assign singles, doubles, and age ladders",
-      },
-      {
-        id: "fixtures" as ModuleKey,
-        label: "Fixtures",
-        description: "Review generated brackets and matchups",
-      },
-      {
-        id: "registrations" as ModuleKey,
-        label: "Registrations",
-        description: "Monitor player sign-ups by category",
-      },
-      {
-        id: "scores" as ModuleKey,
-        label: "Score Input",
-        description: "Capture results as matches conclude",
-      },
-      {
-        id: "results" as ModuleKey,
-        label: "Results Review",
-        description: "Confirm winners for each category",
-      },
-    ],
-    [],
-  );
+  const moduleButtons = [
+    { id: "overview",       label: "Overview",         description: "Edit title, dates, status", roles: ["Administrator","Club","Organizer"] },
+    { id: "categories",     label: "Categories",       description: "Add event presets & fine-tune entries", roles: ["Administrator","Club","Organizer"] },
+    { id: "fixtures",       label: "Fixtures",         description: "Inspect generated draws", roles: ["Administrator","Club","Organizer"] },
+    { id: "registrations",  label: "Registrations",    description: "Review sign-ups per division", roles: ["Administrator","Club","Organizer","Player","Group"] },
+    { id: "scores",         label: "Score Input",      description: "Capture live results", roles: ["Administrator","Club","Organizer"] },
+    { id: "results",        label: "Results Review",   description: "Confirm champions", roles: ["Administrator","Club","Organizer"] },
+  ] as const;
 
-  if (loading) return <div className="p-8">Loading tournament...</div>;
-  if (error && !form)
-    return <div className="p-8 text-red-600">{error}</div>;
-  if (!form) return <div className="p-8">Tournament not found</div>;
+  const canSee = (button: (typeof moduleButtons)[number]) =>
+    button.roles.includes(userProfile?.type as any);
 
-  const tournament = form;
-
-  const renderOverviewModule = () => (
-    <form onSubmit={handleSave} className="space-y-4">
-      <input
-        name="name"
-        value={tournament.name || ""}
-        onChange={handleChange}
-        disabled={!isOwner}
-        className="w-full rounded border p-2"
-        placeholder="Tournament Name"
-      />
-      <textarea
-        name="description"
-        value={tournament.description || ""}
-        onChange={handleChange}
-        disabled={!isOwner}
-        className="w-full rounded border p-2"
-        placeholder="Description"
-      />
-      <input
-        name="location"
-        value={tournament.location || ""}
-        onChange={handleChange}
-        disabled={!isOwner}
-        className="w-full rounded border p-2"
-        placeholder="Location"
-      />
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block text-sm">
-          <span className="text-gray-600">Start Date</span>
+  const renderOverview = () => {
+    if (!form) return null;
+    const readOnly = !(isOwner || isAdmin);
+    return (
+      <form className="space-y-4" onSubmit={handleOverviewSave}>
+        <div className="grid md:grid-cols-2 gap-4">
           <input
-            name="start_date"
+            className="w-full border rounded p-2"
+            value={form.name || ""}
+            onChange={e => setForm({ ...form, name: e.target.value })}
+            placeholder="Tournament Name"
+            disabled={readOnly}
+          />
+          <input
+            className="w-full border rounded p-2"
+            value={form.location || ""}
+            onChange={e => setForm({ ...form, location: e.target.value })}
+            placeholder="Location"
+            disabled={readOnly}
+          />
+        </div>
+        <div className="grid md:grid-cols-3 gap-4">
+          <input
+            className="w-full border rounded p-2"
             type="date"
-            value={tournament.start_date || ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
+            value={form.start_date?.substring(0,10) || ""}
+            onChange={e => setForm({ ...form, start_date: e.target.value })}
+            disabled={readOnly}
           />
-        </label>
-        <label className="block text-sm">
-          <span className="text-gray-600">End Date</span>
           <input
-            name="end_date"
+            className="w-full border rounded p-2"
             type="date"
-            value={tournament.end_date || ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
+            value={form.end_date?.substring(0,10) || ""}
+            onChange={e => setForm({ ...form, end_date: e.target.value })}
+            disabled={readOnly}
           />
-        </label>
-        <label className="block text-sm">
-          <span className="text-gray-600">Registration Deadline</span>
-          <input
-            name="registration_deadline"
-            type="date"
-            value={tournament.registration_deadline || ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="text-gray-600">Max Participants</span>
-          <input
-            name="max_participants"
-            type="number"
-            value={tournament.max_participants || ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
-            placeholder="Max Participants"
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="text-gray-600">Entry Fee</span>
-          <input
-            name="entry_fee"
-            type="number"
-            step="0.01"
-            value={tournament.entry_fee || ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
-            placeholder="Entry Fee"
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="text-gray-600">Prize Pool</span>
-          <input
-            name="prize_pool"
-            type="number"
-            step="0.01"
-            value={tournament.prize_pool || ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
-            placeholder="Prize Pool"
-          />
-        </label>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block text-sm">
-          <span className="text-gray-600">Format</span>
           <select
-            name="tournament_format"
-            value={tournament.tournament_format ?? ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
-          >
-            <option value="single_elimination">Single Elimination</option>
-            <option value="double_elimination">Double Elimination</option>
-            <option value="round_robin">Round Robin</option>
-          </select>
-        </label>
-        <label className="block text-sm">
-          <span className="text-gray-600">Status</span>
-          <select
-            name="status"
-            value={tournament.status ?? ""}
-            onChange={handleChange}
-            disabled={!isOwner}
-            className="mt-1 w-full rounded border p-2"
+            className="w-full border rounded p-2"
+            value={form.status ?? "upcoming"}
+            onChange={e => setForm({ ...form, status: e.target.value })}
+            disabled={readOnly}
           >
             <option value="upcoming">Upcoming</option>
             <option value="registration_open">Registration Open</option>
@@ -290,86 +129,90 @@ const TournamentDetails: React.FC = () => {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-        </label>
-      </div>
-      {isOwner && (
+        </div>
+        <textarea
+          className="w-full border rounded p-2"
+          placeholder="Description"
+          value={form.description || ""}
+          onChange={e => setForm({ ...form, description: e.target.value })}
+          disabled={readOnly}
+        />
+        {(isOwner || isAdmin) && (
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-primary-500 px-4 py-2 text-white hover:bg-primary-600"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        )}
         <button
-          type="submit"
-          disabled={saving}
-          className="rounded bg-primary-500 px-4 py-2 font-semibold text-white transition-colors hover:bg-primary-600"
+          type="button"
+          onClick={() => navigate("/tournaments")}
+          className="ml-2 rounded border border-background-subtle bg-background-subtle px-4 py-2 text-text-primary hover:bg-background"
         >
-          {saving ? "Saving..." : "Save Changes"}
+          Back to Tournaments
         </button>
-      )}
-      <button
-        type="button"
-        onClick={() => navigate("/tournaments")}
-        className="ml-2 rounded border border-background-subtle bg-background-subtle px-4 py-2 text-text-primary hover:bg-background"
-      >
-        Back to Tournaments
-      </button>
-    </form>
-  );
+      </form>
+    );
+  };
 
   const renderActiveModule = () => {
+    if (!form) return null;
     switch (activeModule) {
-      case "categories":
-        return (
-          <TournamentCategoriesPanel
-            tournament={{
-              id: tournament.id,
-              name: tournament.name,
-              currency_code: tournament.currency_code,
-            }}
-          />
-        );
-      case "fixtures":
-        return <TournamentFixturesPanel tournamentId={tournament.id} />;
-      case "registrations":
-        return <TournamentRegistrationsPanel tournamentId={tournament.id} />;
-      case "scores":
-        return <TournamentScoreInputPanel tournamentId={tournament.id} />;
-      case "results":
-        return <TournamentResultsReviewPanel tournamentId={tournament.id} />;
       case "overview":
+        return (isOwner || isAdmin) ? renderOverview() : (
+          <div className="text-sm text-gray-600">Overview (read-only)</div>
+        );
+      case "categories":
+        return (isOwner || isAdmin)
+          ? <TournamentCategoriesPanel tournament={{ id: form.id, name: form.name, currency_code: form.currency_code }} />
+          : <div className="text-sm text-gray-600">Only organizers/administrators can manage categories.</div>;
+      case "fixtures":
+        return (isOwner || isAdmin)
+          ? <TournamentFixturesPanel tournamentId={form.id} />
+          : <div className="text-sm text-gray-600">Only organizers/administrators can view fixtures here.</div>;
+      case "registrations":
+        return <TournamentRegistrationsPanel tournamentId={form.id} />;
+      case "scores":
+        return (isOwner || isAdmin)
+          ? <TournamentScoreInputPanel tournamentId={form.id} />
+          : <div className="text-sm text-gray-600">Only organizers/administrators can input scores.</div>;
+      case "results":
+        return (isOwner || isAdmin)
+          ? <TournamentResultsReviewPanel tournamentId={form.id} />
+          : <div className="text-sm text-gray-600">Only organizers/administrators can confirm results.</div>;
       default:
-        return renderOverviewModule();
+        return null;
     }
   };
+
+  if (loading) return <div className="p-6">Loading…</div>;
+  if (error) return <div className="p-6 text-red-600">{error}</div>;
+  if (!form) return <div className="p-6">Not found.</div>;
 
   return (
     <div className="space-y-6 p-8">
       <div className="rounded border border-blue-200 bg-blue-50 p-4">
         <h1 className="text-2xl font-bold text-blue-900">Tournament Control Center</h1>
         <p className="mt-1 text-sm text-blue-700">
-          Once your tournament is created, manage categories, fixtures, player
-          registrations, live scoring, and results from a single action menu.
+          Manage categories, fixtures, registrations, live scoring, and results from a single action menu.
         </p>
       </div>
 
-      {success && (
-        <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          {success}
-        </div>
-      )}
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {success && <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div>}
+      {error && <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <nav className="rounded border border-gray-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-semibold text-gray-800">Action Menu</h2>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {moduleButtons.map(button => (
+      <nav>
+        <div className="grid md:grid-cols-3 gap-3">
+          {moduleButtons.filter(canSee).map((button) => (
             <button
               key={button.id}
-              type="button"
-              onClick={() => setActiveModule(button.id)}
-              className={`rounded border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                activeModule === button.id
-                  ? "border-primary-500 bg-primary-50 text-primary-700"
-                  : "border-gray-200 hover:border-primary-300"
+              onClick={() => setActiveModule(button.id as ModuleKey)}
+              className={`rounded border p-3 text-left transition ${
+                activeModule === (button.id as ModuleKey)
+                  ? 'border-primary-300 bg-primary-50'
+                  : 'border-gray-200 bg-white hover:bg-gray-50'
               }`}
             >
               <div className="font-semibold">{button.label}</div>
