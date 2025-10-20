@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { SlotBookingRow, getClubDaySlotBookings, groupByCourt } from '@/lib/bookings';
+import { SlotBookingRow, getClubDaySlotBookings, groupByCourt } from '@/lib/booking';
 
 type FilterKey = 'all' | 'single' | 'group' | 'batch';
 
