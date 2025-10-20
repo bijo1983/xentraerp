@@ -1,7 +1,15 @@
+
+
+// ======================================================================
+// FILE: src/components/tournaments/TournamentsList.tsx
+// Purpose: Fix isOwner based on your DB, and add "Manage Tournament" link.
+// Depends on: ../../lib/supabase (as in your code), react-router-dom
+// ======================================================================
+
 import React, { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Pencil, Trash2, Save, Plus, Loader2, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const statusOptions = [
   "upcoming", "registration_open", "ongoing", "completed", "cancelled"
@@ -15,8 +23,8 @@ type Tournament = {
   end_date: string;
   currency_code: string;
   status: string;
-  organizer_id: string;
-  hosted_by: string;
+  organizer_id: string; // FK to auth.users(id) in your schema
+  hosted_by: string;    // 'club' | 'organizer'
   location?: string;
   max_participants?: number | null;
   entry_fee?: number | null;
@@ -60,23 +68,24 @@ export const TournamentsList: React.FC = () => {
     const loadAll = async () => {
       setLoading(true);
       const { data: authData } = await supabase.auth.getUser();
-      const uid = authData?.user?.id;
-      if (!uid) {
-        setLoading(false);
-        return;
-      }
+      const uid = authData?.user?.id ?? null;
       setUserId(uid);
 
-      // Check if user has club or organizer profile to determine if they can create tournaments
-      const { data: clubRows } = await supabase.from("club_users").select("user_id").eq("user_id", uid);
-      const { data: organizerRows } = await supabase.from("organizer_users").select("user_id").eq("user_id", uid);
+      if (uid) {
+        // Determine whether user is club or organizer
+        const { data: clubRows } = await supabase.from("club_users").select("user_id").eq("user_id", uid);
+        const { data: organizerRows } = await supabase.from("organizer_users").select("user_id").eq("user_id", uid);
 
-      if (clubRows?.length) {
-        setIsOrganizerOrClub(true);
-        setHostedBy("club");
-      } else if (organizerRows?.length) {
-        setIsOrganizerOrClub(true);
-        setHostedBy("organizer");
+        if (clubRows?.length) {
+          setIsOrganizerOrClub(true);
+          setHostedBy("club");
+        } else if (organizerRows?.length) {
+          setIsOrganizerOrClub(true);
+          setHostedBy("organizer");
+        } else {
+          setIsOrganizerOrClub(false);
+          setHostedBy("");
+        }
       } else {
         setIsOrganizerOrClub(false);
         setHostedBy("");
@@ -93,13 +102,9 @@ export const TournamentsList: React.FC = () => {
     loadAll();
   }, []);
 
+  // Owner = user is club/organizer AND is the creator (organizer_id matches auth user id)
   const isOwner = (t: Tournament) => {
-    // Check if the current user's profile ID matches the tournament's organizer_id
-    if (!isOrganizerOrClub || !userId) return false;
-    
-    // For tournaments, organizer_id should match the profile table ID, not auth user_id
-    // We need to check if the current user has a profile that matches the organizer_id
-    return true; // We'll do the actual check in the component since we need async calls
+    return Boolean(isOrganizerOrClub && userId && t.organizer_id === userId);
   };
 
   // ----- Add/Edit Modal/Form Logic -----
@@ -110,7 +115,6 @@ export const TournamentsList: React.FC = () => {
   };
 
   const handleEdit = (t: Tournament) => {
-    // Navigate to the tournament details page for editing
     navigate(`/tournaments/edit/${t.id}`);
   };
 
@@ -124,11 +128,7 @@ export const TournamentsList: React.FC = () => {
   ) => {
     if (!form) return;
     const { name, value } = e.target;
-    if (
-      name === "max_participants" ||
-      name === "entry_fee" ||
-      name === "prize_pool"
-    ) {
+    if (name === "max_participants" || name === "entry_fee" || name === "prize_pool") {
       setForm({ ...form, [name]: value === "" ? null : Number(value) });
     } else {
       setForm({ ...form, [name]: value });
@@ -136,52 +136,49 @@ export const TournamentsList: React.FC = () => {
   };
 
   const handleFormSave = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!form || !userId || !hostedBy) return;
-  setSaving(true);
+    e.preventDefault();
+    if (!form || !userId || !hostedBy) return;
+    setSaving(true);
 
-  // Prepare payload (exclude id, keep types)
-  const payload: { [k: string]: any } = {
-    ...form,
-    organizer_id: userId,
-    hosted_by: hostedBy,
+    const payload: { [k: string]: any } = {
+      ...form,
+      organizer_id: userId,
+      hosted_by: hostedBy,
+    };
+
+    for (const key of ["max_participants", "entry_fee", "prize_pool"]) {
+      if (payload[key] === "" || payload[key] === undefined) payload[key] = null;
+      if (payload[key] !== null && typeof payload[key] === "string" && payload[key] !== "")
+        payload[key] = Number(payload[key]);
+    }
+
+    let error;
+    if (form.id) {
+      const { error: updateError } = await supabase
+        .from("tournaments")
+        .update(payload)
+        .eq("id", form.id)
+        .select();
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from("tournaments")
+        .insert(payload);
+      error = insertError;
+    }
+    setSaving(false);
+
+    if (!error) {
+      closeForm();
+      const { data: tournamentsData } = await supabase
+        .from("tournaments")
+        .select("*")
+        .order("start_date");
+      setTournaments(tournamentsData || []);
+    } else {
+      alert("Error: " + error.message);
+    }
   };
-
-  // Clean number fields for DB
-  for (const key of ["max_participants", "entry_fee", "prize_pool"]) {
-    if (payload[key] === "" || payload[key] === undefined) payload[key] = null;
-    if (payload[key] !== null && typeof payload[key] === "string" && payload[key] !== "")
-      payload[key] = Number(payload[key]);
-  }
-
-  let error;
-  if (form.id) {
-    // Ensure the ID is present and correct
-    const { error: updateError } = await supabase
-      .from("tournaments")
-      .update(payload)
-      .eq("id", form.id)
-      .select(); // get the updated row (optional)
-    error = updateError;
-  } else {
-    // Insert new
-    const { error: insertError } = await supabase
-      .from("tournaments")
-      .insert(payload);
-    error = insertError;
-  }
-  setSaving(false);
-
-  if (!error) {
-    closeForm();
-    // Refresh list
-    const { data: tournamentsData } = await supabase.from("tournaments").select("*").order("start_date");
-    setTournaments(tournamentsData || []);
-  } else {
-    alert("Error: " + error.message);
-  }
-};
-
 
   // --------- STATUS LOGIC -----------
   const handleStatusDraftChange = (id: string, newStatus: string) => {
@@ -198,9 +195,12 @@ export const TournamentsList: React.FC = () => {
     setSavingStatusId(null);
 
     if (!error) {
-      const { data: tournamentsData } = await supabase.from("tournaments").select("*").order("start_date");
+      const { data: tournamentsData } = await supabase
+        .from("tournaments")
+        .select("*")
+        .order("start_date");
       setTournaments(tournamentsData || []);
-      setStatusDraft((prev) => ({ ...prev, [t.id!]: undefined }));
+      setStatusDraft((prev) => ({ ...prev, [t.id!]: undefined as any }));
     } else {
       alert("Failed to update status: " + error.message);
     }
@@ -213,7 +213,10 @@ export const TournamentsList: React.FC = () => {
     const { error } = await supabase.from("tournaments").delete().eq("id", t.id);
     setLoading(false);
     if (!error) {
-      const { data: tournamentsData } = await supabase.from("tournaments").select("*").order("start_date");
+      const { data: tournamentsData } = await supabase
+        .from("tournaments")
+        .select("*")
+        .order("start_date");
       setTournaments(tournamentsData || []);
     } else {
       alert("Failed to delete: " + error.message);
@@ -248,6 +251,8 @@ export const TournamentsList: React.FC = () => {
               {tournaments.map((t) => {
                 const draftStatus = statusDraft[t.id!];
                 const isDirty = draftStatus && draftStatus !== t.status;
+                const owner = isOwner(t);
+
                 return (
                   <div key={t.id} className="flex flex-col md:flex-row md:items-center gap-2 py-4">
                     <div className="flex-1">
@@ -258,10 +263,12 @@ export const TournamentsList: React.FC = () => {
                       </div>
                       <div className="text-xs text-text-secondary">{t.description}</div>
                     </div>
+
                     <div className="flex items-center gap-3 mt-2 md:mt-0">
                       <span className="text-xs font-medium text-text-secondary">Status:</span>
                       <span className="uppercase text-xs text-text-primary">{draftStatus ?? t.status}</span>
-                      {isOwner(t) && (
+
+                      {owner && (
                         <>
                           <select
                             value={draftStatus ?? t.status}
@@ -306,6 +313,16 @@ export const TournamentsList: React.FC = () => {
                           </button>
                         </>
                       )}
+
+                      {/* NEW: Manage Tournament link (always visible or restrict to owners if you prefer) */}
+                      <Link
+                        to={`/tournaments/${t.id}`}
+                        className="ml-2 border rounded px-3 py-1 text-xs hover:bg-background-subtle"
+                        aria-label={`Manage ${t.name}`}
+                        title="Open Tournament Control Center"
+                      >
+                        Manage
+                      </Link>
                     </div>
                   </div>
                 );
