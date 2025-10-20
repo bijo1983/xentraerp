@@ -1,3 +1,4 @@
+// src/components/layout/Sidebar.tsx
 import React from 'react';
 import {
   Home,
@@ -9,172 +10,90 @@ import {
   Settings,
   Plus,
   Clock,
-  Search,
   List,
   CheckSquare,
   BookOpen,
   X,
-  ShieldCheck
 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { Link } from "react-router-dom";
 
-interface SidebarProps {
-  activeView: string;
-  onViewChange: (view: string) => void;
-  isOpen?: boolean;
-  onClose?: () => void;
-}
+type Item = { label: string; path: string; icon: React.ComponentType<{ className?: string }> };
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen = true, onClose }) => {
+export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { userProfile } = useAuthStore();
+  const role = userProfile?.type; // 'Administrator' | 'Club' | 'Organizer' | 'Player' | 'Group'
+  const [isOpen, setOpen] = React.useState(true);
 
-  const getMenuItems = () => {
-    const baseItems = [
-      { id: 'dashboard', label: 'Dashboard', icon: Home },
-    ];
+  const adminItems: Item[] = [
+    { label: 'Home', path: '/', icon: Home },
+    { label: 'Admin Console', path: '/admin', icon: Settings },
+    { label: 'Tournaments', path: '/tournaments', icon: Trophy },
+    { label: 'Manage Dropdowns', path: '/admin/manage-dropdowns', icon: List }, // ADMIN ONLY
+    { label: 'Site Settings', path: '/admin/site', icon: Settings },
+  ];
 
-    if (!userProfile) return baseItems;
+  const clubOrganizerItems: Item[] = [
+    { label: 'Home', path: '/', icon: Home },
+    { label: 'Dashboard', path: role === 'Club' ? '/club' : '/organizer', icon: BarChart3 },
+    { label: 'Courts', path: '/courts/manage', icon: MapPin },
+    { label: 'Approve Requests', path: '/bookings/approve', icon: CheckSquare },
+    { label: 'Tournaments', path: '/tournaments', icon: Trophy },
+    { label: 'Bookings', path: '/bookings', icon: Calendar },
+    { label: 'Reports', path: '/reports', icon: BookOpen },
+  ];
 
-    switch (userProfile.type) {
-      case 'Player':
-        return [
-          ...baseItems,
-          { id: 'book-court', label: 'Book Court', icon: Calendar },
-          { id: 'my-bookings', label: 'My Bookings', icon: MapPin },
-          { id: 'find-clubs', label: 'Find Clubs', icon: Search },
-          { id: 'tournaments', label: 'Tournaments', icon: Trophy },
-          { id: 'profile', label: 'Profile', icon: Settings },
-        ];
-      
-      case 'Club':
-        return [
-          ...baseItems,
-          { id: 'approve-requests', label: 'Approve Requests', icon: CheckSquare },
-          { id: 'courts', label: 'Manage Courts', icon: MapPin },
-          { id: 'manage-slots', label: 'Manage Slots', icon: Clock },
-          { id: 'manage-bookings', label: 'Manage Bookings', icon: Calendar },
-          { id: 'view-bookings', label: 'View Bookings', icon: BookOpen },
-          { id: 'tournaments', label: 'Tournaments', icon: Trophy },
-          { id: 'create-tournament', label: 'Create Tournament', icon: Plus },
-          { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-          { id: 'profile', label: 'Profile', icon: Settings },
-          { id: 'manage-dropdowns', label: 'Manage Event Dropdowns', icon: List, link: '/admin/manage-dropdown-options' },
-        ];
+  const playerGroupItems: Item[] = [
+    { label: 'Home', path: '/', icon: Home },
+    { label: 'Dashboard', path: role === 'Player' ? '/player' : '/group', icon: BarChart3 },
+    { label: 'Book Court', path: '/courts/book', icon: Plus },
+    { label: 'My Bookings', path: '/my/bookings', icon: Clock },
+    { label: 'Tournaments', path: '/tournaments', icon: Trophy },
+  ];
 
-      case 'Group':
-        return [
-          ...baseItems,
-          { id: 'book-court', label: 'Plan Monthly Slots', icon: Calendar },
-          { id: 'my-bookings', label: 'Booking History', icon: Clock },
-          { id: 'profile', label: 'Profile', icon: Settings },
-        ];
-      
-      case 'Organizer':
-        return [
-          ...baseItems,
-          { id: 'book-court', label: 'Rent Courts', icon: Calendar },
-          { id: 'tournaments', label: 'My Tournaments', icon: Trophy },
-          { id: 'create-tournament', label: 'Create Tournament', icon: Plus },
-          { id: 'participants', label: 'Participants', icon: Users },
-          { id: 'profile', label: 'Profile', icon: Settings },
-          // Dropdown option manager link for organizers
-          { id: 'manage-dropdowns', label: 'Manage Event Dropdowns', icon: List, link: '/admin/manage-dropdown-options' },
-        ];
-      
-      case 'Administrator':
-        return [
-          ...baseItems,
-          { id: 'admin-console', label: 'Admin Console', icon: ShieldCheck },
-          { id: 'courts', label: 'All Courts', icon: MapPin },
-          { id: 'tournaments', label: 'All Tournaments', icon: Trophy },
-          { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-          { id: 'settings', label: 'Settings', icon: Settings },
-          // Dropdown option manager link for admins
-          { id: 'manage-dropdowns', label: 'Manage Event Dropdowns', icon: List, link: '/admin/manage-dropdown-options' },
-        ];
-      
-      default:
-        return baseItems;
-    }
-  };
-
-  const menuItems = getMenuItems();
-
-  const handleItemClick = (itemId: string) => {
-    onViewChange(itemId);
-    if (onClose) {
-      onClose();
-    }
-  };
+  const items: Item[] =
+    role === 'Administrator' ? adminItems
+    : (role === 'Club' || role === 'Organizer') ? clubOrganizerItems
+    : playerGroupItems;
 
   return (
     <>
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      {/* Mobile overlay */}
+      <div
+        className={`fixed inset-0 z-30 bg-black/30 lg:hidden ${isOpen ? '' : 'hidden'}`}
+        onClick={() => setOpen(false)}
+      />
+      {/* Sidebar */}
+      <div
+        className={`fixed z-40 h-full w-72 transform bg-background shadow-xl transition-transform lg:static lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="text-lg font-semibold">Menu</div>
+          <button className="rounded p-1 lg:hidden" onClick={() => setOpen(false)}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-      <div className={`
-        fixed lg:static inset-y-0 left-0 z-50
-        transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 transition-transform duration-300 ease-in-out
-        bg-white w-64 min-h-screen shadow-lg border-r border-gray-200
-      `}>
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4 lg:hidden">
-            <h2 className="text-lg font-semibold text-text-primary">Menu</h2>
-            <button
-              onClick={onClose}
-              className="p-2 text-text-secondary hover:text-text-primary hover:bg-background-subtle rounded-lg transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="mb-4 p-3 bg-background-subtle rounded-lg">
-            <p className="text-xs text-text-secondary uppercase tracking-wide">Logged in as</p>
-            <p className="font-medium text-text-primary capitalize">{userProfile?.type || 'Unknown'}</p>
-            <p className="text-sm text-text-secondary truncate">{userProfile?.name}</p>
-          </div>
-
-          <nav className="space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeView === item.id;
-
-              if (item.link) {
-                return (
-                  <Link
-                    key={item.id}
-                    to={item.link}
-                    onClick={() => onClose && onClose()}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
-                      isActive
-                        ? 'bg-primary-50 text-primary-600 border border-primary-200'
-                        : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
-                    }`}
-                  >
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-primary-500' : 'text-text-secondary'}`} />
-                    <span className="font-medium">{item.label}</span>
-                  </Link>
-                );
-              }
-
+        <div className="p-3">
+          <nav className="space-y-1">
+            {items.map(({ label, path, icon: Icon }) => {
+              const isActive = location.pathname === path || location.pathname.startsWith(path + '/');
               return (
                 <button
-                  key={item.id}
-                  onClick={() => handleItemClick(item.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                  key={path}
+                  onClick={() => navigate(path)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                     isActive
-                      ? 'bg-primary-50 text-primary-600 border border-primary-200'
+                      ? 'bg-primary-50 text-primary-600'
                       : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
                   }`}
                 >
                   <Icon className={`h-5 w-5 ${isActive ? 'text-primary-500' : 'text-text-secondary'}`} />
-                  <span className="font-medium">{item.label}</span>
+                  <span className="font-medium">{label}</span>
                 </button>
               );
             })}
