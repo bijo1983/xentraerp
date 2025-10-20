@@ -34,7 +34,7 @@ import { Login } from './components/auth/Login';
 import { AdminConsole } from './components/admin/AdminConsole';
 import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
 import { RequireRole } from './components/auth/RequireRole';
-import HomeRedirect from './src/HomeRedirect';
+import HomeRedirect from './components/HomeRedirect';
 
 
 const VIEW_TO_PATH: Record<string, string> = {
