@@ -1,5 +1,5 @@
 // FILE: src/components/bookings/ApproveRequests.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 // ---- Types matching your RPC return (adjust if your RPC shape differs) ----
@@ -38,6 +38,101 @@ async function getClubDaySlotBookings(params: { clubId: string; day: string }) {
   return (data ?? []) as SlotBookingRow[];
 }
 
+type ApprovedBookingRow = {
+  id: string;
+  slot_id: string | null;
+  status: string | null;
+  player_id: string | null;
+  group_id: string | null;
+  booking_batch_id: string | null;
+  created_at: string | null;
+  player_users: { full_name: string | null } | null;
+  group_users: { group_name: string | null } | null;
+  booking_batches: { status: string | null } | null;
+  court_slots: {
+    id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    court_id: string;
+    courts: {
+      id: string;
+      name: string | null;
+      club_id: string;
+    } | null;
+  } | null;
+};
+
+async function getClubApprovedRequests(params: { clubId: string; limit?: number }) {
+  const { clubId, limit = 300 } = params;
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(
+      `
+        id,
+        slot_id,
+        status,
+        player_id,
+        group_id,
+        booking_batch_id,
+        created_at,
+        player_users ( full_name ),
+        group_users ( group_name ),
+        booking_batches ( status ),
+        court_slots!inner (
+          id,
+          date,
+          start_time,
+          end_time,
+          court_id,
+          courts!inner (
+            id,
+            name,
+            club_id
+          )
+        )
+      `
+    )
+    .eq('status', 'approved')
+    .eq('court_slots.courts.club_id', clubId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message || 'Failed to load approved requests');
+
+  const rows = (data ?? []) as ApprovedBookingRow[];
+
+  return rows.map<SlotBookingRow>((row) => {
+    const slot = row.court_slots;
+    const courts = slot?.courts;
+    const bookingSource: SlotBookingRow['booking_source'] = row.booking_batch_id
+      ? 'group_batch_item'
+      : row.group_id
+      ? 'group_booking'
+      : 'single_booking';
+
+    return {
+      slot_id: row.slot_id ?? slot?.id ?? '',
+      court_id: slot?.court_id ?? courts?.id ?? '',
+      club_id: courts?.club_id ?? clubId,
+      slot_date: slot?.date ?? '',
+      start_time: slot?.start_time ?? '',
+      end_time: slot?.end_time ?? '',
+      court_name: courts?.name ?? null,
+      booking_source: bookingSource,
+      booking_id: row.id ?? null,
+      batch_item_id: null,
+      batch_id: row.booking_batch_id,
+      booking_status: row.status,
+      batch_status: row.booking_batches?.status ?? null,
+      player_id: row.player_id,
+      player_name: row.player_users?.full_name ?? null,
+      group_id: row.group_id,
+      group_name: row.group_users?.group_name ?? null,
+    };
+  });
+}
+
 function groupByCourt(rows: SlotBookingRow[]) {
   const by: Record<string, SlotBookingRow[]> = {};
   for (const r of rows) (by[r.court_id] ||= []).push(r);
@@ -58,6 +153,14 @@ export const ApproveRequests: React.FC = () => {
   const [err, setErr] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showAllApproved, setShowAllApproved] = useState(false);
+
+  const loadRows = useCallback(async (): Promise<SlotBookingRow[]> => {
+    if (!clubId) return [];
+    if (showAllApproved) return await getClubApprovedRequests({ clubId });
+    if (!day) return [];
+    return await getClubDaySlotBookings({ clubId, day });
+  }, [clubId, day, showAllApproved]);
 
   // Resolve club id for current user (assumes exactly one club profile)
   useEffect(() => {
@@ -79,11 +182,11 @@ export const ApproveRequests: React.FC = () => {
 
   // Load unified bookings (singles + group + batch items)
   useEffect(() => {
-    if (!clubId || !day) return;
+    if (!clubId) return;
     let alive = true;
     setLoading(true);
     setErr(null);
-    getClubDaySlotBookings({ clubId, day })
+    loadRows()
       .then((d) => {
         if (alive) setRows(d);
       })
@@ -96,7 +199,7 @@ export const ApproveRequests: React.FC = () => {
     return () => {
       alive = false;
     };
-  }, [clubId, day]);
+  }, [clubId, loadRows]);
 
   const filtered = useMemo(() => {
     switch (filter) {
@@ -118,7 +221,12 @@ export const ApproveRequests: React.FC = () => {
     const { error } = await supabase.from('bookings').update({ status: 'approved' }).eq('id', id);
     setBusyId(null);
     if (error) return setErr(error.message);
-    if (clubId && day) setRows(await getClubDaySlotBookings({ clubId, day }));
+    try {
+      const refreshed = await loadRows();
+      setRows(refreshed);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to refresh');
+    }
   }
 
   async function rejectSingleBooking(id: string) {
@@ -126,7 +234,12 @@ export const ApproveRequests: React.FC = () => {
     const { error } = await supabase.from('bookings').update({ status: 'rejected' }).eq('id', id);
     setBusyId(null);
     if (error) return setErr(error.message);
-    if (clubId && day) setRows(await getClubDaySlotBookings({ clubId, day }));
+    try {
+      const refreshed = await loadRows();
+      setRows(refreshed);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to refresh');
+    }
   }
 
   async function approveBatchItem(batchItemId: string | null, batchId: string | null) {
@@ -150,7 +263,12 @@ export const ApproveRequests: React.FC = () => {
       }
     }
     setBusyId(null);
-    if (clubId && day) setRows(await getClubDaySlotBookings({ clubId, day }));
+    try {
+      const refreshed = await loadRows();
+      setRows(refreshed);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to refresh');
+    }
   }
 
   async function rejectBatchItem(batchItemId: string | null, batchId: string | null) {
@@ -174,7 +292,12 @@ export const ApproveRequests: React.FC = () => {
       }
     }
     setBusyId(null);
-    if (clubId && day) setRows(await getClubDaySlotBookings({ clubId, day }));
+    try {
+      const refreshed = await loadRows();
+      setRows(refreshed);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to refresh');
+    }
   }
 
   return (
@@ -183,10 +306,20 @@ export const ApproveRequests: React.FC = () => {
         <h1 className="text-lg font-semibold">Approve Requests</h1>
         <input
           type="date"
-          className="border rounded px-2 py-1"
+          className="border rounded px-2 py-1 disabled:opacity-60"
           value={day}
+          disabled={showAllApproved}
           onChange={(e) => setDay(e.target.value)}
         />
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            className="rounded border-gray-300"
+            checked={showAllApproved}
+            onChange={(e) => setShowAllApproved(e.target.checked)}
+          />
+          Show all approved
+        </label>
         <select
           className="border rounded px-2 py-1"
           value={filter}
@@ -199,7 +332,15 @@ export const ApproveRequests: React.FC = () => {
         </select>
         <button
           className="border rounded px-3 py-1"
-          onClick={() => clubId && day && getClubDaySlotBookings({ clubId, day }).then(setRows)}
+          onClick={() => {
+            if (!clubId) return;
+            setLoading(true);
+            setErr(null);
+            loadRows()
+              .then((d) => setRows(d))
+              .catch((e) => setErr(e.message ?? 'Failed to load'))
+              .finally(() => setLoading(false));
+          }}
         >
           Refresh
         </button>
@@ -208,7 +349,11 @@ export const ApproveRequests: React.FC = () => {
 
       {err && <div className="text-red-600">{err}</div>}
       {loading && <div>Loading…</div>}
-      {!loading && !rows.length && <div className="border rounded p-3">No requests for {day}.</div>}
+      {!loading && !rows.length && (
+        <div className="border rounded p-3">
+          {showAllApproved ? 'No approved requests found yet.' : `No requests for ${day}.`}
+        </div>
+      )}
 
       {!loading && !!rows.length && (
         <div className="space-y-4">
