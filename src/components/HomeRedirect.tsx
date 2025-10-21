@@ -3,25 +3,40 @@ import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 
+/**
+ * Ensures `/` and `/home` never render blank:
+ * - If loading: do nothing.
+ * - If signed-out: redirect to /login.
+ * - If signed-in: redirect to role dashboard.
+ */
 const HomeRedirect: React.FC = () => {
-  const { userProfile, loading } = useAuthStore();
+  const { user, userProfile, loading } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     if (loading) return;
-    if (!userProfile) return; // stays on current route, let auth guard handle
-    const role = userProfile.type;
-    const target =
-      role === "Administrator" ? "/admin" :
-      role === "Club" ? "/club" :
-      role === "Organizer" ? "/organizer" :
-      role === "Group" ? "/group" :
-      "/player";
-    if (location.pathname === "/" || location.pathname === "/home") {
+
+    // Signed-out → go to /login
+    if (!user) {
+      if (location.pathname !== "/login") {
+        navigate("/login", { replace: true });
+      }
+      return;
+    }
+
+    // Signed-in → route to role home from / or /home
+    if (userProfile && (location.pathname === "/" || location.pathname === "/home")) {
+      const role = userProfile.type;
+      const target =
+        role === "Administrator" ? "/admin" :
+        role === "Club" ? "/club" :
+        role === "Organizer" ? "/organizer" :
+        role === "Group" ? "/group" :
+        "/player";
       navigate(target, { replace: true });
     }
-  }, [loading, userProfile, location.pathname, navigate]);
+  }, [loading, user, userProfile, location.pathname, navigate]);
 
   return null;
 };
