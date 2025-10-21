@@ -237,12 +237,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Login & Auth */}
-        <Route path="/login" element={<Login />} />
 
-         {/* Home -> redirect by role */}
+        {/* Home -> redirect by role */}
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/home" element={<HomeRedirect />} />
+        {/* Login & Auth */}
+        {<Route path="/login" element={<AuthForm />} />
+      
 
              {/* Tournaments list & details */}
      <Route path="/tournaments" element={<TournamentsList />} />
