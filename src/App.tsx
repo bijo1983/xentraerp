@@ -242,10 +242,8 @@ function App() {
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/home" element={<HomeRedirect />} />
         {/* Login & Auth */}
-        {<Route path="/login" element={<AuthForm />} />
-      
-
-             {/* Tournaments list & details */}
+        <Route path="/login" element={<AuthForm />} />
+        {/* Tournaments list & details */}
      <Route path="/tournaments" element={<TournamentsList />} />
      <Route path="/tournaments/:id" element={<TournamentDetails />} />
      <Route path="/tournaments/edit/:id" element={<EditTournament />} />       
