@@ -2,7 +2,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
-import { AuthForm } from './components/auth/AuthForm';
 import Register from './components/auth/Register';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -34,7 +33,7 @@ import { Login } from './components/auth/Login';
 import { AdminConsole } from './components/admin/AdminConsole';
 import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
 import { RequireRole } from './components/auth/RequireRole';
-import HomeRedirect from './components/HomeRedirect';
+import HomeRedirect from './HomeRedirect';
 
 
 const VIEW_TO_PATH: Record<string, string> = {
@@ -242,7 +241,7 @@ function App() {
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/home" element={<HomeRedirect />} />
         {/* Login & Auth */}
-        <Route path="/login" element={<AuthForm />} />
+        <Route path="/login" element={<Login />} />
         {/* Tournaments list & details */}
      <Route path="/tournaments" element={<TournamentsList />} />
      <Route path="/tournaments/:id" element={<TournamentDetails />} />
