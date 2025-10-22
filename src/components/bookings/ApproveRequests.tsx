@@ -72,17 +72,6 @@ type BatchItemRow = {
   status: string | null;
   price: number | null;
   slot_id: string | null;
-  court_slots?: {
-    id: string;
-    date: string;
-    start_time: string;
-    end_time: string;
-    courts?: {
-      id: string;
-      name: string | null;
-      club_id: string;
-    } | null;
-  } | null;
   booking_batches?: {
     id: string;
     status: string | null;
@@ -93,6 +82,18 @@ type BatchItemRow = {
     notes?: string | null;
     group_users?: { group_name: string | null } | null;
     player_users?: { full_name: string | null } | null;
+    club_id: string;
+  } | null;
+};
+
+type CourtSlotRow = {
+  id: string;
+  date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  courts?: {
+    id: string;
+    name: string | null;
     club_id: string;
   } | null;
 };
@@ -263,17 +264,6 @@ async function fetchBatchRequests(params: {
         status,
         price,
         slot_id,
-        court_slots!inner (
-          id,
-          date,
-          start_time,
-          end_time,
-          courts!inner (
-            id,
-            name,
-            club_id
-          )
-        ),
         booking_batches!inner (
           id,
           status,
@@ -307,6 +297,44 @@ async function fetchBatchRequests(params: {
   }
 
   const rows = (data ?? []) as BatchItemRow[];
+
+  const slotIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.slot_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
+  );
+
+  let slotMap = new Map<string, CourtSlotRow>();
+  if (slotIds.length > 0) {
+    const { data: slotRows, error: slotError } = await supabase
+      .from('court_slots')
+      .select(
+        `
+          id,
+          date,
+          start_time,
+          end_time,
+          courts!inner (
+            id,
+            name,
+            club_id
+          )
+        `
+      )
+      .in('id', slotIds)
+      .eq('courts.club_id', clubId);
+
+    if (slotError) {
+      throw new Error(slotError.message || 'Failed to load court slot details');
+    }
+
+    slotMap = new Map(
+      (slotRows ?? []).map((slot) => [slot.id, slot as CourtSlotRow])
+    );
+  }
+
   const grouped = new Map<string, BatchRequestItem>();
 
   for (const row of rows) {
@@ -332,7 +360,7 @@ async function fetchBatchRequests(params: {
     const target = grouped.get(batch.id);
     if (!target) continue;
 
-    const slot = row.court_slots;
+    const slot = row.slot_id ? slotMap.get(row.slot_id) : null;
     target.slots.push({
       slotId: row.slot_id,
       slotDate: slot?.date ?? '',
