@@ -73,6 +73,13 @@ const visibilityColors = {
   false: 'bg-slate-100 text-slate-600 border border-slate-200',
 } as const;
 
+const isAdministrator = (role?: string | null) => {
+  if (!role) return false;
+
+  const normalized = role.trim().toLowerCase();
+  return normalized === 'administrator' || normalized === 'admin';
+};
+
 const formatDateTime = (value: string) => {
   try {
     return new Date(value).toLocaleString();
@@ -95,7 +102,7 @@ export const AdminConsole: React.FC = () => {
   const [actionState, setActionState] = React.useState<Record<string, boolean>>({});
   const [lastRefreshed, setLastRefreshed] = React.useState<Date | null>(null);
 
-  const isAdmin = userProfile?.type === 'Administrator';
+  const isAdmin = isAdministrator(userProfile?.type);
 
   const summary = React.useMemo(() => {
     const compute = <T extends BaseProfile>(items: T[]): SummaryStats => ({
