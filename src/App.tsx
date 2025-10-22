@@ -1,6 +1,6 @@
 // src/App.tsx
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom';
 
 import Register from './components/auth/Register';
 import { Navbar } from './components/layout/Navbar';
@@ -37,7 +37,7 @@ import HomeRedirect from './HomeRedirect';
 
 
 const VIEW_TO_PATH: Record<string, string> = {
-  dashboard: '/',
+  dashboard: '/dashboard',
   'book-court': '/book-court',
   'my-bookings': '/my-bookings',
   'approve-requests': '/approve-requests',
@@ -62,83 +62,87 @@ const PATH_TO_VIEW: Record<string, string> = Object.entries(VIEW_TO_PATH).reduce
   {
     '': 'dashboard',
     dashboard: 'dashboard',
-  } as Record<string, string>
+    'admin/manage-dropdowns': 'admin-console',
+  } as Record<string, string>,
 );
 
 const getViewFromPath = (pathname: string): string => {
-  const segment = pathname.replace(/^\/+/, '').split('/')[0];
-  return PATH_TO_VIEW[segment] ?? 'dashboard';
+  const segment = pathname.replace(/^\/+/, '').split('/').slice(0, 2).join('/') || '';
+  const firstSegment = segment.split('/')[0] ?? '';
+
+  if (PATH_TO_VIEW[segment]) {
+    return PATH_TO_VIEW[segment];
+  }
+
+  return PATH_TO_VIEW[firstSegment] ?? 'dashboard';
 };
 
 const getPathForView = (view: string): string => VIEW_TO_PATH[view] ?? '/';
 
-function AppContent() {
-  const { user, userProfile, loading } = useAuthStore();
+const Spinner = (
+  <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+      <p className="text-text-secondary">🔄 Loading Badminton Booking...</p>
+    </div>
+  </div>
+);
 
+const RoleDashboard: React.FC = () => {
+  const { userProfile } = useAuthStore();
+
+  switch (userProfile?.type) {
+    case 'Player':
+      return <PlayerDashboard />;
+    case 'Club':
+      return <ClubDashboard />;
+    case 'Organizer':
+      return <OrganizerDashboard />;
+    case 'Group':
+      return <GroupDashboard />;
+    default:
+      return <PlayerDashboard />;
+  }
+};
+
+const ProtectedLayout: React.FC = () => {
+  const { user, userProfile, loading } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const [activeView, setActiveView] = React.useState(() => getViewFromPath(location.pathname));
-  const [mountedViews, setMountedViews] = React.useState<string[]>(() => [getViewFromPath(location.pathname)]);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
 
-  const Spinner = (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-        <p className="text-text-secondary">🔄 Loading Badminton Booking...</p>
-      </div>
-    </div>
-  );
-
-  React.useEffect(() => {
-    console.log('🔎 AppContent state:', { user, userProfile, loading });
-  }, [user, userProfile, loading]);
-
-  React.useEffect(() => {
-    const viewFromLocation = getViewFromPath(location.pathname);
-    if (viewFromLocation !== activeView) {
-      setActiveView(viewFromLocation);
-    }
-  }, [location.pathname, activeView]);
-
-  React.useEffect(() => {
-    setMountedViews((prev) => {
-      if (prev.includes(activeView)) {
-        return prev;
-      }
-      return [...prev, activeView];
-    });
-  }, [activeView]);
+  const activeView = React.useMemo(() => getViewFromPath(location.pathname), [location.pathname]);
 
   const handleViewChange = React.useCallback(
     (view: string) => {
-      setActiveView(view);
       const targetPath = getPathForView(view);
       if (location.pathname !== targetPath) {
         navigate(targetPath, { replace: true });
       }
     },
-    [navigate, location.pathname]
+    [navigate, location.pathname],
   );
+
+  React.useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
 
   if (window.location.search.includes('debug=supabase')) {
     return <SupabaseVerification />;
   }
 
-  // Supabase not configured
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     return <SupabaseSetup />;
   }
 
-  // While store is booting
   if (loading) {
     return Spinner;
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
-  // User exists but profile not ready yet
   if (user && !userProfile) {
     return (
       <div className="p-6 text-center text-text-secondary">
@@ -153,60 +157,6 @@ function AppContent() {
     );
   }
 
-  const renderView = (view: string) => {
-    switch (view) {
-      case 'dashboard': {
-        switch (userProfile?.type) {
-          case 'Player':
-            return <PlayerDashboard />;
-          case 'Club':
-            return <ClubDashboard />;
-          case 'Organizer':
-            return <OrganizerDashboard />;
-          case 'Group':
-            return <GroupDashboard />;
-          default:
-            return <PlayerDashboard />;
-        }
-      }
-      case 'book-court':
-        return <BookCourt />;
-      case 'my-bookings':
-        return <MyBookings />;
-      case 'approve-requests':
-        return <ApproveRequests />;
-      case 'courts':
-        return <ManageCourts />;
-      case 'manage-slots':
-        return <ManageSlots />;
-      case 'manage-bookings':
-        return <ManageBookings />;
-      case 'view-bookings':
-        return <ViewBookings />;
-      case 'tournaments':
-        return <TournamentsList />;
-      case 'create-tournament':
-        return <CreateTournament />;
-      case 'profile':
-        return <ProfileSettings />;
-      case 'find-clubs':
-        return <FindClubs />;
-      case 'analytics':
-        return <Analytics />;
-      case 'admin-console':
-        return <AdminConsole />;
-      default:
-        return (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-text-primary mb-2">Coming Soon</h2>
-              <p className="text-text-secondary">This feature is under development.</p>
-            </div>
-          </div>
-        );
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background-subtle flex flex-col">
       <Navbar onMenuClick={() => setIsSidebarOpen(true)} />
@@ -219,50 +169,56 @@ function AppContent() {
         />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            {mountedViews.map((view) => (
-              <div key={view} style={{ display: view === activeView ? 'block' : 'none' }}>
-                {renderView(view)}
-              </div>
-            ))}
+            <Outlet />
           </div>
         </main>
       </div>
       <Footer />
     </div>
   );
-}
+};
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-
-        {/* Home -> redirect by role */}
-          <Route path="/" element={<HomeRedirect />} />
-          <Route path="/home" element={<HomeRedirect />} />
-        {/* Login & Auth */}
+        {/* Public routes */}
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/home" element={<HomeRedirect />} />
         <Route path="/login" element={<Login />} />
-        {/* Tournaments list & details */}
-     <Route path="/tournaments" element={<TournamentsList />} />
-     <Route path="/tournaments/:id" element={<TournamentDetails />} />
-     <Route path="/tournaments/edit/:id" element={<EditTournament />} />       
- 
-        {/* Debug & Connection */}
+        <Route path="/register" element={<Register />} />
         <Route path="/db-connection" element={<DatabaseConnection />} />
 
-        {/* Tournament Routes */}
-        <Route path="/tournaments" element={<TournamentsList />} />
-        <Route path="/tournaments/:id" element={<TournamentDetails />} />
-        <Route path="/tournaments/edit/:id" element={<EditTournament />} />
+        {/* Authenticated layout */}
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<RoleDashboard />} />
+          <Route path="/book-court" element={<BookCourt />} />
+          <Route path="/my-bookings" element={<MyBookings />} />
+          <Route path="/approve-requests" element={<ApproveRequests />} />
+          <Route path="/courts" element={<ManageCourts />} />
+          <Route path="/manage-slots" element={<ManageSlots />} />
+          <Route path="/manage-bookings" element={<ManageBookings />} />
+          <Route path="/view-bookings" element={<ViewBookings />} />
+          <Route path="/tournaments" element={<TournamentsList />} />
+          <Route path="/tournaments/:id" element={<TournamentDetails />} />
+          <Route path="/tournaments/edit/:id" element={<EditTournament />} />
+          <Route path="/create-tournament" element={<CreateTournament />} />
+          <Route path="/profile" element={<ProfileSettings />} />
+          <Route path="/find-clubs" element={<FindClubs />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/admin-console" element={<AdminConsole />} />
+          <Route
+            path="/admin/manage-dropdowns"
+            element={
+              <RequireRole roles={['Administrator']}>
+                <ManageDropdownOptions />
+              </RequireRole>
+            }
+          />
+        </Route>
 
-         {/* Admin-only: Manage dropdown options */}
-        <Route path="/admin/manage-dropdowns"   element={  <RequireRole roles={['Administrator']}> <ManageDropdownOptions /></RequireRole> }  />
-
-        {/* Main entry point */}
-        <Route path="/*" element={<AppContent />} />
-
-        {/* Register */}
-        <Route path="/register" element={<Register />} />
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
