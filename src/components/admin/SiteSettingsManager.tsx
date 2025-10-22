@@ -9,7 +9,7 @@ import {
 } from '../../hooks/useSiteSettings';
 
 const toFormState = (settings: SiteSettings) => ({
-  copyright_line: settings.copyright_line,
+  copyright_line: settings.copyright_line ?? '',
   powered_by_line: settings.powered_by_line ?? '',
   powered_by_link: settings.powered_by_link ?? '',
   contact_text: settings.contact_text ?? '',
@@ -19,11 +19,11 @@ const toFormState = (settings: SiteSettings) => ({
 type SiteSettingsFormState = ReturnType<typeof toFormState>;
 
 const normalizeFormState = (values: SiteSettingsFormState): SiteSettingsUpdateInput => {
-  const copyright = values.copyright_line.trim();
-  const poweredByLine = values.powered_by_line.trim();
-  const poweredByLink = values.powered_by_link.trim();
-  const contactText = values.contact_text.trim();
-  let contactHref = values.contact_href.trim();
+  const copyright = (values.copyright_line ?? '').trim();
+  const poweredByLine = (values.powered_by_line ?? '').trim();
+  const poweredByLink = (values.powered_by_link ?? '').trim();
+  const contactText = (values.contact_text ?? '').trim();
+  let contactHref = (values.contact_href ?? '').trim();
 
   if (!contactHref && contactText) {
     if (contactText.startsWith('http://') || contactText.startsWith('https://')) {

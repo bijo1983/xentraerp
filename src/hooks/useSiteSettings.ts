@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 export type SiteSettings = {
   slug: string;
-  copyright_line: string;
+  copyright_line: string | null;
   powered_by_line: string | null;
   powered_by_link: string | null;
   contact_text: string | null;
