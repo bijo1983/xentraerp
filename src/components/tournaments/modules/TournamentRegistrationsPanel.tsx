@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
 interface RegistrationRow {
@@ -6,6 +6,11 @@ interface RegistrationRow {
   status?: string | null;
   created_at?: string | null;
   player?: { id: string; name?: string | null } | null;
+  pair?: {
+    id: string;
+    player1?: { id: string; name?: string | null } | null;
+    player2?: { id: string; name?: string | null } | null;
+  } | null;
   event?: {
     id: string;
     event_type: string;
@@ -23,32 +28,41 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const [rows, setRows] = useState<RegistrationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [usingLegacyTable, setUsingLegacyTable] = useState(false);
 
   useEffect(() => {
     const fetchRegistrations = async () => {
       setLoading(true);
       setError(null);
+      setUsingLegacyTable(false);
 
       try {
-        const { data, error: fetchError } = await supabase
-          .from("tournament_registrations")
-          .select(
-            "id, status, created_at, player:player_id(id, name), event:tournament_event_id(id, event_type, age_group, gender, skill_level)",
-          )
-          .eq("tournament_id", tournamentId)
-          .order("created_at", { ascending: false });
-
-        if (fetchError) {
-          throw fetchError;
+        const primary = await loadFromEventEntries();
+        if (primary.length) {
+          setRows(primary);
+        } else {
+          const fallback = await loadFromTournamentRegistrations();
+          setRows(fallback);
+          if (fallback.length) {
+            setUsingLegacyTable(true);
+          }
         }
-
-        setRows(data || []);
-      } catch (err: any) {
-        setError(
-          err?.message ||
-            "Unable to load registrations. Ensure the tournament_registrations table is available.",
-        );
-        setRows([]);
+      } catch (primaryError: any) {
+        try {
+          const fallback = await loadFromTournamentRegistrations();
+          setRows(fallback);
+          setUsingLegacyTable(true);
+        } catch (secondaryError: any) {
+          const primaryMessage = primaryError?.message || "";
+          const secondaryMessage = secondaryError?.message || "";
+          const combined = primaryMessage && secondaryMessage
+            ? primaryMessage + " | " + secondaryMessage
+            : primaryMessage || secondaryMessage || "Unable to load registrations.";
+          setRows([]);
+          setError(combined);
+        }
       }
 
       setLoading(false);
@@ -57,6 +71,147 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     fetchRegistrations();
   }, [tournamentId]);
 
+  const loadFromEventEntries = async (): Promise<RegistrationRow[]> => {
+    const { data, error: loadError } = await supabase
+      .from("event_entries")
+      .select(
+        "id, entry_status, created_at, tournament_id, event:event_id(id, event_type, age_group, gender, skill_level), " +
+          "player:player_id(id, name), pair:pair_id(id, player1:player1_id(id, name), player2:player2_id(id, name))",
+      )
+      .eq("tournament_id", tournamentId)
+      .order("created_at", { ascending: false });
+
+    if (loadError) {
+      throw loadError;
+    }
+
+    const entries = data || [];
+    return entries.map((row: any) => ({
+      id: row.id,
+      status: row.entry_status,
+      created_at: row.created_at,
+      player: row.player,
+      pair: row.pair,
+      event: row.event,
+    }));
+  };
+
+  const loadFromTournamentRegistrations = async (): Promise<RegistrationRow[]> => {
+    const { data, error: loadError } = await supabase
+      .from("tournament_registrations")
+      .select(
+        "id, status, created_at, player:player_id(id, name), event:tournament_event_id(id, event_type, age_group, gender, skill_level)",
+      )
+      .eq("tournament_id", tournamentId)
+      .order("created_at", { ascending: false });
+
+    if (loadError) {
+      throw loadError;
+    }
+
+    const registrations = data || [];
+    return registrations.map((row: any) => ({
+      id: row.id,
+      status: row.status,
+      created_at: row.created_at,
+      player: row.player,
+      pair: null,
+      event: row.event,
+    }));
+  };
+  const buildEventLabel = (event?: RegistrationRow["event"]) => {
+    if (!event) return "-";
+    const parts: string[] = [];
+    if (event.event_type) parts.push(event.event_type);
+    if (event.age_group) parts.push(event.age_group);
+    if (event.skill_level) parts.push(event.skill_level);
+    if (event.gender) parts.push(event.gender);
+    return parts.length ? parts.join(" · ") : "-";
+  };
+
+  const buildParticipantName = (row: RegistrationRow) => {
+    if (row.pair) {
+      const names: string[] = [];
+      if (row.pair.player1?.name) names.push(row.pair.player1.name);
+      if (row.pair.player2?.name) names.push(row.pair.player2.name);
+      if (names.length) {
+        return names.join(" & ");
+      }
+      return row.pair.id || "-";
+    }
+    if (row.player?.name) return row.player.name;
+    return row.player?.id || "-";
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString();
+  };
+
+  const eventFilterOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    rows.forEach(row => {
+      if (row.event?.id && !seen.has(row.event.id)) {
+        seen.set(row.event.id, buildEventLabel(row.event));
+      }
+    });
+    return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
+  }, [rows]);
+
+  const statusCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    rows.forEach(row => {
+      const key = (row.status || "pending").toLowerCase();
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([status, count]) => ({ status, count }));
+  }, [rows]);
+
+  const uniqueParticipants = useMemo(() => {
+    const identifiers = new Set<string>();
+    rows.forEach(row => {
+      if (row.player?.id) identifiers.add(row.player.id);
+      if (row.pair?.player1?.id) identifiers.add(row.pair.player1.id);
+      if (row.pair?.player2?.id) identifiers.add(row.pair.player2.id);
+    });
+    return identifiers.size;
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    const loweredSearch = searchTerm.trim().toLowerCase();
+    return rows.filter(row => {
+      if (selectedEventId !== "all" && row.event?.id !== selectedEventId) {
+        return false;
+      }
+      if (!loweredSearch) {
+        return true;
+      }
+      const participant = buildParticipantName(row).toLowerCase();
+      const eventLabel = buildEventLabel(row.event).toLowerCase();
+      const status = (row.status || "pending").toLowerCase();
+      return (
+        participant.includes(loweredSearch) ||
+        eventLabel.includes(loweredSearch) ||
+        status.includes(loweredSearch)
+      );
+    });
+  }, [rows, selectedEventId, searchTerm]);
+
+  const perEventTotals = useMemo(() => {
+    const map = new Map<string, { label: string; count: number }>();
+    rows.forEach(row => {
+      if (!row.event?.id) return;
+      const existing = map.get(row.event.id);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(row.event.id, { label: buildEventLabel(row.event), count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [rows]);
   if (loading) {
     return <div className="p-4">Loading registrations...</div>;
   }
@@ -65,57 +220,117 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     return <div className="p-4 text-red-600">{error}</div>;
   }
 
-  if (!rows.length) {
-    return (
-      <div className="p-4 text-sm text-gray-600">
-        No players have registered yet. Share the registration link once
-        categories are confirmed so that players can join the tournament.
-      </div>
-    );
-  }
+  const totalRegistrations = rows.length;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-2 text-left font-semibold text-gray-600">
-              Player
-            </th>
-            <th className="px-4 py-2 text-left font-semibold text-gray-600">
-              Category
-            </th>
-            <th className="px-4 py-2 text-left font-semibold text-gray-600">
-              Status
-            </th>
-            <th className="px-4 py-2 text-left font-semibold text-gray-600">
-              Registered On
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 bg-white">
-          {rows.map(row => {
-            const categoryParts = [row.event?.event_type];
-            if (row.event?.age_group) categoryParts.push(row.event.age_group);
-            if (row.event?.skill_level) categoryParts.push(row.event.skill_level);
-            if (row.event?.gender) categoryParts.push(row.event.gender);
-            const category = categoryParts.filter(Boolean).join(" · ") || "-";
+    <div className="space-y-6">
+      {usingLegacyTable && (
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          Displaying registrations from the legacy tournament_registrations table.
+        </div>
+      )}
 
-            return (
-              <tr key={row.id}>
-                <td className="px-4 py-2">{row.player?.name || row.player?.id || "-"}</td>
-                <td className="px-4 py-2">{category}</td>
-                <td className="px-4 py-2 capitalize">{row.status || "pending"}</td>
-                <td className="px-4 py-2">
-                  {row.created_at
-                    ? new Date(row.created_at).toLocaleString()
-                    : "-"}
-                </td>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded border bg-white p-4 shadow-sm">
+          <div className="text-xs uppercase text-gray-500">Total registrations</div>
+          <div className="text-2xl font-semibold text-gray-800">{totalRegistrations}</div>
+        </div>
+        <div className="rounded border bg-white p-4 shadow-sm">
+          <div className="text-xs uppercase text-gray-500">Unique participants</div>
+          <div className="text-2xl font-semibold text-gray-800">{uniqueParticipants}</div>
+        </div>
+        <div className="rounded border bg-white p-4 shadow-sm">
+          <div className="text-xs uppercase text-gray-500">Categories configured</div>
+          <div className="text-2xl font-semibold text-gray-800">{eventFilterOptions.length}</div>
+        </div>
+      </div>
+
+      {statusCounts.length > 0 && (
+        <div className="rounded border bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold text-gray-700">Status overview</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {statusCounts.map(item => (
+              <span
+                key={item.status}
+                className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
+              >
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)} · {item.count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {perEventTotals.length > 0 && (
+        <div className="rounded border bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold text-gray-700">Registrations by category</div>
+          <ul className="mt-2 space-y-1 text-sm text-gray-600">
+            {perEventTotals.map(item => (
+              <li key={item.label} className="flex justify-between">
+                <span>{item.label}</span>
+                <span>{item.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <label className="text-sm font-medium text-gray-700">
+          Filter by category
+          <select
+            value={selectedEventId}
+            onChange={event => setSelectedEventId(event.target.value)}
+            className="mt-1 block w-full rounded border px-3 py-2"
+          >
+            <option value="all">All categories</option>
+            {eventFilterOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-medium text-gray-700">
+          Search
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={event => setSearchTerm(event.target.value)}
+            placeholder="Search by player, pair, or status"
+            className="mt-1 block w-full rounded border px-3 py-2"
+          />
+        </label>
+      </div>
+
+      {filteredRows.length === 0 ? (
+        <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+          No registrations match the current filters.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded border bg-white shadow-sm">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600">Participant(s)</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600">Category</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600">Status</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600">Registered On</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {filteredRows.map(row => (
+                <tr key={row.id}>
+                  <td className="px-4 py-2">{buildParticipantName(row)}</td>
+                  <td className="px-4 py-2">{buildEventLabel(row.event)}</td>
+                  <td className="px-4 py-2 capitalize">{row.status || "pending"}</td>
+                  <td className="px-4 py-2">{formatDateTime(row.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };
