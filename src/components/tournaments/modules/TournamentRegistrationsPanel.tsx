@@ -115,7 +115,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
         [
           "id",
           "entry_status",
-          "created_at",
+          "inserted_at",
           "tournament_id",
           "event:event_id(id, event_type, age_group, gender, skill_level)",
           "player:player_id(id, full_name)",
@@ -123,7 +123,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
         ].join(", "),
       )
       .eq("tournament_id", tournamentId)
-      .order("created_at", { ascending: false });
+      .order("inserted_at", { ascending: false });
 
     if (loadError) {
       throw loadError;
@@ -133,7 +133,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     return entries.map((row: any) => ({
       id: row.id,
       status: row.entry_status,
-      created_at: row.created_at,
+      created_at: row.inserted_at ?? row.created_at ?? null,
       player: normalizeParticipant(row.player),
       pair: row.pair
         ? {
@@ -149,23 +149,22 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const loadFromTournamentRegistrations = async (): Promise<RegistrationRow[]> => {
     const { data, error: loadError } = await supabase
       .from("tournament_registrations")
-      .select(
-        [
-          "id",
-          "status",
-          "created_at",
-          "player_id",
-          "event:tournament_event_id(id, event_type, age_group, gender, skill_level)",
-        ].join(", "),
-      )
+      .select(["id", "status", "inserted_at", "player_id", "tournament_event_id"].join(", "))
       .eq("tournament_id", tournamentId)
-      .order("created_at", { ascending: false });
+      .order("inserted_at", { ascending: false });
 
     if (loadError) {
       throw loadError;
     }
 
     const registrations = data || [];
+    const eventIds = Array.from(
+      new Set(
+        registrations
+          .map((row: any) => row.tournament_event_id)
+          .filter((value): value is string => typeof value === "string" && value.length > 0),
+      ),
+    );
     const playerIds = Array.from(
       new Set(
         registrations
@@ -173,6 +172,30 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
           .filter((value): value is string => typeof value === "string" && value.length > 0),
       ),
     );
+
+    const eventMap = new Map<string, RegistrationRow["event"]>();
+    if (eventIds.length) {
+      const { data: events, error: eventsError } = await supabase
+        .from("tournament_events")
+        .select("id, event_type, age_group, gender, skill_level")
+        .in("id", eventIds);
+
+      if (eventsError) {
+        console.error("Failed to load event details for legacy registrations", eventsError);
+      } else {
+        (events || []).forEach((event: any) => {
+          if (event?.id) {
+            eventMap.set(event.id, {
+              id: event.id,
+              event_type: event.event_type,
+              age_group: event.age_group ?? null,
+              gender: event.gender ?? null,
+              skill_level: event.skill_level ?? null,
+            });
+          }
+        });
+      }
+    }
 
     const playerMap = new Map<string, { id: string; name?: string | null }>();
 
@@ -193,16 +216,29 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
       }
     }
 
-    return registrations.map((row: any) => ({
-      id: row.id,
-      status: row.status,
-      created_at: row.created_at,
-      player: row.player_id
-        ? playerMap.get(row.player_id) || { id: row.player_id, name: null }
-        : null,
-      pair: null,
-      event: row.event,
-    }));
+    return registrations.map((row: any) => {
+      const eventId = row.tournament_event_id;
+      const event = eventId
+        ? eventMap.get(eventId) ?? {
+            id: eventId,
+            event_type: "",
+            age_group: null,
+            gender: null,
+            skill_level: null,
+          }
+        : null;
+
+      return {
+        id: row.id,
+        status: row.status,
+        created_at: row.inserted_at ?? row.created_at ?? null,
+        player: row.player_id
+          ? playerMap.get(row.player_id) || { id: row.player_id, name: null }
+          : null,
+        pair: null,
+        event,
+      };
+    });
   };
   const buildEventLabel = (event?: RegistrationRow["event"]) => {
     if (!event) return "-";
