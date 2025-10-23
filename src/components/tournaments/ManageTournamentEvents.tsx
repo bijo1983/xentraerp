@@ -5,6 +5,8 @@ export type TournamentSummary = {
   id: string;
   name: string;
   currency_code?: string | null;
+  default_registration_fee?: number | string | null;
+  entry_fee?: number | string | null;
 };
 
 type TournamentEvent = {
@@ -13,8 +15,8 @@ type TournamentEvent = {
   age_group?: string;
   gender?: string;
   skill_level?: string;
-  registration_fee: number;
-  max_entries?: number;
+  registration_fee?: number | null;
+  max_entries?: number | null;
 };
 
 const genderOptions = [
@@ -153,8 +155,28 @@ const buildEventLabel = (event: {
   return parts.filter(Boolean).join(" · ");
 };
 
+const normalizeFee = (value?: number | string | null) => {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
   const currencyCode = tournament.currency_code || "USD";
+  const defaultRegistrationFee =
+    normalizeFee(tournament.default_registration_fee) ?? normalizeFee(tournament.entry_fee);
+
+  const createInitialFormState = (): FormState => ({
+    event_type: "",
+    age_group: "",
+    gender: "male",
+    skill_level: "",
+    registration_fee:
+      defaultRegistrationFee !== null && defaultRegistrationFee !== undefined
+        ? String(defaultRegistrationFee)
+        : "",
+    max_entries: 32,
+  });
 
   const fallbackCatalog = useMemo(() => {
     const eventTypes = new Set<string>();
@@ -178,14 +200,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
   const [eventTypeOptions, setEventTypeOptions] = useState<DropdownOption[]>([]);
   const [ageGroupOptions, setAgeGroupOptions] = useState<DropdownOption[]>([]);
   const [skillLevelOptions, setSkillLevelOptions] = useState<DropdownOption[]>([]);
-  const [form, setForm] = useState<FormState>({
-    event_type: "",
-    age_group: "",
-    gender: "male",
-    skill_level: "",
-    registration_fee: "",
-    max_entries: 32,
-  });
+  const [form, setForm] = useState<FormState>(createInitialFormState);
   const [isMutating, setIsMutating] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [dropdownLoading, setDropdownLoading] = useState(true);
@@ -195,6 +210,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
   const [dismissedPresetPrompt, setDismissedPresetPrompt] = useState(false);
   const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>([]);
   const [presetSearch, setPresetSearch] = useState("");
+  const [editingEvent, setEditingEvent] = useState<TournamentEvent | null>(null);
 
   useEffect(() => {
     fetchDropdownOptions();
@@ -372,6 +388,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
   const buildRecordsForPresets = (
     presets: CategoryPreset[],
     keySet: Set<string>,
+    fallbackFee: number | null,
   ) => {
     const records: any[] = [];
 
@@ -396,7 +413,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
               tournament_id: tournament.id,
               event_type: event.event_type,
               gender: event.gender,
-              registration_fee: event.registration_fee ?? 0,
+              registration_fee: event.registration_fee ?? fallbackFee ?? 0,
               max_entries: event.max_entries ?? 32,
             };
 
@@ -411,7 +428,31 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
 
     return records;
   };
-  const handleAddEvent = async (e: React.FormEvent) => {
+  const resolveFormRegistrationFee = () => {
+    if (!form.registration_fee || !form.registration_fee.trim()) {
+      return defaultRegistrationFee ?? 0;
+    }
+    const parsed = parseFloat(form.registration_fee);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+    return defaultRegistrationFee ?? 0;
+  };
+
+  const resetFormState = () => {
+    setForm(createInitialFormState());
+  };
+
+  useEffect(() => {
+    setSelectedPresetIds([]);
+    setPresetSearch("");
+    setStatusMessage(null);
+    setStatusType(null);
+    setEditingEvent(null);
+    resetFormState();
+  }, [tournament.id, defaultRegistrationFee]);
+
+  const handleSubmitEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.event_type) {
       setStatusType("error");
@@ -423,37 +464,77 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
     setStatusMessage(null);
     setStatusType(null);
 
+    const registrationFee = resolveFormRegistrationFee();
+    const payload = {
+      tournament_id: tournament.id,
+      event_type: form.event_type,
+      age_group: form.age_group || null,
+      gender: form.gender,
+      skill_level: form.skill_level || null,
+      registration_fee: registrationFee,
+      max_entries: Number(form.max_entries) || 32,
+    };
+
     try {
-      const { error } = await supabase.from("tournament_events").insert([
-        {
-          tournament_id: tournament.id,
-          event_type: form.event_type,
-          age_group: form.age_group || null,
-          gender: form.gender,
-          skill_level: form.skill_level || null,
-          registration_fee: parseFloat(form.registration_fee) || 0,
-          max_entries: Number(form.max_entries) || 32,
-        },
-      ]);
+      if (editingEvent) {
+        const { error } = await supabase
+          .from("tournament_events")
+          .update({
+            event_type: payload.event_type,
+            age_group: payload.age_group,
+            gender: payload.gender,
+            skill_level: payload.skill_level,
+            registration_fee: payload.registration_fee,
+            max_entries: payload.max_entries,
+          })
+          .eq("id", editingEvent.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setStatusType("success");
-      setStatusMessage("Event added successfully.");
+        setStatusType("success");
+        setStatusMessage("Event updated successfully.");
+        setEditingEvent(null);
+      } else {
+        const { error } = await supabase.from("tournament_events").insert([payload]);
 
-      setForm(current => ({
-        ...current,
-        registration_fee: "",
-        max_entries: 32,
-      }));
+        if (error) throw error;
 
+        setStatusType("success");
+        setStatusMessage("Event added successfully.");
+      }
+
+      resetFormState();
       await fetchEvents();
     } catch (error: any) {
       setStatusType("error");
-      setStatusMessage(error?.message || "Failed to add event.");
+      setStatusMessage(error?.message || "Failed to save event.");
     } finally {
       setIsMutating(false);
     }
+  };
+
+  const handleEditEvent = (event: TournamentEvent) => {
+    setEditingEvent(event);
+    setStatusMessage(null);
+    setStatusType(null);
+    setForm({
+      event_type: event.event_type,
+      age_group: event.age_group || "",
+      gender: (event.gender as FormState["gender"]) || "male",
+      skill_level: event.skill_level || "",
+      registration_fee:
+        event.registration_fee !== null && event.registration_fee !== undefined
+          ? String(event.registration_fee)
+          : defaultRegistrationFee !== null && defaultRegistrationFee !== undefined
+            ? String(defaultRegistrationFee)
+            : "",
+      max_entries: event.max_entries ?? 32,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEvent(null);
+    resetFormState();
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -470,6 +551,9 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
 
       setStatusType("success");
       setStatusMessage("Event removed.");
+      if (editingEvent?.id === eventId) {
+        handleCancelEdit();
+      }
       await fetchEvents();
     } catch (error: any) {
       setStatusType("error");
@@ -485,7 +569,11 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
     setStatusType(null);
     try {
       await ensureDropdownOptionsForPresets([preset]);
-      const records = buildRecordsForPresets([preset], new Set(existingEventsKey));
+      const records = buildRecordsForPresets(
+        [preset],
+        new Set(existingEventsKey),
+        defaultRegistrationFee ?? 0,
+      );
 
       if (!records.length) {
         setStatusType("error");
@@ -530,7 +618,11 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
 
     try {
       await ensureDropdownOptionsForPresets(presets);
-      const records = buildRecordsForPresets(presets, new Set(existingEventsKey));
+      const records = buildRecordsForPresets(
+        presets,
+        new Set(existingEventsKey),
+        defaultRegistrationFee ?? 0,
+      );
 
       if (!records.length) {
         setStatusType("error");
@@ -736,8 +828,22 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
         </div>
       </div>
 
-      <form onSubmit={handleAddEvent} className="rounded border bg-white p-4 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-800">Add a custom event</h3>
+      <form onSubmit={handleSubmitEvent} className="rounded border bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-semibold text-gray-800">
+            {editingEvent ? "Edit event" : "Add a custom event"}
+          </h3>
+          {editingEvent && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="text-sm text-blue-600 underline"
+              disabled={isMutating}
+            >
+              Cancel editing
+            </button>
+          )}
+        </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="text-sm font-medium text-gray-700">
             Event Type
@@ -846,7 +952,7 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
           disabled={disableForm}
           className="mt-4 rounded bg-blue-600 px-4 py-2 font-semibold text-white shadow hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
-          {isMutating ? "Adding…" : "Add Event"}
+          {isMutating ? (editingEvent ? "Saving…" : "Adding…") : editingEvent ? "Save Changes" : "Add Event"}
         </button>
       </form>
 
@@ -878,17 +984,29 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
                 <div>
                   <div className="font-semibold text-gray-800">{buildEventLabel(event)}</div>
                   <div className="text-xs text-gray-600">
-                    Fee: {currencyCode} {event.registration_fee.toFixed(2)} · Max entries: {event.max_entries || 32}
+                    Fee: {currencyCode}{" "}
+                    {Number(event.registration_fee ?? defaultRegistrationFee ?? 0).toFixed(2)} · Max entries:{" "}
+                    {event.max_entries || 32}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteEvent(event.id)}
-                  disabled={isMutating}
-                  className="self-start rounded bg-red-500 px-3 py-1 text-sm font-medium text-white shadow hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  Delete
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleEditEvent(event)}
+                    disabled={isMutating}
+                    className="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white shadow hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEvent(event.id)}
+                    disabled={isMutating}
+                    className="rounded bg-red-500 px-3 py-1 text-sm font-medium text-white shadow hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

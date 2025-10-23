@@ -105,6 +105,7 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [modalEvent, setModalEvent] = useState<TournamentEventSummary | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [countryInitialized, setCountryInitialized] = useState(false);
 
   const countryMap = useMemo(() => {
     const map = new Map<string, CountryRow>();
@@ -221,21 +222,22 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
   }, []);
 
   useEffect(() => {
-    if (!countries.length) return;
+    if (!countries.length || countryInitialized) return;
 
-    if (userCountryId && !selectedCountry) {
+    if (userCountryId) {
       setSelectedCountry(userCountryId);
-      return;
+    } else {
+      setSelectedCountry("");
     }
 
-    if (!selectedCountry && countries.length) {
-      setSelectedCountry(countries[0].id);
-    }
-  }, [countries, userCountryId, selectedCountry]);
+    setCountryInitialized(true);
+  }, [countries, userCountryId, countryInitialized]);
 
   useEffect(() => {
     const nextList = selectedCountry
-      ? allTournaments.filter(tournament => tournament.country_id === selectedCountry)
+      ? allTournaments.filter(
+          tournament => tournament.country_id === selectedCountry || !tournament.country_id,
+        )
       : allTournaments;
 
     setFilteredTournaments(nextList);
@@ -310,13 +312,20 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
                 disabled={countriesLoading}
               >
                 {countriesLoading && <option>Loading...</option>}
-                {!countriesLoading && countries.length === 0 && <option>No countries available</option>}
-                {!countriesLoading &&
-                  countries.map(country => (
-                    <option key={country.id} value={country.id}>
-                      {country.name}
-                    </option>
-                  ))}
+                {!countriesLoading && (
+                  <>
+                    <option value="">All countries</option>
+                    {countries.length === 0 ? (
+                      <option disabled>No countries available</option>
+                    ) : (
+                      countries.map(country => (
+                        <option key={country.id} value={country.id}>
+                          {country.name}
+                        </option>
+                      ))
+                    )}
+                  </>
+                )}
               </select>
             </div>
 

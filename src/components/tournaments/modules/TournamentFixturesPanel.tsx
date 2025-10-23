@@ -221,7 +221,6 @@ const TournamentFixturesPanel: React.FC<Props> = ({ tournamentId }) => {
         const { data, error: fallbackError } = await supabase
           .from("event_entries")
           .select("event_id")
-          .eq("tournament_id", tournamentId)
           .in("event_id", eventIds);
 
         if (fallbackError) {

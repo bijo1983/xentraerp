@@ -21,6 +21,7 @@ interface Tournament {
   registration_deadline?: string;
   max_participants?: number | null;
   entry_fee?: number | null;
+  default_registration_fee?: number | null;
   prize_pool?: number | null;
   tournament_format?: string;
   currency_code?: string | null;
@@ -166,7 +167,17 @@ const TournamentDetails: React.FC = () => {
         );
       case "categories":
         return (isOwner || isAdmin)
-          ? <TournamentCategoriesPanel tournament={{ id: form.id, name: form.name, currency_code: form.currency_code }} />
+          ? (
+              <TournamentCategoriesPanel
+                tournament={{
+                  id: form.id,
+                  name: form.name,
+                  currency_code: form.currency_code,
+                  entry_fee: form.entry_fee ?? null,
+                  default_registration_fee: form.default_registration_fee ?? null,
+                }}
+              />
+            )
           : <div className="text-sm text-gray-600">Only organizers/administrators can manage categories.</div>;
       case "fixtures":
         return (isOwner || isAdmin)
