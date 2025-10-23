@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import { useAuthStore } from "../../../store/authStore";
 
 interface RegistrationRow {
   id: string;
@@ -31,6 +32,32 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [usingLegacyTable, setUsingLegacyTable] = useState(false);
+  const [participantPayments, setParticipantPayments] = useState<Record<string, string>>({});
+  const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
+  const { userProfile } = useAuthStore();
+  const canManagePayments =
+    userProfile?.type === "Organizer" || userProfile?.type === "Club" || userProfile?.type === "Administrator";
+
+  const loadParticipantPayments = async () => {
+    const { data, error } = await supabase
+      .from("tournament_participants")
+      .select("player_id, payment_status")
+      .eq("tournament_id", tournamentId);
+
+    if (error) {
+      console.error("Failed to load participant payments", error);
+      return;
+    }
+
+    const map: Record<string, string> = {};
+    (data || []).forEach((row: any) => {
+      if (row.player_id) {
+        map[row.player_id] = row.payment_status || "pending";
+      }
+    });
+
+    setParticipantPayments(map);
+  };
 
   useEffect(() => {
     const fetchRegistrations = async () => {
@@ -64,6 +91,8 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
           setError(combined);
         }
       }
+
+      await loadParticipantPayments();
 
       setLoading(false);
     };
@@ -212,6 +241,60 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     });
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [rows]);
+
+  const gatherPlayerIds = (row: RegistrationRow) => {
+    const ids = new Set<string>();
+    if (row.player?.id) ids.add(row.player.id);
+    if (row.pair?.player1?.id) ids.add(row.pair.player1.id);
+    if (row.pair?.player2?.id) ids.add(row.pair.player2.id);
+    return Array.from(ids);
+  };
+
+  const paymentStatusForRow = (row: RegistrationRow) => {
+    const ids = gatherPlayerIds(row);
+    if (!ids.length) return "pending";
+    const statuses = ids.map(id => participantPayments[id] ?? "pending");
+    if (statuses.every(status => status === "paid")) return "paid";
+    if (statuses.some(status => status === "paid")) return "partial";
+    return "pending";
+  };
+
+  const paymentBadgeClass = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-700";
+      case "partial":
+        return "bg-amber-100 text-amber-700";
+      default:
+        return "bg-gray-100 text-gray-600";
+    }
+  };
+
+  const updatePaymentStatus = async (row: RegistrationRow, status: "paid" | "pending") => {
+    const playerIds = gatherPlayerIds(row);
+    if (!playerIds.length) return;
+
+    setUpdatingPaymentId(row.id);
+    const { error: updateError } = await supabase
+      .from("tournament_participants")
+      .update({ payment_status: status })
+      .eq("tournament_id", tournamentId)
+      .in("player_id", playerIds);
+    setUpdatingPaymentId(null);
+
+    if (updateError) {
+      alert("Failed to update payment status: " + updateError.message);
+      return;
+    }
+
+    setParticipantPayments(prev => {
+      const next = { ...prev };
+      playerIds.forEach(id => {
+        next[id] = status;
+      });
+      return next;
+    });
+  };
   if (loading) {
     return <div className="p-4">Loading registrations...</div>;
   }
@@ -314,19 +397,49 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
               <tr>
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Participant(s)</th>
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Category</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600">Payment</th>
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Status</th>
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Registered On</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {filteredRows.map(row => (
-                <tr key={row.id}>
-                  <td className="px-4 py-2">{buildParticipantName(row)}</td>
-                  <td className="px-4 py-2">{buildEventLabel(row.event)}</td>
-                  <td className="px-4 py-2 capitalize">{row.status || "pending"}</td>
-                  <td className="px-4 py-2">{formatDateTime(row.created_at)}</td>
-                </tr>
-              ))}
+              {filteredRows.map(row => {
+                const paymentStatus = paymentStatusForRow(row);
+                return (
+                  <tr key={row.id}>
+                    <td className="px-4 py-2">{buildParticipantName(row)}</td>
+                    <td className="px-4 py-2">{buildEventLabel(row.event)}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${paymentBadgeClass(paymentStatus)}`}
+                        >
+                          {paymentStatus === "paid"
+                            ? "Paid"
+                            : paymentStatus === "partial"
+                            ? "Partially paid"
+                            : "Pending"}
+                        </span>
+                        {canManagePayments && (
+                          <button
+                            className="self-start text-xs font-medium text-primary-600 hover:text-primary-700"
+                            disabled={updatingPaymentId === row.id}
+                            onClick={() => updatePaymentStatus(row, paymentStatus === "paid" ? "pending" : "paid")}
+                          >
+                            {updatingPaymentId === row.id
+                              ? "Updating..."
+                              : paymentStatus === "paid"
+                              ? "Mark as pending"
+                              : "Mark as paid"}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 capitalize">{row.status || "pending"}</td>
+                    <td className="px-4 py-2">{formatDateTime(row.created_at)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
