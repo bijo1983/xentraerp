@@ -449,7 +449,13 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
       {modalEvent && selectedTournament && (
         <EventRegistrationModal
           event={modalEvent}
-          tournament={{ id: selectedTournament.id, name: selectedTournament.name, currency_code: resolvedCurrency }}
+          tournament={{
+            id: selectedTournament.id,
+            name: selectedTournament.name,
+            currency_code: resolvedCurrency,
+            start_date: selectedTournament.start_date,
+            end_date: selectedTournament.end_date,
+          }}
           currency={resolvedCurrency}
           onClose={handleModalClose}
           onSuccess={() => handleRegistrationSuccess(modalEvent)}
