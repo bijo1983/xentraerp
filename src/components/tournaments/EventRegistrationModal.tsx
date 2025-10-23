@@ -43,7 +43,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
   const [loading, setLoading] = useState(false);
   const [partnerEmail, setPartnerEmail] = useState("");
   const [pairId, setPairId] = useState<string | null>(null);
-  const [pairError, setPairError] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [success, setSuccess] = useState(false);
   const [pairMembers, setPairMembers] = useState<string[]>([]);
   const [partnerName, setPartnerName] = useState<string>("");
@@ -137,6 +137,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
 
   // Helper: Register for singles event
   const registerSingles = async () => {
+    setErrorMessage("");
     setLoading(true);
     try {
       setEmailStatus(null);
@@ -152,7 +153,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       if (error) throw error;
       await handleRegistrationSuccess([userProfile.id]);
     } catch (err: any) {
-      setPairError(err.message || "Registration failed");
+      setErrorMessage(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -160,11 +161,12 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
 
   // Helper: Register for doubles/mixed event
   const registerDoubles = async () => {
+    setErrorMessage("");
     setLoading(true);
     try {
       setEmailStatus(null);
       if (!pairId) {
-        setPairError("Please create or select a pair.");
+        setErrorMessage("Please create or select a pair.");
         setLoading(false);
         return;
       }
@@ -188,7 +190,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       const fallbackIds = playerIds.length ? playerIds : [userProfile?.id].filter(Boolean) as string[];
       await handleRegistrationSuccess(fallbackIds);
     } catch (err: any) {
-      setPairError(err.message || "Registration failed");
+      setErrorMessage(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -196,9 +198,9 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
 
   // Helper: Create new pair (doubles/mixed)
   const handleCreatePair = async () => {
-    setPairError("");
+    setErrorMessage("");
     if (!partnerEmail) {
-      setPairError("Please enter your partner's email.");
+      setErrorMessage("Please enter your partner's email.");
       return;
     }
     setLoading(true);
@@ -240,9 +242,9 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
 
       setPairId(newPairId);
       setPartnerName(partner.full_name ?? partnerEmail);
-      setPairError("");
+      setErrorMessage("");
     } catch (err: any) {
-      setPairError(err.message || "Could not create pair.");
+      setErrorMessage(err.message || "Could not create pair.");
     } finally {
       setLoading(false);
     }
@@ -296,7 +298,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
             {pairId && (
               <span className="text-green-700 ml-2">Pair ready{partnerName ? ` with ${partnerName}` : ""}!</span>
             )}
-            {pairError && <div className="text-red-600 mt-2">{pairError}</div>}
+            {errorMessage && <div className="text-red-600 mt-2">{errorMessage}</div>}
             <button
               type="button"
               className="bg-green-600 text-white px-4 py-2 rounded mt-4 w-full"
@@ -307,13 +309,16 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
             </button>
           </>
         ) : (
-          <button
-            className="bg-green-600 text-white px-4 py-2 rounded w-full"
-            onClick={registerSingles}
-            disabled={loading}
-          >
-            Register as Player
-          </button>
+          <>
+            <button
+              className="bg-green-600 text-white px-4 py-2 rounded w-full"
+              onClick={registerSingles}
+              disabled={loading}
+            >
+              Register as Player
+            </button>
+            {errorMessage && <div className="text-red-600 mt-2">{errorMessage}</div>}
+          </>
         )}
       </div>
     </div>
