@@ -258,8 +258,8 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
       setForm(current => ({
         ...current,
         event_type: current.event_type || eventOptions[0] || "",
-        age_group: current.age_group || ageOptions[0] || "",
-        skill_level: current.skill_level || skillOptions[0] || "",
+        age_group: current.age_group,
+        skill_level: current.skill_level,
       }));
 
       if (!eventOptions.length) {
@@ -871,11 +871,8 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
               onChange={event => setForm(current => ({ ...current, age_group: event.target.value }))}
               className="mt-1 block w-full rounded border px-3 py-2"
               disabled={disableForm}
-              required
             >
-              <option value="" disabled>
-                Select…
-              </option>
+              <option value="">None</option>
               {ageGroupOptions.map(option => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -905,11 +902,8 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
               onChange={event => setForm(current => ({ ...current, skill_level: event.target.value }))}
               className="mt-1 block w-full rounded border px-3 py-2"
               disabled={disableForm}
-              required
             >
-              <option value="" disabled>
-                Select…
-              </option>
+              <option value="">None</option>
               {skillLevelOptions.map(option => (
                 <option key={option.value} value={option.value}>
                   {option.label}
