@@ -34,3 +34,27 @@ The script overwrites the target file with the definitions returned by Supabase.
 
 After regenerating the base schema, append any local helpers (such as `get_recent_database_changes`) to the migration file so that bespoke logic remains alongside the introspected dump.
 
+## Configuring tournament registration emails
+
+The frontend invokes the `send_tournament_registration_email` RPC after a player registers for an event. The helper defined in
+`supabase/migrations/20250616103000_add_tournament_registration_email_rpc.sql` forwards the payload to an external webhook by calling the `pg_net` extension.
+
+1. Install `pg_net` in your project if it is not already available:
+
+   ```sql
+   create extension if not exists pg_net with schema extensions;
+   ```
+
+2. Store the webhook configuration as Postgres settings so the function can read them at runtime:
+
+   ```sql
+   alter database postgres set app.tournament_registration_webhook = 'https://api.resend.com/emails';
+   alter database postgres set app.tournament_registration_webhook_secret = 're_XXXX';
+   ```
+
+   Adjust the URL and secret for the provider you use (Resend, SendGrid, Mailgun, etc.). If your provider does not require a
+   bearer token, leave `app.tournament_registration_webhook_secret` unset.
+
+3. Deploy the migration or run the function definition manually. After the settings are in place, the RPC returns success to the
+   frontend and the player sees the “Confirmation email sent…” status.
+

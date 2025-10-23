@@ -6,6 +6,19 @@ type Tournament = {
   id: string;
   name: string;
   currency_code: string;
+  start_date: string;
+  end_date: string;
+};
+
+type RegistrationEmailPayload = {
+  to_email: string;
+  player_name: string;
+  tournament_name: string;
+  event_label: string;
+  amount_due: number;
+  currency_code: string;
+  start_date: string;
+  end_date: string;
 };
 
 type TournamentEvent = {
@@ -64,13 +77,24 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     }
   };
 
+  const triggerRegistrationEmailRpc = async (payload: RegistrationEmailPayload) => {
+    const { error } = await supabase.rpc("send_tournament_registration_email", payload);
+    if (error) {
+      throw error;
+    }
+  };
+
+  const triggerRegistrationEmailFallback = async (payload: RegistrationEmailPayload) => {
+    await supabase.functions.invoke("send-tournament-registration-email", { body: payload });
+  };
+
   const sendConfirmationEmail = async () => {
     if (!userProfile?.email) {
       setEmailStatus("Registration completed. Please update your profile email to receive confirmations.");
       return;
     }
 
-    const payload = {
+    const payload: RegistrationEmailPayload = {
       to_email: userProfile.email,
       player_name: userProfile.name || userProfile.email,
       tournament_name: tournament.name,
@@ -84,19 +108,13 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     let delivered = false;
 
     try {
-      const { error } = await supabase.rpc("send_tournament_registration_email", payload);
-      if (!error) {
-        delivered = true;
-      } else {
-        console.warn("send_tournament_registration_email RPC error", error);
-      }
+      await triggerRegistrationEmailRpc(payload);
+      delivered = true;
     } catch (rpcError) {
       console.warn("send_tournament_registration_email RPC failed", rpcError);
-    }
 
-    if (!delivered) {
       try {
-        await supabase.functions.invoke("send-tournament-registration-email", { body: payload });
+        await triggerRegistrationEmailFallback(payload);
         delivered = true;
       } catch (funcError) {
         console.warn("send-tournament-registration-email function failed", funcError);
