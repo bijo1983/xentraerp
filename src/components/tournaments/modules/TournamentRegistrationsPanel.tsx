@@ -67,15 +67,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
 
       try {
         const primary = await loadFromEventEntries();
-        if (primary.length) {
-          setRows(primary);
-        } else {
-          const fallback = await loadFromTournamentRegistrations();
-          setRows(fallback);
-          if (fallback.length) {
-            setUsingLegacyTable(true);
-          }
-        }
+        setRows(primary);
       } catch (primaryError: any) {
         try {
           const fallback = await loadFromTournamentRegistrations();
@@ -100,12 +92,17 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     fetchRegistrations();
   }, [tournamentId]);
 
-  const normalizeParticipant = (entry: any): { id: string; name?: string | null } | null => {
-    if (!entry?.id) return null;
-    return {
-      id: entry.id,
-      name: entry.full_name ?? entry.name ?? null,
-    };
+  const isMissingColumnError = (err: any, column: string) => {
+    if (!err) return false;
+    if (err.code === "42703") return true;
+    const columnName = column.toLowerCase();
+    const message = typeof err.message === "string" ? err.message.toLowerCase() : "";
+    const details = typeof err.details === "string" ? err.details.toLowerCase() : "";
+    return (
+      message.includes(`column ${columnName}`) ||
+      message.includes(`column \"${columnName}\"`) ||
+      details.includes(`column ${columnName}`)
+    );
   };
 
   const loadFromEventEntries = async (): Promise<RegistrationRow[]> => {
@@ -142,26 +139,104 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
       return [];
     }
 
-    const { data, error: loadError } = await supabase
-      .from("event_entries")
-      .select(
-        [
-          "id",
-          "entry_status",
-          "inserted_at",
-          "event_id",
-          "player:player_id(id, full_name)",
-          "pair:pair_id(id, player1:player1_id(id, full_name), player2:player2_id(id, full_name))",
-        ].join(", "),
-      )
-      .in("event_id", eventIds)
-      .order("inserted_at", { ascending: false });
+    const runEntriesQuery = async (orderColumn: "inserted_at" | "created_at") => {
+      const selectedColumns = ["id", "entry_status", "event_id", "player_id", "pair_id"];
+      if (orderColumn === "inserted_at") {
+        selectedColumns.push("inserted_at", "created_at");
+      } else {
+        selectedColumns.push("created_at");
+      }
 
-    if (loadError) {
-      throw loadError;
+      return supabase
+        .from("event_entries")
+        .select(selectedColumns.join(", "))
+        .in("event_id", eventIds)
+        .order(orderColumn, { ascending: false });
+    };
+
+    let orderColumn: "inserted_at" | "created_at" = "inserted_at";
+    let {
+      data: entryData,
+      error: entryError,
+    } = await runEntriesQuery(orderColumn);
+
+    if (entryError && isMissingColumnError(entryError, orderColumn)) {
+      orderColumn = "created_at";
+      ({ data: entryData, error: entryError } = await runEntriesQuery(orderColumn));
     }
 
-    const entries = data || [];
+    if (entryError) {
+      throw entryError;
+    }
+
+    const entries = entryData || [];
+
+    const pairIds = new Set<string>();
+    const playerIds = new Set<string>();
+
+    entries.forEach((row: any) => {
+      if (row.player_id) {
+        playerIds.add(row.player_id);
+      }
+      if (row.pair_id) {
+        pairIds.add(row.pair_id);
+      }
+    });
+
+    let pairRows: any[] = [];
+    if (pairIds.size) {
+      const { data: fetchedPairs, error: pairError } = await supabase
+        .from("pairs")
+        .select("id, player1_id, player2_id")
+        .in("id", Array.from(pairIds));
+
+      if (pairError) {
+        throw pairError;
+      }
+
+      pairRows = fetchedPairs || [];
+      pairRows.forEach(pair => {
+        if (pair?.player1_id) playerIds.add(pair.player1_id);
+        if (pair?.player2_id) playerIds.add(pair.player2_id);
+      });
+    }
+
+    const playerNameMap = new Map<string, string | null>();
+    if (playerIds.size) {
+      const { data: playerRows, error: playerError } = await supabase
+        .from("player_users")
+        .select("id, full_name")
+        .in("id", Array.from(playerIds));
+
+      if (playerError) {
+        throw playerError;
+      }
+
+      (playerRows || []).forEach((player: any) => {
+        if (player?.id) {
+          playerNameMap.set(player.id, player.full_name ?? null);
+        }
+      });
+    }
+
+    const resolveParticipant = (id?: string | null): { id: string; name?: string | null } | null => {
+      if (!id) return null;
+      return {
+        id,
+        name: playerNameMap.get(id) ?? null,
+      };
+    };
+
+    const pairMap = new Map<string, RegistrationRow["pair"]>();
+    pairRows.forEach(pair => {
+      if (!pair?.id) return;
+      pairMap.set(pair.id, {
+        id: pair.id,
+        player1: resolveParticipant(pair.player1_id),
+        player2: resolveParticipant(pair.player2_id),
+      });
+    });
+
     return entries.map((row: any) => {
       const eventId = row.event_id as string | undefined;
       const event = eventId
@@ -178,12 +253,12 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
         id: row.id,
         status: row.entry_status,
         created_at: row.inserted_at ?? row.created_at ?? null,
-        player: normalizeParticipant(row.player),
-        pair: row.pair
-          ? {
-              id: row.pair.id,
-              player1: normalizeParticipant(row.pair.player1),
-              player2: normalizeParticipant(row.pair.player2),
+        player: resolveParticipant(row.player_id),
+        pair: row.pair_id
+          ? pairMap.get(row.pair_id) || {
+              id: row.pair_id,
+              player1: null,
+              player2: null,
             }
           : null,
         event,
@@ -192,11 +267,28 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   };
 
   const loadFromTournamentRegistrations = async (): Promise<RegistrationRow[]> => {
-    const { data, error: loadError } = await supabase
-      .from("tournament_registrations")
-      .select(["id", "status", "inserted_at", "player_id", "tournament_event_id"].join(", "))
-      .eq("tournament_id", tournamentId)
-      .order("inserted_at", { ascending: false });
+    const runLegacyQuery = async (orderColumn: "inserted_at" | "created_at") => {
+      const columns = ["id", "status", "player_id", "tournament_event_id"];
+      if (orderColumn === "inserted_at") {
+        columns.push("inserted_at", "created_at");
+      } else {
+        columns.push("created_at");
+      }
+
+      return supabase
+        .from("tournament_registrations")
+        .select(columns.join(", "))
+        .eq("tournament_id", tournamentId)
+        .order(orderColumn, { ascending: false });
+    };
+
+    let legacyOrder: "inserted_at" | "created_at" = "inserted_at";
+    let { data, error: loadError } = await runLegacyQuery(legacyOrder);
+
+    if (loadError && isMissingColumnError(loadError, legacyOrder)) {
+      legacyOrder = "created_at";
+      ({ data, error: loadError } = await runLegacyQuery(legacyOrder));
+    }
 
     if (loadError) {
       const message = typeof loadError.message === "string" ? loadError.message.toLowerCase() : "";
