@@ -109,6 +109,39 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   };
 
   const loadFromEventEntries = async (): Promise<RegistrationRow[]> => {
+    const { data: eventData, error: eventError } = await supabase
+      .from("tournament_events")
+      .select("id, event_type, age_group, gender, skill_level")
+      .eq("tournament_id", tournamentId);
+
+    if (eventError) {
+      throw eventError;
+    }
+
+    const eventRows = eventData || [];
+    if (!eventRows.length) {
+      return [];
+    }
+
+    const eventMap = new Map<string, RegistrationRow["event"]>();
+    const eventIds: string[] = [];
+
+    eventRows.forEach((event: any) => {
+      if (!event?.id) return;
+      eventIds.push(event.id);
+      eventMap.set(event.id, {
+        id: event.id,
+        event_type: event.event_type,
+        age_group: event.age_group ?? null,
+        gender: event.gender ?? null,
+        skill_level: event.skill_level ?? null,
+      });
+    });
+
+    if (!eventIds.length) {
+      return [];
+    }
+
     const { data, error: loadError } = await supabase
       .from("event_entries")
       .select(
@@ -116,13 +149,12 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
           "id",
           "entry_status",
           "inserted_at",
-          "tournament_id",
-          "event:event_id(id, event_type, age_group, gender, skill_level)",
+          "event_id",
           "player:player_id(id, full_name)",
           "pair:pair_id(id, player1:player1_id(id, full_name), player2:player2_id(id, full_name))",
         ].join(", "),
       )
-      .eq("tournament_id", tournamentId)
+      .in("event_id", eventIds)
       .order("inserted_at", { ascending: false });
 
     if (loadError) {
@@ -130,20 +162,33 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     }
 
     const entries = data || [];
-    return entries.map((row: any) => ({
-      id: row.id,
-      status: row.entry_status,
-      created_at: row.inserted_at ?? row.created_at ?? null,
-      player: normalizeParticipant(row.player),
-      pair: row.pair
-        ? {
-            id: row.pair.id,
-            player1: normalizeParticipant(row.pair.player1),
-            player2: normalizeParticipant(row.pair.player2),
+    return entries.map((row: any) => {
+      const eventId = row.event_id as string | undefined;
+      const event = eventId
+        ? eventMap.get(eventId) || {
+            id: eventId,
+            event_type: "",
+            age_group: null,
+            gender: null,
+            skill_level: null,
           }
-        : null,
-      event: row.event,
-    }));
+        : null;
+
+      return {
+        id: row.id,
+        status: row.entry_status,
+        created_at: row.inserted_at ?? row.created_at ?? null,
+        player: normalizeParticipant(row.player),
+        pair: row.pair
+          ? {
+              id: row.pair.id,
+              player1: normalizeParticipant(row.pair.player1),
+              player2: normalizeParticipant(row.pair.player2),
+            }
+          : null,
+        event,
+      };
+    });
   };
 
   const loadFromTournamentRegistrations = async (): Promise<RegistrationRow[]> => {
@@ -154,6 +199,12 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
       .order("inserted_at", { ascending: false });
 
     if (loadError) {
+      const message = typeof loadError.message === "string" ? loadError.message.toLowerCase() : "";
+      if (loadError.code === "42P01" || message.includes("relation \"public.tournament_registrations\" does not exist")) {
+        console.warn("tournament_registrations table is not available; falling back to event_entries only.");
+        return [];
+      }
+
       throw loadError;
     }
 
