@@ -100,12 +100,27 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     fetchRegistrations();
   }, [tournamentId]);
 
+  const normalizeParticipant = (entry: any): { id: string; name?: string | null } | null => {
+    if (!entry?.id) return null;
+    return {
+      id: entry.id,
+      name: entry.full_name ?? entry.name ?? null,
+    };
+  };
+
   const loadFromEventEntries = async (): Promise<RegistrationRow[]> => {
     const { data, error: loadError } = await supabase
       .from("event_entries")
       .select(
-        "id, entry_status, created_at, tournament_id, event:event_id(id, event_type, age_group, gender, skill_level), " +
-          "player:player_id(id, name), pair:pair_id(id, player1:player1_id(id, name), player2:player2_id(id, name))",
+        [
+          "id",
+          "entry_status",
+          "created_at",
+          "tournament_id",
+          "event:event_id(id, event_type, age_group, gender, skill_level)",
+          "player:player_id(id, full_name)",
+          "pair:pair_id(id, player1:player1_id(id, full_name), player2:player2_id(id, full_name))",
+        ].join(", "),
       )
       .eq("tournament_id", tournamentId)
       .order("created_at", { ascending: false });
@@ -119,8 +134,14 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
       id: row.id,
       status: row.entry_status,
       created_at: row.created_at,
-      player: row.player,
-      pair: row.pair,
+      player: normalizeParticipant(row.player),
+      pair: row.pair
+        ? {
+            id: row.pair.id,
+            player1: normalizeParticipant(row.pair.player1),
+            player2: normalizeParticipant(row.pair.player2),
+          }
+        : null,
       event: row.event,
     }));
   };
@@ -129,7 +150,13 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     const { data, error: loadError } = await supabase
       .from("tournament_registrations")
       .select(
-        "id, status, created_at, player:player_id(id, name), event:tournament_event_id(id, event_type, age_group, gender, skill_level)",
+        [
+          "id",
+          "status",
+          "created_at",
+          "player_id",
+          "event:tournament_event_id(id, event_type, age_group, gender, skill_level)",
+        ].join(", "),
       )
       .eq("tournament_id", tournamentId)
       .order("created_at", { ascending: false });
@@ -139,11 +166,40 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     }
 
     const registrations = data || [];
+    const playerIds = Array.from(
+      new Set(
+        registrations
+          .map((row: any) => row.player_id)
+          .filter((value): value is string => typeof value === "string" && value.length > 0),
+      ),
+    );
+
+    const playerMap = new Map<string, { id: string; name?: string | null }>();
+
+    if (playerIds.length) {
+      const { data: players, error: playerError } = await supabase
+        .from("player_users")
+        .select("id, full_name")
+        .in("id", playerIds);
+
+      if (playerError) {
+        console.error("Failed to load player details for legacy registrations", playerError);
+      } else {
+        (players || []).forEach((player: any) => {
+          if (player?.id) {
+            playerMap.set(player.id, { id: player.id, name: player.full_name ?? null });
+          }
+        });
+      }
+    }
+
     return registrations.map((row: any) => ({
       id: row.id,
       status: row.status,
       created_at: row.created_at,
-      player: row.player,
+      player: row.player_id
+        ? playerMap.get(row.player_id) || { id: row.player_id, name: null }
+        : null,
       pair: null,
       event: row.event,
     }));
