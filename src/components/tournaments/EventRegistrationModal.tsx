@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 
@@ -17,38 +17,122 @@ type TournamentEvent = {
   registration_fee: number;
 };
 
-type Pair = {
-  id: string;
-  player1_id: string;
-  player2_id: string;
-};
-
 interface Props {
   event: TournamentEvent;
   tournament: Tournament;
   currency: string;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, onClose }) => {
+const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, onClose, onSuccess }) => {
   const { userProfile } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [partnerEmail, setPartnerEmail] = useState("");
   const [pairId, setPairId] = useState<string | null>(null);
   const [pairError, setPairError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [pairMembers, setPairMembers] = useState<string[]>([]);
+  const [partnerName, setPartnerName] = useState<string>("");
+  const [emailStatus, setEmailStatus] = useState<string | null>(null);
+
+  const eventLabel = useMemo(() => {
+    const parts: string[] = [event.event_type];
+    if (event.age_group) parts.push(event.age_group);
+    if (event.skill_level) parts.push(event.skill_level);
+    if (event.gender) parts.push(event.gender);
+    return parts.filter(Boolean).join(" · ");
+  }, [event]);
+
+  const ensureParticipants = async (playerIds: string[]) => {
+    const unique = Array.from(new Set(playerIds.filter(Boolean)));
+    if (!unique.length) return;
+
+    const { error } = await supabase
+      .from("tournament_participants")
+      .upsert(
+        unique.map(playerId => ({
+          tournament_id: tournament.id,
+          player_id: playerId,
+          payment_status: "pending",
+        })),
+        { onConflict: "tournament_id,player_id" }
+      );
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  const sendConfirmationEmail = async () => {
+    if (!userProfile?.email) {
+      setEmailStatus("Registration completed. Please update your profile email to receive confirmations.");
+      return;
+    }
+
+    const payload = {
+      to_email: userProfile.email,
+      player_name: userProfile.name || userProfile.email,
+      tournament_name: tournament.name,
+      event_label: eventLabel,
+      amount_due: event.registration_fee ?? 0,
+      currency_code: currency,
+      start_date: tournament.start_date,
+      end_date: tournament.end_date,
+    };
+
+    let delivered = false;
+
+    try {
+      const { error } = await supabase.rpc("send_tournament_registration_email", payload);
+      if (!error) {
+        delivered = true;
+      } else {
+        console.warn("send_tournament_registration_email RPC error", error);
+      }
+    } catch (rpcError) {
+      console.warn("send_tournament_registration_email RPC failed", rpcError);
+    }
+
+    if (!delivered) {
+      try {
+        await supabase.functions.invoke("send-tournament-registration-email", { body: payload });
+        delivered = true;
+      } catch (funcError) {
+        console.warn("send-tournament-registration-email function failed", funcError);
+      }
+    }
+
+    setEmailStatus(
+      delivered
+        ? `Confirmation email sent to ${userProfile.email}.`
+        : "Registration completed. We were unable to send a confirmation email automatically."
+    );
+  };
+
+  const handleRegistrationSuccess = async (playerIds: string[]) => {
+    await ensureParticipants(playerIds);
+    await sendConfirmationEmail();
+    setSuccess(true);
+    onSuccess?.();
+  };
 
   // Helper: Register for singles event
   const registerSingles = async () => {
     setLoading(true);
     try {
+      setEmailStatus(null);
+      if (!userProfile?.id) {
+        throw new Error("Unable to determine your player profile.");
+      }
+
       const { error } = await supabase.from("event_entries").insert([{
         event_id: event.id,
         player_id: userProfile.id,
         entry_status: "pending",
       }]);
       if (error) throw error;
-      setSuccess(true);
+      await handleRegistrationSuccess([userProfile.id]);
     } catch (err: any) {
       setPairError(err.message || "Registration failed");
     } finally {
@@ -60,6 +144,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
   const registerDoubles = async () => {
     setLoading(true);
     try {
+      setEmailStatus(null);
       if (!pairId) {
         setPairError("Please create or select a pair.");
         setLoading(false);
@@ -71,7 +156,19 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
         entry_status: "pending",
       }]);
       if (error) throw error;
-      setSuccess(true);
+      let playerIds = pairMembers;
+      if (!playerIds.length) {
+        const { data: pairInfo } = await supabase
+          .from("pairs")
+          .select("player1_id, player2_id")
+          .eq("id", pairId)
+          .maybeSingle();
+        if (pairInfo) {
+          playerIds = [pairInfo.player1_id, pairInfo.player2_id].filter(Boolean) as string[];
+        }
+      }
+      const fallbackIds = playerIds.length ? playerIds : [userProfile?.id].filter(Boolean) as string[];
+      await handleRegistrationSuccess(fallbackIds);
     } catch (err: any) {
       setPairError(err.message || "Registration failed");
     } finally {
@@ -91,7 +188,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       // Find user by email
       const { data: partner, error: userError } = await supabase
         .from("player_users")
-        .select("id")
+        .select("id, full_name")
         .eq("email", partnerEmail)
         .single();
       if (userError || !partner) throw new Error("Partner not found");
@@ -102,7 +199,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       // Check if pair exists
       const { data: pair } = await supabase
         .from("pairs")
-        .select("id")
+        .select("id, player1_id, player2_id")
         .or(
           `and(player1_id.eq.${userProfile.id},player2_id.eq.${partner.id}),and(player1_id.eq.${partner.id},player2_id.eq.${userProfile.id})`
         )
@@ -114,13 +211,17 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
         const { data: newPair, error: pairError } = await supabase
           .from("pairs")
           .insert([{ player1_id: userProfile.id, player2_id: partner.id }])
-          .select("id")
+          .select("id, player1_id, player2_id")
           .single();
         if (pairError) throw pairError;
         newPairId = newPair.id;
+        setPairMembers([newPair.player1_id, newPair.player2_id]);
+      } else {
+        setPairMembers([pair.player1_id, pair.player2_id]);
       }
 
       setPairId(newPairId);
+      setPartnerName(partner.full_name ?? partnerEmail);
       setPairError("");
     } catch (err: any) {
       setPairError(err.message || "Could not create pair.");
@@ -143,7 +244,19 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
         </div>
 
         {success ? (
-          <div className="text-green-600 font-semibold mb-4">Registration successful!</div>
+          <div className="space-y-3">
+            <div className="text-green-600 font-semibold">Registration successful!</div>
+            <div className="text-sm text-gray-700">
+              Please pay the tournament entry fee at the tournament counter. The organizer will mark your payment as paid once it has been received.
+            </div>
+            {emailStatus && <div className="text-sm text-gray-600">{emailStatus}</div>}
+            <button
+              className="mt-2 w-full rounded bg-primary-500 px-4 py-2 text-white hover:bg-primary-600"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
         ) : isDoubles ? (
           <>
             <label className="block mb-2 font-medium">Partner Email</label>
@@ -162,7 +275,9 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
             >
               Find/Create Pair
             </button>
-            {pairId && <span className="text-green-700 ml-2">Pair ready!</span>}
+            {pairId && (
+              <span className="text-green-700 ml-2">Pair ready{partnerName ? ` with ${partnerName}` : ""}!</span>
+            )}
             {pairError && <div className="text-red-600 mt-2">{pairError}</div>}
             <button
               type="button"
