@@ -61,19 +61,52 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     const unique = Array.from(new Set(playerIds.filter(Boolean)));
     if (!unique.length) return;
 
+    const rows = unique.map(playerId => ({
+      tournament_id: tournament.id,
+      player_id: playerId,
+      payment_status: "pending" as const,
+    }));
+
     const { error } = await supabase
       .from("tournament_participants")
-      .upsert(
-        unique.map(playerId => ({
-          tournament_id: tournament.id,
-          player_id: playerId,
-          payment_status: "pending",
-        })),
-        { onConflict: "tournament_id,player_id" }
-      );
+      .upsert(rows, { onConflict: "tournament_id,player_id" });
 
-    if (error) {
+    if (!error) {
+      return;
+    }
+
+    const errorWithStatus = error as { status?: number };
+    const normalizedMessage = error.message?.toLowerCase() || "";
+    const isRowSecurityError =
+      error.code === "42501" ||
+      error.code === "PGRST301" ||
+      normalizedMessage.includes("row-level security") ||
+      normalizedMessage.includes("not authorized") ||
+      errorWithStatus.status === 403;
+
+    if (!isRowSecurityError) {
       throw error;
+    }
+
+    console.warn("Limited permissions prevented registering all participants", error);
+
+    const ownRows = rows.filter(row => row.player_id === userProfile?.id);
+    if (!ownRows.length) {
+      return;
+    }
+
+    const { error: fallbackError } = await supabase
+      .from("tournament_participants")
+      .upsert(ownRows, { onConflict: "tournament_id,player_id" });
+
+    const fallbackErrorWithStatus = fallbackError as { status?: number } | null;
+    if (
+      fallbackError &&
+      fallbackError.code !== "42501" &&
+      fallbackError.code !== "PGRST301" &&
+      fallbackErrorWithStatus?.status !== 403
+    ) {
+      throw fallbackError;
     }
   };
 
