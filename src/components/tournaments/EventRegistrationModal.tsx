@@ -61,20 +61,147 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     const unique = Array.from(new Set(playerIds.filter(Boolean)));
     if (!unique.length) return;
 
+    const rows = unique.map(playerId => ({
+      tournament_id: tournament.id,
+      player_id: playerId,
+      payment_status: "pending" as const,
+    }));
+
     const { error } = await supabase
       .from("tournament_participants")
-      .upsert(
-        unique.map(playerId => ({
-          tournament_id: tournament.id,
-          player_id: playerId,
-          payment_status: "pending",
-        })),
-        { onConflict: "tournament_id,player_id" }
-      );
+      .upsert(rows, { onConflict: "tournament_id,player_id" });
+
+    if (!error) {
+      return;
+    }
+
+    const errorWithStatus = error as { status?: number };
+    const normalizedMessage = error.message?.toLowerCase() || "";
+    const isRowSecurityError =
+      error.code === "42501" ||
+      error.code === "PGRST301" ||
+      normalizedMessage.includes("row-level security") ||
+      normalizedMessage.includes("not authorized") ||
+      errorWithStatus.status === 403;
+
+    if (!isRowSecurityError) {
+      throw error;
+    }
+
+    console.warn("Limited permissions prevented registering all participants", error);
+
+    const ownRows = rows.filter(row => row.player_id === userProfile?.id);
+    if (!ownRows.length) {
+      return;
+    }
+
+    const { error: fallbackError } = await supabase
+      .from("tournament_participants")
+      .upsert(ownRows, { onConflict: "tournament_id,player_id" });
+
+    const fallbackErrorWithStatus = fallbackError as { status?: number } | null;
+    if (
+      fallbackError &&
+      fallbackError.code !== "42501" &&
+      fallbackError.code !== "PGRST301" &&
+      fallbackErrorWithStatus?.status !== 403
+    ) {
+      throw fallbackError;
+    }
+  };
+
+  const assertUniqueCategoryEntry = async (playerIds: string[]) => {
+    const uniquePlayerIds = Array.from(new Set(playerIds.filter(Boolean)));
+    if (!uniquePlayerIds.length) {
+      return;
+    }
+
+    const { data: existingEntries, error: existingEntriesError } = await supabase
+      .from("event_entries")
+      .select("id, player_id, pair_id")
+      .eq("event_id", event.id);
+
+    if (existingEntriesError) {
+      throw existingEntriesError;
+    }
+
+    const entries = existingEntries ?? [];
+    const pairIds = entries
+      .map(entry => entry.pair_id)
+      .filter((id): id is string => Boolean(id));
+
+    const uniquePairIds = Array.from(new Set(pairIds));
+    const pairMembersMap = new Map<
+      string,
+      { player1_id: string | null; player2_id: string | null }
+    >();
+
+    if (uniquePairIds.length) {
+      const { data: pairRows, error: pairError } = await supabase
+        .from("pairs")
+        .select("id, player1_id, player2_id")
+        .in("id", uniquePairIds);
+
+      if (pairError) {
+        throw pairError;
+      }
+
+      (pairRows || []).forEach(pair => {
+        if (pair?.id) {
+          pairMembersMap.set(pair.id, {
+            player1_id: pair.player1_id ?? null,
+            player2_id: pair.player2_id ?? null,
+          });
+        }
+      });
+    }
+
+    const hasConflict = entries.some(entry => {
+      if (entry.player_id && uniquePlayerIds.includes(entry.player_id)) {
+        return true;
+      }
+
+      if (entry.pair_id) {
+        const pair = pairMembersMap.get(entry.pair_id);
+        if (!pair) {
+          return false;
+        }
+
+        return [pair.player1_id, pair.player2_id].some(
+          memberId => memberId && uniquePlayerIds.includes(memberId)
+        );
+      }
+
+      return false;
+    });
+
+    if (hasConflict) {
+      throw new Error(`You already have a registration for ${eventLabel}.`);
+    }
+  };
+
+  const resolvePairMembers = async (id: string) => {
+    if (pairMembers.length) {
+      return [...pairMembers];
+    }
+
+    const { data: pairInfo, error } = await supabase
+      .from("pairs")
+      .select("player1_id, player2_id")
+      .eq("id", id)
+      .maybeSingle();
 
     if (error) {
       throw error;
     }
+
+    if (!pairInfo) {
+      return [] as string[];
+    }
+
+    const members = [pairInfo.player1_id, pairInfo.player2_id].filter(Boolean) as string[];
+    setPairMembers(members);
+    return [...members];
   };
 
   const triggerRegistrationEmailRpc = async (payload: RegistrationEmailPayload) => {
@@ -145,11 +272,15 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
         throw new Error("Unable to determine your player profile.");
       }
 
-      const { error } = await supabase.from("event_entries").insert([{
-        event_id: event.id,
-        player_id: userProfile.id,
-        entry_status: "pending",
-      }]);
+      await assertUniqueCategoryEntry([userProfile.id]);
+
+      const { error } = await supabase.from("event_entries").insert([
+        {
+          event_id: event.id,
+          player_id: userProfile.id,
+          entry_status: "pending",
+        },
+      ]);
       if (error) throw error;
       await handleRegistrationSuccess([userProfile.id]);
     } catch (err: any) {
@@ -170,24 +301,20 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
         setLoading(false);
         return;
       }
-      const { error } = await supabase.from("event_entries").insert([{
-        event_id: event.id,
-        pair_id: pairId,
-        entry_status: "pending",
-      }]);
+      const members = await resolvePairMembers(pairId);
+      await assertUniqueCategoryEntry(members);
+
+      const { error } = await supabase.from("event_entries").insert([
+        {
+          event_id: event.id,
+          pair_id: pairId,
+          entry_status: "pending",
+        },
+      ]);
       if (error) throw error;
-      let playerIds = pairMembers;
-      if (!playerIds.length) {
-        const { data: pairInfo } = await supabase
-          .from("pairs")
-          .select("player1_id, player2_id")
-          .eq("id", pairId)
-          .maybeSingle();
-        if (pairInfo) {
-          playerIds = [pairInfo.player1_id, pairInfo.player2_id].filter(Boolean) as string[];
-        }
-      }
-      const fallbackIds = playerIds.length ? playerIds : [userProfile?.id].filter(Boolean) as string[];
+      const fallbackIds = members.length
+        ? members
+        : ([userProfile?.id].filter(Boolean) as string[]);
       await handleRegistrationSuccess(fallbackIds);
     } catch (err: any) {
       setErrorMessage(err.message || "Registration failed");
