@@ -765,7 +765,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
           </table>
         </div>
       )}
-    </div>
+    </div> {/* Close outer container explicitly to match opening <div> */}
   );
 };
 
