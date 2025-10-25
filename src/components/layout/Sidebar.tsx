@@ -65,7 +65,14 @@ const MENU_CONFIG_MAP = {
     { label: 'Dashboard', view: 'dashboard', icon: Home },
     { label: 'Admin Console', view: 'admin-console', icon: Settings },
     { label: 'Profile Settings', view: 'profile', icon: Users },
-    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+    {
+      label: 'Tournaments',
+      icon: Trophy,
+      children: [
+        { label: 'Overview', view: 'tournaments' },
+        { label: 'Create Tournament', view: 'create-tournament' },
+      ],
+    },
     { label: 'Analytics & Reports', view: 'analytics', icon: BarChart3 },
   ],
   Club: [
@@ -76,14 +83,27 @@ const MENU_CONFIG_MAP = {
     { label: 'View Bookings', view: 'view-bookings', icon: Calendar },
     { label: 'Approve Requests', view: 'approve-requests', icon: CheckSquare },
     { label: 'Reports & Analytics', view: 'analytics', icon: BookOpen },
-    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+    {
+      label: 'Tournaments',
+      icon: Trophy,
+      children: [
+        { label: 'Manage Tournaments', view: 'tournaments' },
+        { label: 'Create Tournament', view: 'create-tournament' },
+      ],
+    },
   ],
   Organizer: [
     { label: 'Dashboard', view: 'dashboard', icon: Home },
     { label: 'Manage Bookings', view: 'manage-bookings', icon: List },
     { label: 'Create Slots', view: 'manage-slots', icon: Clock },
-    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
-    { label: 'Create Tournament', view: 'create-tournament', icon: Plus },
+    {
+      label: 'Tournaments',
+      icon: Trophy,
+      children: [
+        { label: 'Manage Tournaments', view: 'tournaments' },
+        { label: 'Create Tournament', view: 'create-tournament' },
+      ],
+    },
     { label: 'Reports & Analytics', view: 'analytics', icon: BarChart3 },
   ],
   Player: [
