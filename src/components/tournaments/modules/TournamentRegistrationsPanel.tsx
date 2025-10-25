@@ -4,6 +4,7 @@ import { useAuthStore } from "../../../store/authStore";
 
 interface RegistrationRow {
   id: string;
+  source: "event_entries" | "tournament_registrations";
   status?: string | null;
   created_at?: string | null;
   player?: { id: string; name?: string | null } | null;
@@ -34,9 +35,12 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const [usingLegacyTable, setUsingLegacyTable] = useState(false);
   const [participantPayments, setParticipantPayments] = useState<Record<string, string>>({});
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const { userProfile } = useAuthStore();
   const canManagePayments =
     userProfile?.type === "Organizer" || userProfile?.type === "Club" || userProfile?.type === "Administrator";
+  const canManageEntries = canManagePayments;
 
   const loadParticipantPayments = async () => {
     const { data, error } = await supabase
@@ -251,6 +255,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
 
       return {
         id: row.id,
+        source: "event_entries",
         status: row.entry_status,
         created_at: row.inserted_at ?? row.created_at ?? null,
         player: resolveParticipant(row.player_id),
@@ -373,6 +378,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
 
       return {
         id: row.id,
+        source: "tournament_registrations",
         status: row.status,
         created_at: row.inserted_at ?? row.created_at ?? null,
         player: row.player_id
@@ -530,6 +536,63 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
       return next;
     });
   };
+
+  const updateEntryStatus = async (row: RegistrationRow) => {
+    const currentStatus = row.status ?? "pending";
+    const nextStatus = window.prompt("Update entry status", currentStatus);
+    if (nextStatus === null) {
+      return;
+    }
+
+    const trimmed = nextStatus.trim();
+    if (!trimmed || trimmed === currentStatus) {
+      return;
+    }
+
+    setUpdatingStatusId(row.id);
+    try {
+      if (row.source === "event_entries") {
+        const { error } = await supabase.from("event_entries").update({ entry_status: trimmed }).eq("id", row.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("tournament_registrations")
+          .update({ status: trimmed })
+          .eq("id", row.id);
+        if (error) throw error;
+      }
+
+      setRows(prev => prev.map(item => (item.id === row.id ? { ...item, status: trimmed } : item)));
+    } catch (err: any) {
+      alert(`Failed to update registration: ${err.message || err}`);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  const deleteRegistration = async (row: RegistrationRow) => {
+    if (!window.confirm("Are you sure you want to delete this registration?")) {
+      return;
+    }
+
+    setDeletingEntryId(row.id);
+    try {
+      if (row.source === "event_entries") {
+        const { error } = await supabase.from("event_entries").delete().eq("id", row.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("tournament_registrations").delete().eq("id", row.id);
+        if (error) throw error;
+      }
+
+      setRows(prev => prev.filter(item => item.id !== row.id));
+    } catch (err: any) {
+      alert(`Failed to delete registration: ${err.message || err}`);
+    } finally {
+      setDeletingEntryId(null);
+    }
+  };
+
   if (loading) {
     return <div className="p-4">Loading registrations...</div>;
   }
@@ -635,6 +698,9 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Payment</th>
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Status</th>
                 <th className="px-4 py-2 text-left font-semibold text-gray-600">Registered On</th>
+                {canManageEntries && (
+                  <th className="px-4 py-2 text-left font-semibold text-gray-600">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
@@ -672,6 +738,26 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
                     </td>
                     <td className="px-4 py-2 capitalize">{row.status || "pending"}</td>
                     <td className="px-4 py-2">{formatDateTime(row.created_at)}</td>
+                    {canManageEntries && (
+                      <td className="px-4 py-2">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                            onClick={() => updateEntryStatus(row)}
+                            disabled={updatingStatusId === row.id}
+                          >
+                            {updatingStatusId === row.id ? "Saving..." : "Edit status"}
+                          </button>
+                          <button
+                            className="text-xs font-medium text-red-600 hover:text-red-700"
+                            onClick={() => deleteRegistration(row)}
+                            disabled={deletingEntryId === row.id}
+                          >
+                            {deletingEntryId === row.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
