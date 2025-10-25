@@ -191,7 +191,20 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       .eq("id", id)
       .maybeSingle();
 
-    if (error) {
+    if (!error) {
+      return;
+    }
+
+    const errorWithStatus = error as { status?: number };
+    const normalizedMessage = error.message?.toLowerCase() || "";
+    const isRowSecurityError =
+      error.code === "42501" ||
+      error.code === "PGRST301" ||
+      normalizedMessage.includes("row-level security") ||
+      normalizedMessage.includes("not authorized") ||
+      errorWithStatus.status === 403;
+
+    if (!isRowSecurityError) {
       throw error;
     }
 
@@ -202,6 +215,26 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     const members = [pairInfo.player1_id, pairInfo.player2_id].filter(Boolean) as string[];
     setPairMembers(members);
     return [...members];
+    console.warn("Limited permissions prevented registering all participants", error);
+
+    const ownRows = rows.filter(row => row.player_id === userProfile?.id);
+    if (!ownRows.length) {
+      return;
+    }
+
+    const { error: fallbackError } = await supabase
+      .from("tournament_participants")
+      .upsert(ownRows, { onConflict: "tournament_id,player_id" });
+
+    const fallbackErrorWithStatus = fallbackError as { status?: number } | null;
+    if (
+      fallbackError &&
+      fallbackError.code !== "42501" &&
+      fallbackError.code !== "PGRST301" &&
+      fallbackErrorWithStatus?.status !== 403
+    ) {
+      throw fallbackError;
+    }
   };
 
   const triggerRegistrationEmailRpc = async (payload: RegistrationEmailPayload) => {
