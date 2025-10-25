@@ -4,6 +4,7 @@ import {
   BarChart3,
   Calendar,
   CheckSquare,
+  ChevronDown,
   Clock,
   Home,
   List,
@@ -30,15 +31,26 @@ type ViewKey =
   | 'view-bookings'
   | 'tournaments'
   | 'create-tournament'
+  | 'tournaments-join'
+  | 'tournaments-registered'
+  | 'tournaments-draws'
+  | 'tournaments-schedules'
+  | 'tournaments-results'
   | 'profile'
   | 'find-clubs'
   | 'analytics'
   | 'admin-console';
 
-type Item = {
+type ChildItem = {
   label: string;
   view: ViewKey;
+};
+
+type Item = {
+  label: string;
   icon: IconType;
+  view?: ViewKey;
+  children?: ChildItem[];
 };
 
 interface SidebarProps {
@@ -79,14 +91,34 @@ const MENU_CONFIG_MAP = {
     { label: 'Book Courts', view: 'book-court', icon: Plus },
     { label: 'My Bookings', view: 'my-bookings', icon: Clock },
     { label: 'Search Clubs', view: 'find-clubs', icon: MapPin },
-    { label: 'Join Tournaments', view: 'tournaments', icon: Trophy },
+    {
+      label: 'Tournaments',
+      icon: Trophy,
+      children: [
+        { label: 'Join Tournament', view: 'tournaments-join' },
+        { label: 'Registered Tournaments', view: 'tournaments-registered' },
+        { label: 'Draws', view: 'tournaments-draws' },
+        { label: 'Schedules', view: 'tournaments-schedules' },
+        { label: 'Results', view: 'tournaments-results' },
+      ],
+    },
   ],
   Group: [
     { label: 'Dashboard', view: 'dashboard', icon: Home },
     { label: 'Manage Bookings', view: 'manage-bookings', icon: List },
     { label: 'My Bookings', view: 'my-bookings', icon: Calendar },
     { label: 'Reports & Analytics', view: 'analytics', icon: BarChart3 },
-    { label: 'Tournaments', view: 'tournaments', icon: Trophy },
+    {
+      label: 'Tournaments',
+      icon: Trophy,
+      children: [
+        { label: 'Join Tournament', view: 'tournaments-join' },
+        { label: 'Registered Tournaments', view: 'tournaments-registered' },
+        { label: 'Draws', view: 'tournaments-draws' },
+        { label: 'Schedules', view: 'tournaments-schedules' },
+        { label: 'Results', view: 'tournaments-results' },
+      ],
+    },
   ],
 } satisfies Record<string, Item[]>;
 
@@ -115,6 +147,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { userProfile } = useAuthStore();
   const normalizedRole = normalizeRole(userProfile?.type);
   const items = MENU_CONFIG[normalizedRole];
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
 
   const handleChange = (view: ViewKey) => {
     onViewChange(view);
@@ -124,6 +157,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const isActive = (view: ViewKey) => activeView === view;
+
+  const toggleSection = (label: string) => {
+    setExpanded(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  React.useEffect(() => {
+    setExpanded(prev => {
+      const next = { ...prev };
+      items.forEach(item => {
+        if (item.children?.some(child => isActive(child.view))) {
+          next[item.label] = true;
+        }
+      });
+      return next;
+    });
+  }, [items, activeView]);
 
   return (
     <>
@@ -147,20 +196,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div className="p-3">
           <nav className="space-y-1">
-            {items.map(({ label, view, icon: Icon }) => (
-              <button
-                key={view}
-                onClick={() => handleChange(view)}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                  isActive(view)
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
-                }`}
-              >
-                <Icon className={`h-5 w-5 ${isActive(view) ? 'text-primary-500' : 'text-text-secondary'}`} />
-                <span className="font-medium">{label}</span>
-              </button>
-            ))}
+            {items.map(item => {
+              const { label, view, icon: Icon, children } = item;
+              const hasChildren = Array.isArray(children) && children.length > 0;
+              const childActive = hasChildren && children.some(child => isActive(child.view));
+              const isParentActive = (view && isActive(view)) || childActive;
+              const isOpenSection = hasChildren ? expanded[label] || childActive : false;
+
+              return (
+                <div key={label}>
+                  <button
+                    onClick={() => {
+                      if (hasChildren) {
+                        toggleSection(label);
+                      } else if (view) {
+                        handleChange(view);
+                      }
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                      isParentActive
+                        ? 'bg-primary-50 text-primary-600'
+                        : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
+                    }`}
+                  >
+                    <Icon className={`h-5 w-5 ${isParentActive ? 'text-primary-500' : 'text-text-secondary'}`} />
+                    <span className="font-medium">{label}</span>
+                    {hasChildren && (
+                      <ChevronDown
+                        className={`ml-auto h-4 w-4 transition-transform ${isOpenSection ? 'rotate-180 text-primary-500' : 'text-text-secondary'}`}
+                      />
+                    )}
+                  </button>
+
+                  {hasChildren && (
+                    <div className={`mt-1 space-y-1 ${isOpenSection ? 'block' : 'hidden'}`}>
+                      {children.map(child => {
+                        const activeChild = isActive(child.view);
+                        return (
+                          <button
+                            key={child.view}
+                            onClick={() => handleChange(child.view)}
+                            className={`flex w-full items-center gap-2 rounded-lg pl-11 pr-3 py-2 text-sm transition ${
+                              activeChild
+                                ? 'bg-primary-100 text-primary-600'
+                                : 'text-text-secondary hover:bg-background-subtle hover:text-text-primary'
+                            }`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${activeChild ? 'bg-primary-500' : 'bg-text-secondary/40'}`}
+                            />
+                            <span className="font-medium">{child.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </div>
       </div>

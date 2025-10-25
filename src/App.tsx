@@ -22,6 +22,11 @@ import { TournamentsList } from './components/tournaments/TournamentsList';
 import { CreateTournament } from './components/tournaments/CreateTournament';
 import TournamentDetails from './components/tournaments/tournamentdetails';
 import EditTournament from './components/tournaments/EditTournament';
+import PlayerJoinTournaments from './components/tournaments/player/PlayerJoinTournaments';
+import PlayerRegisteredTournaments from './components/tournaments/player/PlayerRegisteredTournaments';
+import PlayerTournamentDraws from './components/tournaments/player/PlayerTournamentDraws';
+import PlayerTournamentSchedules from './components/tournaments/player/PlayerTournamentSchedules';
+import PlayerTournamentResults from './components/tournaments/player/PlayerTournamentResults';
 import { ProfileSettings } from './components/profile/ProfileSettings';
 import { FindClubs } from './components/clubs/FindClubs';
 import { Analytics } from './components/analytics/Analytics';
@@ -46,6 +51,11 @@ const VIEW_TO_PATH: Record<string, string> = {
   'manage-bookings': '/manage-bookings',
   'view-bookings': '/view-bookings',
   tournaments: '/tournaments',
+  'tournaments-join': '/tournaments/join',
+  'tournaments-registered': '/tournaments/registered',
+  'tournaments-draws': '/tournaments/draws',
+  'tournaments-schedules': '/tournaments/schedules',
+  'tournaments-results': '/tournaments/results',
   'create-tournament': '/create-tournament',
   profile: '/profile',
   'find-clubs': '/find-clubs',
@@ -200,6 +210,11 @@ function App() {
           <Route path="/manage-bookings" element={<ManageBookings />} />
           <Route path="/view-bookings" element={<ViewBookings />} />
           <Route path="/tournaments" element={<TournamentsList />} />
+          <Route path="/tournaments/join" element={<PlayerJoinTournaments />} />
+          <Route path="/tournaments/registered" element={<PlayerRegisteredTournaments />} />
+          <Route path="/tournaments/draws" element={<PlayerTournamentDraws />} />
+          <Route path="/tournaments/schedules" element={<PlayerTournamentSchedules />} />
+          <Route path="/tournaments/results" element={<PlayerTournamentResults />} />
           <Route path="/tournaments/:id" element={<TournamentDetails />} />
           <Route path="/tournaments/edit/:id" element={<EditTournament />} />
           <Route path="/create-tournament" element={<CreateTournament />} />
