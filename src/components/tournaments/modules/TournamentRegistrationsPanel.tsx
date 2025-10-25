@@ -787,6 +787,7 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
           </table>
         </div>
       )}
+    </div> {/* Close outer container explicitly to match opening <div> */}
       {editingContext && (
         <EditRegistrationModal
           row={editingContext.row}
