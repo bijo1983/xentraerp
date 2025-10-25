@@ -35,6 +35,7 @@ type PlayerSearchResult = {
   id: string;
   full_name?: string | null;
   email?: string | null;
+  phone_number?: string | null;
 };
 
 interface Props {
@@ -413,8 +414,8 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
 
       const { data, error } = await supabase
         .from("player_users")
-        .select("id, full_name, email")
-        .or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
+        .select("id, full_name, email, phone_number")
+        .or(`full_name.ilike.${pattern},email.ilike.${pattern},phone_number.ilike.${pattern}`)
         .limit(10);
 
       if (!active) {
@@ -441,7 +442,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
 
   const handleSelectPartner = (partner: PlayerSearchResult) => {
     setSelectedPartner(partner);
-    setPartnerQuery(partner.full_name || partner.email || "");
+    setPartnerQuery(partner.full_name || partner.email || partner.phone_number || "");
     setPartnerResults([]);
   };
 
@@ -492,13 +493,15 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
                 setPartnerQuery(event.target.value);
                 setSelectedPartner(null);
               }}
-              placeholder="Start typing a name or email"
+              placeholder="Start typing a name, email, or phone number"
               className="w-full border rounded p-2 mb-2"
               disabled={loading}
             />
             {selectedPartner && (
               <div className="mb-2 flex items-center justify-between rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                <span>Selected partner: {selectedPartner.full_name || selectedPartner.email || selectedPartner.id}</span>
+                <span>
+                  Selected partner: {selectedPartner.full_name || selectedPartner.email || selectedPartner.phone_number || selectedPartner.id}
+                </span>
                 <button type="button" onClick={handleClearPartner} className="text-xs font-medium underline">
                   Change
                 </button>
@@ -518,7 +521,12 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
                           className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-primary-50"
                         >
                           <span className="font-medium text-gray-900">{result.full_name || "Unnamed player"}</span>
-                          <span className="text-xs text-gray-500">{result.email || "No email"}</span>
+                          <span className="text-xs text-gray-500">
+                            {result.email || result.phone_number || "No contact details"}
+                          </span>
+                          {result.email && result.phone_number && (
+                            <span className="text-xs text-gray-500">{result.phone_number}</span>
+                          )}
                         </button>
                       </li>
                     ))}
