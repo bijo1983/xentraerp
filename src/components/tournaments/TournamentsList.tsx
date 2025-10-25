@@ -1,10 +1,11 @@
 // src/components/tournaments/TournamentsList.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Pencil, Trash2, Save, Plus, Loader2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import type { UserProfile } from "../../store/authStore";
+import PlayerJoinTournaments from "./player/PlayerJoinTournaments";
 import EventRegistrationModal from "./EventRegistrationModal";
 import PendingPairInvitations from "./PendingPairInvitations";
 
@@ -740,7 +741,7 @@ export const TournamentsList: React.FC = () => {
   }
 
   if (userProfile.type === "Player" || userProfile.type === "Group") {
-    return <JoinTournamentsView userCountryId={userProfile.country_id} />;
+    return <PlayerJoinTournaments />;
   }
 
   return <ManageTournamentsView userProfile={userProfile} />;
