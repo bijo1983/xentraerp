@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import type { UserProfile } from "../../store/authStore";
 import EventRegistrationModal from "./EventRegistrationModal";
+import PendingPairInvitations from "./PendingPairInvitations";
 
 const statusOptions = ["upcoming","registration_open","ongoing","completed","cancelled"] as const;
 
@@ -106,6 +107,7 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
   const [modalEvent, setModalEvent] = useState<TournamentEventSummary | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [countryInitialized, setCountryInitialized] = useState(false);
+  const { userProfile } = useAuthStore();
 
   const countryMap = useMemo(() => {
     const map = new Map<string, CountryRow>();
@@ -286,7 +288,15 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
     setModalEvent(null);
   };
 
-  const handleRegistrationSuccess = (event: TournamentEventSummary) => {
+  const handleRegistrationSuccess = (
+    event: TournamentEventSummary,
+    options?: { message?: string },
+  ) => {
+    if (options?.message) {
+      setSuccessMessage(options.message);
+      return;
+    }
+
     setSuccessMessage(`You have registered for ${formatEventLabel(event)}. Check your email for confirmation.`);
   };
 
@@ -303,6 +313,9 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
 
         <div className="grid gap-6 md:grid-cols-3">
           <div className="space-y-6 md:col-span-1">
+            {userProfile?.type === "Player" && (
+              <PendingPairInvitations onHandled={message => setSuccessMessage(message)} />
+            )}
             <div className="bg-background rounded-xl shadow p-4">
               <label className="block text-sm font-medium text-text-secondary mb-2">Select Country</label>
               <select
@@ -458,7 +471,7 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
           }}
           currency={resolvedCurrency}
           onClose={handleModalClose}
-          onSuccess={() => handleRegistrationSuccess(modalEvent)}
+          onSuccess={details => handleRegistrationSuccess(modalEvent, details)}
         />
       )}
     </div>
