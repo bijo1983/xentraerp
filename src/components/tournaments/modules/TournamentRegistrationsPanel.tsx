@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { useAuthStore } from "../../../store/authStore";
+import { ensureTournamentParticipants } from "../utils/ensureTournamentParticipants";
 
 interface RegistrationRow {
   id: string;
@@ -26,6 +27,29 @@ interface Props {
   tournamentId: string;
 }
 
+const DEFAULT_STATUS_OPTIONS = [
+  "pending",
+  "accepted",
+  "confirmed",
+  "checked_in",
+  "waitlisted",
+  "cancelled",
+  "withdrawn",
+  "completed",
+  "disqualified",
+];
+
+type EditContext = {
+  row: RegistrationRow;
+  eventLabel: string;
+};
+
+type PlayerOption = {
+  id: string;
+  full_name?: string | null;
+  email?: string | null;
+};
+
 const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const [rows, setRows] = useState<RegistrationRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,12 +59,13 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const [usingLegacyTable, setUsingLegacyTable] = useState(false);
   const [participantPayments, setParticipantPayments] = useState<Record<string, string>>({});
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
-  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
+  const [editingContext, setEditingContext] = useState<EditContext | null>(null);
   const { userProfile } = useAuthStore();
   const canManagePayments =
     userProfile?.type === "Organizer" || userProfile?.type === "Club" || userProfile?.type === "Administrator";
   const canManageEntries = canManagePayments;
+  const actingPlayerId = userProfile?.type === "Player" ? userProfile.id ?? null : null;
 
   const loadParticipantPayments = async () => {
     const { data, error } = await supabase
@@ -511,6 +536,35 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
     }
   };
 
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>(DEFAULT_STATUS_OPTIONS);
+    rows.forEach(row => {
+      const normalized = (row.status || "").trim().toLowerCase();
+      if (normalized) {
+        set.add(normalized);
+      }
+    });
+    return Array.from(set).sort();
+  }, [rows]);
+
+  const openEditRegistration = (row: RegistrationRow) => {
+    setEditingContext({ row, eventLabel: buildEventLabel(row.event) });
+  };
+
+  const handleEditSaved = (updatedRow: RegistrationRow, options?: { refreshPayments?: boolean }) => {
+    setRows(prev => prev.map(item => (item.id === updatedRow.id ? updatedRow : item)));
+    if (options?.refreshPayments) {
+      void loadParticipantPayments();
+    }
+  };
+
+  const handleCloseEditor = () => setEditingContext(null);
+
+  const handleModalSaved = (updatedRow: RegistrationRow, options?: { refreshPayments?: boolean }) => {
+    handleEditSaved(updatedRow, options);
+    setEditingContext(null);
+  };
+
   const updatePaymentStatus = async (row: RegistrationRow, status: "paid" | "pending") => {
     const playerIds = gatherPlayerIds(row);
     if (!playerIds.length) return;
@@ -535,39 +589,6 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
       });
       return next;
     });
-  };
-
-  const updateEntryStatus = async (row: RegistrationRow) => {
-    const currentStatus = row.status ?? "pending";
-    const nextStatus = window.prompt("Update entry status", currentStatus);
-    if (nextStatus === null) {
-      return;
-    }
-
-    const trimmed = nextStatus.trim();
-    if (!trimmed || trimmed === currentStatus) {
-      return;
-    }
-
-    setUpdatingStatusId(row.id);
-    try {
-      if (row.source === "event_entries") {
-        const { error } = await supabase.from("event_entries").update({ entry_status: trimmed }).eq("id", row.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("tournament_registrations")
-          .update({ status: trimmed })
-          .eq("id", row.id);
-        if (error) throw error;
-      }
-
-      setRows(prev => prev.map(item => (item.id === row.id ? { ...item, status: trimmed } : item)));
-    } catch (err: any) {
-      alert(`Failed to update registration: ${err.message || err}`);
-    } finally {
-      setUpdatingStatusId(null);
-    }
   };
 
   const deleteRegistration = async (row: RegistrationRow) => {
@@ -604,12 +625,13 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
   const totalRegistrations = rows.length;
 
   return (
-    <div className="space-y-6">
-      {usingLegacyTable && (
-        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          Displaying registrations from the legacy tournament_registrations table.
-        </div>
-      )}
+    <>
+      <div className="space-y-6">
+        {usingLegacyTable && (
+          <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            Displaying registrations from the legacy tournament_registrations table.
+          </div>
+        )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded border bg-white p-4 shadow-sm">
@@ -743,10 +765,10 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
                         <div className="flex flex-col gap-1">
                           <button
                             className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                            onClick={() => updateEntryStatus(row)}
-                            disabled={updatingStatusId === row.id}
+                            onClick={() => openEditRegistration(row)}
+                            disabled={editingContext?.row.id === row.id}
                           >
-                            {updatingStatusId === row.id ? "Saving..." : "Edit status"}
+                            Edit registration
                           </button>
                           <button
                             className="text-xs font-medium text-red-600 hover:text-red-700"
@@ -765,6 +787,482 @@ const TournamentRegistrationsPanel: React.FC<Props> = ({ tournamentId }) => {
           </table>
         </div>
       )}
+      {editingContext && (
+        <EditRegistrationModal
+          row={editingContext.row}
+          eventLabel={editingContext.eventLabel}
+          statusOptions={statusOptions}
+          onClose={handleCloseEditor}
+          onSaved={handleModalSaved}
+          tournamentId={tournamentId}
+          actingPlayerId={actingPlayerId}
+        />
+      )}
+    </>
+  );
+};
+
+interface EditRegistrationModalProps {
+  row: RegistrationRow;
+  eventLabel: string;
+  statusOptions: string[];
+  onClose: () => void;
+  onSaved: (row: RegistrationRow, options?: { refreshPayments?: boolean }) => void;
+  tournamentId: string;
+  actingPlayerId: string | null;
+}
+
+const formatPlayerOption = (option?: PlayerOption | null) =>
+  option?.full_name || option?.email || option?.id || "Player not selected";
+
+const toParticipant = (option: PlayerOption | null): { id: string; name?: string | null } | null => {
+  if (!option) return null;
+  return { id: option.id, name: option.full_name ?? option.email ?? null };
+};
+
+const escapeLikePattern = (value: string) => value.replace(/[\\%_]/g, match => `\\${match}`);
+
+const EditRegistrationModal: React.FC<EditRegistrationModalProps> = ({
+  row,
+  eventLabel,
+  statusOptions,
+  onClose,
+  onSaved,
+  tournamentId,
+  actingPlayerId,
+}) => {
+  const [statusDraft, setStatusDraft] = useState<string>((row.status || "pending").toLowerCase());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isPairEntry = row.source === "event_entries" && Boolean(row.pair);
+
+  const [playerOne, setPlayerOne] = useState<PlayerOption | null>(
+    row.pair?.player1?.id ? { id: row.pair.player1.id, full_name: row.pair.player1.name ?? null } : null,
+  );
+  const [playerTwo, setPlayerTwo] = useState<PlayerOption | null>(
+    row.pair?.player2?.id ? { id: row.pair.player2.id, full_name: row.pair.player2.name ?? null } : null,
+  );
+  const [playerOneQuery, setPlayerOneQuery] = useState("");
+  const [playerTwoQuery, setPlayerTwoQuery] = useState("");
+  const [playerOneResults, setPlayerOneResults] = useState<PlayerOption[]>([]);
+  const [playerTwoResults, setPlayerTwoResults] = useState<PlayerOption[]>([]);
+  const [searchingOne, setSearchingOne] = useState(false);
+  const [searchingTwo, setSearchingTwo] = useState(false);
+
+  useEffect(() => {
+    if (!isPairEntry) {
+      setPlayerOneResults([]);
+      setSearchingOne(false);
+      return;
+    }
+
+    const term = playerOneQuery.trim();
+    if (term.length < 2) {
+      setPlayerOneResults([]);
+      setSearchingOne(false);
+      return;
+    }
+
+    let active = true;
+    const run = async () => {
+      setSearchingOne(true);
+      const escaped = escapeLikePattern(term);
+      const pattern = `%${escaped}%`;
+      const { data, error } = await supabase
+        .from("player_users")
+        .select("id, full_name, email")
+        .or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
+        .limit(10);
+
+      if (!active) {
+        return;
+      }
+
+      if (error) {
+        console.error("Failed to search players", error);
+        setPlayerOneResults([]);
+      } else {
+        const filtered = (data || []).filter((row: any) => row.id && row.id !== playerTwo?.id);
+        setPlayerOneResults(filtered as PlayerOption[]);
+      }
+
+      setSearchingOne(false);
+    };
+
+    void run();
+
+    return () => {
+      active = false;
+    };
+  }, [isPairEntry, playerOneQuery, playerTwo?.id]);
+
+  useEffect(() => {
+    if (!isPairEntry) {
+      setPlayerTwoResults([]);
+      setSearchingTwo(false);
+      return;
+    }
+
+    const term = playerTwoQuery.trim();
+    if (term.length < 2) {
+      setPlayerTwoResults([]);
+      setSearchingTwo(false);
+      return;
+    }
+
+    let active = true;
+    const run = async () => {
+      setSearchingTwo(true);
+      const escaped = escapeLikePattern(term);
+      const pattern = `%${escaped}%`;
+      const { data, error } = await supabase
+        .from("player_users")
+        .select("id, full_name, email")
+        .or(`full_name.ilike.${pattern},email.ilike.${pattern}`)
+        .limit(10);
+
+      if (!active) {
+        return;
+      }
+
+      if (error) {
+        console.error("Failed to search players", error);
+        setPlayerTwoResults([]);
+      } else {
+        const filtered = (data || []).filter((row: any) => row.id && row.id !== playerOne?.id);
+        setPlayerTwoResults(filtered as PlayerOption[]);
+      }
+
+      setSearchingTwo(false);
+    };
+
+    void run();
+
+    return () => {
+      active = false;
+    };
+  }, [isPairEntry, playerTwoQuery, playerOne?.id]);
+
+  const handleSelectPlayerOne = (option: PlayerOption) => {
+    setPlayerOne(option);
+    setPlayerOneQuery("");
+    setPlayerOneResults([]);
+  };
+
+  const handleSelectPlayerTwo = (option: PlayerOption) => {
+    setPlayerTwo(option);
+    setPlayerTwoQuery("");
+    setPlayerTwoResults([]);
+  };
+
+  const handleSave = async () => {
+    const trimmedStatus = statusDraft.trim().toLowerCase();
+    if (!trimmedStatus) {
+      setError("Status is required.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const nextRow: RegistrationRow = { ...row, status: trimmedStatus };
+      let refreshPayments = false;
+
+      if (row.source === "event_entries") {
+        const updates: Record<string, any> = {};
+        if (trimmedStatus !== (row.status || "pending").toLowerCase()) {
+          updates.entry_status = trimmedStatus;
+        }
+
+        if (isPairEntry) {
+          const newPlayers = [playerOne?.id, playerTwo?.id].filter((id): id is string => Boolean(id));
+          const originalPlayers = [row.pair?.player1?.id, row.pair?.player2?.id].filter(
+            (id): id is string => Boolean(id),
+          );
+
+          if (newPlayers.length !== 2) {
+            throw new Error("Select two different players for this pair.");
+          }
+
+          if (newPlayers[0] === newPlayers[1]) {
+            throw new Error("Select two different players for this pair.");
+          }
+
+          const sortedOriginal = [...originalPlayers].sort();
+          const sortedNew = [...newPlayers].sort();
+          const membershipChanged =
+            sortedOriginal.length !== sortedNew.length ||
+            sortedOriginal.some((value, index) => value !== sortedNew[index]);
+
+          let pairId = row.pair?.id ?? null;
+
+          if (membershipChanged || !pairId) {
+            const [first, second] = newPlayers;
+            const { data: existingPair, error: pairLookupError } = await supabase
+              .from("pairs")
+              .select("id")
+              .or(
+                `and(player1_id.eq.${first},player2_id.eq.${second}),and(player1_id.eq.${second},player2_id.eq.${first})`,
+              )
+              .maybeSingle();
+
+            if (pairLookupError && pairLookupError.code !== "PGRST116") {
+              throw pairLookupError;
+            }
+
+            pairId = existingPair?.id ?? pairId;
+
+            if (!pairId) {
+              const { data: createdPair, error: createPairError } = await supabase
+                .from("pairs")
+                .insert([{ player1_id: first, player2_id: second }])
+                .select("id")
+                .single();
+
+              if (createPairError) {
+                throw createPairError;
+              }
+
+              pairId = createdPair.id;
+            }
+
+            if (pairId && pairId !== row.pair?.id) {
+              updates.pair_id = pairId;
+            }
+
+            refreshPayments = membershipChanged;
+            await ensureTournamentParticipants(tournamentId, newPlayers, actingPlayerId ?? null);
+          }
+
+          const finalPairId = pairId ?? row.pair?.id ?? null;
+          nextRow.pair = finalPairId
+            ? {
+                id: finalPairId,
+                player1: toParticipant(playerOne),
+                player2: toParticipant(playerTwo),
+              }
+            : row.pair;
+        }
+
+        if (Object.keys(updates).length) {
+          const { error: updateError } = await supabase.from("event_entries").update(updates).eq("id", row.id);
+          if (updateError) {
+            throw updateError;
+          }
+        }
+      } else if (trimmedStatus !== (row.status || "pending").toLowerCase()) {
+        const { error: legacyError } = await supabase
+          .from("tournament_registrations")
+          .update({ status: trimmedStatus })
+          .eq("id", row.id);
+
+        if (legacyError) {
+          throw legacyError;
+        }
+      }
+
+      onSaved(nextRow, { refreshPayments });
+    } catch (err: any) {
+      console.error("Failed to update registration", err);
+      setError(err.message || "Unable to update the registration.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+      <div className="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Edit registration</h2>
+            <p className="text-sm text-gray-600">{eventLabel}</p>
+            {row.player?.name && (
+              <p className="text-xs text-gray-500">Primary contact: {row.player.name}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-gray-100 px-2 py-1 text-sm font-medium text-gray-600 hover:bg-gray-200"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-5">
+          <label className="block text-sm font-medium text-gray-700">
+            Entry status
+            <input
+              list="registration-status-options"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              value={statusDraft}
+              onChange={event => setStatusDraft(event.target.value.toLowerCase())}
+              placeholder="Enter a status"
+              disabled={saving}
+            />
+            <datalist id="registration-status-options">
+              {statusOptions.map(option => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </label>
+
+          {row.source === "event_entries" && !isPairEntry && (
+            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Pair details are unavailable until both players have been confirmed.
+            </div>
+          )}
+
+          {isPairEntry && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">Update doubles pair</h3>
+                <p className="text-xs text-gray-500">
+                  Search by name or email to replace either player in this pair. Each partner must be unique.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase text-gray-500">Player 1</div>
+                  {playerOne ? (
+                    <div className="flex items-center justify-between rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                      <span>{formatPlayerOption(playerOne)}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlayerOne(null);
+                          setPlayerOneQuery("");
+                          setPlayerOneResults([]);
+                        }}
+                        className="font-medium text-green-700 underline"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                      Select a player to occupy this slot.
+                    </div>
+                  )}
+                  <input
+                    type="search"
+                    value={playerOneQuery}
+                    onChange={event => setPlayerOneQuery(event.target.value)}
+                    placeholder="Search by name or email"
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    disabled={saving}
+                  />
+                  {playerOneQuery.trim().length >= 2 && (
+                    <div className="max-h-48 overflow-y-auto rounded border border-gray-200 bg-gray-50">
+                      {searchingOne ? (
+                        <div className="px-3 py-2 text-xs text-gray-500">Searching players...</div>
+                      ) : playerOneResults.length ? (
+                        <ul>
+                          {playerOneResults.map(option => (
+                            <li key={option.id}>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectPlayerOne(option)}
+                                className="flex w-full flex-col items-start px-3 py-2 text-left text-xs hover:bg-primary-50"
+                              >
+                                <span className="font-medium text-gray-900">{option.full_name || "Unnamed player"}</span>
+                                <span className="text-[11px] text-gray-500">{option.email || option.id}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-gray-500">No players match your search.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase text-gray-500">Player 2</div>
+                  {playerTwo ? (
+                    <div className="flex items-center justify-between rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                      <span>{formatPlayerOption(playerTwo)}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlayerTwo(null);
+                          setPlayerTwoQuery("");
+                          setPlayerTwoResults([]);
+                        }}
+                        className="font-medium text-green-700 underline"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                      Select a player to occupy this slot.
+                    </div>
+                  )}
+                  <input
+                    type="search"
+                    value={playerTwoQuery}
+                    onChange={event => setPlayerTwoQuery(event.target.value)}
+                    placeholder="Search by name or email"
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    disabled={saving}
+                  />
+                  {playerTwoQuery.trim().length >= 2 && (
+                    <div className="max-h-48 overflow-y-auto rounded border border-gray-200 bg-gray-50">
+                      {searchingTwo ? (
+                        <div className="px-3 py-2 text-xs text-gray-500">Searching players...</div>
+                      ) : playerTwoResults.length ? (
+                        <ul>
+                          {playerTwoResults.map(option => (
+                            <li key={option.id}>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectPlayerTwo(option)}
+                                className="flex w-full flex-col items-start px-3 py-2 text-left text-xs hover:bg-primary-50"
+                              >
+                                <span className="font-medium text-gray-900">{option.full_name || "Unnamed player"}</span>
+                                <span className="text-[11px] text-gray-500">{option.email || option.id}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-gray-500">No players match your search.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && <div className="text-sm text-red-600">{error}</div>}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="rounded bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

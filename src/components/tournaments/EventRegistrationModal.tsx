@@ -57,6 +57,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
   const [searchingPartner, setSearchingPartner] = useState(false);
   const [successTitle, setSuccessTitle] = useState("Registration successful!");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pairMembers, setPairMembers] = useState<string[]>([]);
 
   const eventLabel = useMemo(() => {
     const parts: string[] = [event.event_type];
@@ -65,59 +66,6 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     if (event.gender) parts.push(event.gender);
     return parts.filter(Boolean).join(" · ");
   }, [event]);
-
-  const ensureParticipants = async (playerIds: string[]) => {
-    const unique = Array.from(new Set(playerIds.filter(Boolean)));
-    if (!unique.length) return;
-
-    const rows = unique.map(playerId => ({
-      tournament_id: tournament.id,
-      player_id: playerId,
-      payment_status: "pending" as const,
-    }));
-
-    const { error } = await supabase
-      .from("tournament_participants")
-      .upsert(rows, { onConflict: "tournament_id,player_id" });
-
-    if (!error) {
-      return;
-    }
-
-    const errorWithStatus = error as { status?: number };
-    const normalizedMessage = error.message?.toLowerCase() || "";
-    const isRowSecurityError =
-      error.code === "42501" ||
-      error.code === "PGRST301" ||
-      normalizedMessage.includes("row-level security") ||
-      normalizedMessage.includes("not authorized") ||
-      errorWithStatus.status === 403;
-
-    if (!isRowSecurityError) {
-      throw error;
-    }
-
-    console.warn("Limited permissions prevented registering all participants", error);
-
-    const ownRows = rows.filter(row => row.player_id === userProfile?.id);
-    if (!ownRows.length) {
-      return;
-    }
-
-    const { error: fallbackError } = await supabase
-      .from("tournament_participants")
-      .upsert(ownRows, { onConflict: "tournament_id,player_id" });
-
-    const fallbackErrorWithStatus = fallbackError as { status?: number } | null;
-    if (
-      fallbackError &&
-      fallbackError.code !== "42501" &&
-      fallbackError.code !== "PGRST301" &&
-      fallbackErrorWithStatus?.status !== 403
-    ) {
-      throw fallbackError;
-    }
-  };
 
   const assertUniqueCategoryEntry = async (playerIds: string[]) => {
     const uniquePlayerIds = Array.from(new Set(playerIds.filter(Boolean)));
@@ -200,50 +148,26 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       .eq("id", id)
       .maybeSingle();
 
-    if (!error) {
-      return;
+    if (error) {
+      const errorWithStatus = error as { status?: number };
+      const normalizedMessage = error.message?.toLowerCase() || "";
+      const isRowSecurityError =
+        error.code === "42501" ||
+        error.code === "PGRST301" ||
+        normalizedMessage.includes("row-level security") ||
+        normalizedMessage.includes("not authorized") ||
+        errorWithStatus.status === 403;
+
+      if (!isRowSecurityError) {
+        throw error;
+      }
+
+      console.warn("Limited permissions prevented loading pair members", error);
     }
 
-    const errorWithStatus = error as { status?: number };
-    const normalizedMessage = error.message?.toLowerCase() || "";
-    const isRowSecurityError =
-      error.code === "42501" ||
-      error.code === "PGRST301" ||
-      normalizedMessage.includes("row-level security") ||
-      normalizedMessage.includes("not authorized") ||
-      errorWithStatus.status === 403;
-
-    if (!isRowSecurityError) {
-      throw error;
-    }
-
-    if (!pairInfo) {
-      return [] as string[];
-    }
-
-    const members = [pairInfo.player1_id, pairInfo.player2_id].filter(Boolean) as string[];
+    const members = [pairInfo?.player1_id, pairInfo?.player2_id].filter(Boolean) as string[];
     setPairMembers(members);
     return [...members];
-    console.warn("Limited permissions prevented registering all participants", error);
-
-    const ownRows = rows.filter(row => row.player_id === userProfile?.id);
-    if (!ownRows.length) {
-      return;
-    }
-
-    const { error: fallbackError } = await supabase
-      .from("tournament_participants")
-      .upsert(ownRows, { onConflict: "tournament_id,player_id" });
-
-    const fallbackErrorWithStatus = fallbackError as { status?: number } | null;
-    if (
-      fallbackError &&
-      fallbackError.code !== "42501" &&
-      fallbackError.code !== "PGRST301" &&
-      fallbackErrorWithStatus?.status !== 403
-    ) {
-      throw fallbackError;
-    }
   };
 
   const triggerRegistrationEmailRpc = async (payload: RegistrationEmailPayload) => {
@@ -357,6 +281,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       }
 
       const partnerId = selectedPartner.id;
+      const knownPlayers = [userProfile.id, partnerId];
 
       const { data: existingPair, error: pairLookupError } = await supabase
         .from("pairs")
@@ -450,7 +375,8 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       setSuccess(true);
       onSuccess?.({ message: `Invitation sent to ${partnerLabel} for ${eventLabel}.` });
       const members = await resolvePairMembers(pairId);
-      await assertUniqueCategoryEntry(members);
+      const playersForValidation = members.length ? members : knownPlayers;
+      await assertUniqueCategoryEntry(playersForValidation);
 
       const { error } = await supabase.from("event_entries").insert([
         {
@@ -460,9 +386,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
         },
       ]);
       if (error) throw error;
-      const fallbackIds = members.length
-        ? members
-        : ([userProfile?.id].filter(Boolean) as string[]);
+      const fallbackIds = members.length ? members : knownPlayers;
       await handleRegistrationSuccess(fallbackIds);
     } catch (err: any) {
       setErrorMessage(err.message || "Registration failed");
@@ -527,7 +451,8 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     setPartnerResults([]);
   };
 
-  const isDoubles = ["doubles", "mixed"].includes(event.event_type.toLowerCase());
+  const normalizedType = event.event_type.toLowerCase();
+  const isDoubles = normalizedType.includes("double") || normalizedType.includes("mixed");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
