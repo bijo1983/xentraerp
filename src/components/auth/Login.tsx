@@ -3,7 +3,7 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { useNavigate, Link } from 'react-router-dom';
-import { Activity, Trophy, Users, Calendar, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import badmintonLogo from '../../assets/logo/badminton-booking-logo.svg';
 import { Footer } from '../layout/Footer';
 import { PageMetadata } from '../seo/PageMetadata';
@@ -137,111 +137,9 @@ export const Login = () => {
         structuredData={LOGIN_FAQ_SCHEMA}
       />
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex flex-col">
-        <div className="flex-1">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-            <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center min-h-[calc(100vh-3rem)] sm:min-h-[calc(100vh-4rem)]">
-              <div className="space-y-6 sm:space-y-8 order-2 lg:order-1">
-                <div className="space-y-3 sm:space-y-4">
-                  <img
-                    src={badmintonLogo}
-                    alt="Badminton Booking logo"
-                    className="h-12 w-auto sm:h-16"
-              />
-              <div className="flex items-center space-x-2">
-                <Activity className="h-8 w-8 sm:h-10 sm:w-10 text-blue-600" />
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">
-                  Badminton Booking
-                </h1>
-              </div>
-              <p className="text-base sm:text-xl text-gray-600 leading-relaxed">
-                Your complete platform for managing courts, tournaments, and the badminton community.
-              </p>
-            </div>
-
-            <div className="hidden sm:grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-blue-100 rounded-lg flex items-center justify-center mb-3 sm:mb-4">
-                  <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Court Booking</h3>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Manage court schedules and bookings with real-time availability.
-                </p>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-green-100 rounded-lg flex items-center justify-center mb-3 sm:mb-4">
-                  <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Tournaments</h3>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Organize and manage tournaments with bracket generation.
-                </p>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-orange-100 rounded-lg flex items-center justify-center mb-3 sm:mb-4">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Community</h3>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Connect players, clubs, and organizers in one place.
-                </p>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-cyan-100 rounded-lg flex items-center justify-center mb-3 sm:mb-4">
-                  <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-600" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">Analytics</h3>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Track bookings, payments, and performance metrics.
-                </p>
-              </div>
-            </div>
-
-                <div className="hidden sm:block bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl p-4 sm:p-6 text-white">
-                  <p className="text-xs sm:text-sm font-medium mb-1">Trusted by clubs and players</p>
-                  <p className="text-xl sm:text-2xl font-bold">Streamline your badminton operations</p>
-                </div>
-
-                <section className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 sm:p-6 space-y-4">
-                  <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">Badminton club management made simple</h2>
-                  <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-                    Bring bookings, competitions, and member communication into a single badminton-specific workspace. Our scheduling software helps administrators eliminate double bookings, automate reminders, and keep every player informed.
-                  </p>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm sm:text-base text-gray-700">
-                    <li className="flex items-start">
-                      <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-blue-500"></span>
-                      Real-time court availability with adjustable pricing and peak-hour controls.
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-green-500"></span>
-                      Tournament workflows covering registrations, draws, officiating checklists, and live scoring.
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-orange-500"></span>
-                      Automated email and SMS updates that keep badminton players engaged and informed.
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-cyan-500"></span>
-                      Insightful dashboards showing revenue, utilisation, and membership growth trends.
-                    </li>
-                  </ul>
-                  <div className="pt-3 border-t border-gray-200">
-                    <p className="text-sm text-gray-600">
-                      Need more details? Visit our{' '}
-                      <Link to="/faq" className="text-blue-600 hover:text-blue-800 font-semibold">
-                        Frequently Asked Questions
-                      </Link>{' '}
-                      for common setup and onboarding answers.
-                    </p>
-                  </div>
-                </section>
-              </div>
-
-              <div className="lg:pl-8 order-1 lg:order-2">
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8 max-w-md mx-auto">
+        <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="w-full max-w-md">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8">
               <div className="mb-6 sm:mb-8 text-center">
                 <img
                   src={badmintonLogo}
@@ -327,17 +225,6 @@ export const Login = () => {
                   <ArrowRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </div>
-
-              <div className="mt-4 sm:mt-6 text-center">
-                <a
-                  href="/db-connection"
-                  className="text-gray-400 hover:text-gray-600 text-xs transition-colors"
-                >
-                  Check Database Connection
-                </a>
-              </div>
-            </div>
-          </div>
             </div>
           </div>
         </div>
