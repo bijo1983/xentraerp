@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin-console
+Disallow: /admin/
+Disallow: /analytics
+
+Sitemap: https://badmintonbooking.com/sitemap.xml
+Host: badmintonbooking.com

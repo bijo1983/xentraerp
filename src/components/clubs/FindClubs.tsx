@@ -2,6 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Phone, Globe, Star, Send, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
+import { PageMetadata } from '../seo/PageMetadata';
+
+const FIND_CLUBS_KEYWORDS = [
+  'find badminton clubs',
+  'badminton clubs directory',
+  'join badminton club online',
+  'badminton facilities near me',
+  'badminton community platform',
+];
+
+const FIND_CLUBS_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'Find badminton clubs on Badminton Booking',
+  url: 'https://badmintonbooking.com/find-clubs',
+  description:
+    'Search badminton clubs by country, explore available courts, and request to join communities through the Badminton Booking platform.',
+};
 
 export const FindClubs: React.FC = () => {
   const { userProfile } = useAuthStore();
@@ -220,7 +238,15 @@ export const FindClubs: React.FC = () => {
   );
 
   return (
-    <div className="space-y-8">
+    <>
+      <PageMetadata
+        title="Find Badminton Clubs Near You | Badminton Booking"
+        description="Discover badminton clubs by country, compare facilities, and request to join the communities that match your playing goals."
+        path="/find-clubs"
+        keywords={FIND_CLUBS_KEYWORDS}
+        structuredData={FIND_CLUBS_SCHEMA}
+      />
+      <div className="space-y-8">
       {/* Header */}
       <div className="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 rounded-xl p-8 text-white">
         <h1 className="text-3xl font-bold mb-2">Find Clubs</h1>
@@ -298,6 +324,7 @@ export const FindClubs: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
