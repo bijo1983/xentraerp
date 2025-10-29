@@ -38,7 +38,7 @@ import { Login } from './components/auth/Login';
 import { AdminConsole } from './components/admin/AdminConsole';
 import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
 import { RequireRole } from './components/auth/RequireRole';
-import HomeRedirect from './HomeRedirect';
+import LandingPage from './components/home/LandingPage';
 import { DefaultSeo } from './components/seo/PageMetadata';
 
 
@@ -195,8 +195,8 @@ function App() {
       <DefaultSeo />
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<HomeRedirect />} />
-        <Route path="/home" element={<HomeRedirect />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/home" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/db-connection" element={<DatabaseConnection />} />
