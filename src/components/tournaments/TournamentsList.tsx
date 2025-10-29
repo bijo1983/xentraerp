@@ -1,5 +1,5 @@
 // src/components/tournaments/TournamentsList.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "../../lib/supabase";
 import { Pencil, Trash2, Save, Plus, Loader2, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,8 +8,26 @@ import type { UserProfile } from "../../store/authStore";
 import PlayerJoinTournaments from "./player/PlayerJoinTournaments";
 import EventRegistrationModal from "./EventRegistrationModal";
 import PendingPairInvitations from "./PendingPairInvitations";
+import { PageMetadata } from "../seo/PageMetadata";
 
 const statusOptions = ["upcoming","registration_open","ongoing","completed","cancelled"] as const;
+
+const TOURNAMENTS_KEYWORDS = [
+  "badminton tournaments software",
+  "manage badminton tournament",
+  "badminton event registration platform",
+  "badminton draws and scheduling",
+  "club tournament management",
+];
+
+const TOURNAMENTS_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: "Badminton tournaments on Badminton Booking",
+  url: "https://badmintonbooking.com/tournaments",
+  description:
+    "Discover, register, and manage badminton tournaments with real-time brackets, participant tracking, and automated communications.",
+};
 
 type Tournament = {
   id?: string;
@@ -732,17 +750,40 @@ const ManageTournamentsView: React.FC<{ userProfile: UserProfile }> = ({ userPro
 export const TournamentsList: React.FC = () => {
   const { userProfile } = useAuthStore();
 
+  const metadata = (
+    <PageMetadata
+      title="Badminton Tournaments | Manage & Register"
+      description="Create badminton tournaments, publish draws, and manage registrations with the Badminton Booking platform. Players can discover events and secure their spot online."
+      path="/tournaments"
+      keywords={TOURNAMENTS_KEYWORDS}
+      structuredData={TOURNAMENTS_SCHEMA}
+    />
+  );
+
   if (!userProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50">
-        <div className="text-sm text-text-secondary">Loading tournaments...</div>
-      </div>
+      <>
+        {metadata}
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50">
+          <div className="text-sm text-text-secondary">Loading tournaments...</div>
+        </div>
+      </>
     );
   }
 
   if (userProfile.type === "Player" || userProfile.type === "Group") {
-    return <PlayerJoinTournaments />;
+    return (
+      <>
+        {metadata}
+        <PlayerJoinTournaments />
+      </>
+    );
   }
 
-  return <ManageTournamentsView userProfile={userProfile} />;
+  return (
+    <>
+      {metadata}
+      <ManageTournamentsView userProfile={userProfile} />
+    </>
+  );
 };

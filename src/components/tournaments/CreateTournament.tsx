@@ -2,6 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { Trophy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
+import { PageMetadata } from '../seo/PageMetadata';
+
+const CREATE_TOURNAMENT_KEYWORDS = [
+  'create badminton tournament',
+  'badminton tournament software',
+  'sports event management platform',
+  'badminton bracket management',
+  'tournament registration system',
+];
+
+const CREATE_TOURNAMENT_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'CreateAction',
+  name: 'Create a badminton tournament',
+  agent: {
+    '@type': 'Organization',
+    name: 'Badminton Booking Platform',
+  },
+  result: {
+    '@type': 'Event',
+    name: 'Badminton tournament',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+  },
+};
 
 export const CreateTournament: React.FC = () => {
   const { userProfile } = useAuthStore();
@@ -113,11 +137,19 @@ export const CreateTournament: React.FC = () => {
   };
 
   return (
-    <div className="bg-white p-6 rounded shadow-md max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Trophy />Create Tournament</h2>
-      {errorMsg && <div className="bg-red-100 text-red-700 p-2 mb-2 rounded">{errorMsg}</div>}
-      {success && <div className="bg-green-100 text-green-700 p-2 mb-2 rounded">Tournament created!</div>}
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <>
+      <PageMetadata
+        title="Create a Badminton Tournament | Badminton Booking"
+        description="Launch a badminton tournament with configurable draws, registration fees, and scheduling workflows using Badminton Booking."
+        path="/create-tournament"
+        keywords={CREATE_TOURNAMENT_KEYWORDS}
+        structuredData={CREATE_TOURNAMENT_SCHEMA}
+      />
+      <div className="bg-white p-6 rounded shadow-md max-w-xl mx-auto">
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2"><Trophy />Create Tournament</h2>
+        {errorMsg && <div className="bg-red-100 text-red-700 p-2 mb-2 rounded">{errorMsg}</div>}
+        {success && <div className="bg-green-100 text-green-700 p-2 mb-2 rounded">Tournament created!</div>}
+        <form onSubmit={handleSubmit} className="space-y-4">
         <input name="name" value={formData.name} onChange={handleChange} required placeholder="Tournament Name" className="w-full border rounded p-2" />
         <textarea name="description" value={formData.description} onChange={handleChange} placeholder="Description" className="w-full border rounded p-2" />
         <input name="location" value={formData.location} onChange={handleChange} required placeholder="Location" className="w-full border rounded p-2" />
@@ -137,5 +169,6 @@ export const CreateTournament: React.FC = () => {
         </button>
       </form>
     </div>
+    </>
   );
 };

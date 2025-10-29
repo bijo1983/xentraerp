@@ -39,6 +39,7 @@ import { AdminConsole } from './components/admin/AdminConsole';
 import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
 import { RequireRole } from './components/auth/RequireRole';
 import HomeRedirect from './HomeRedirect';
+import { DefaultSeo } from './components/seo/PageMetadata';
 
 
 const VIEW_TO_PATH: Record<string, string> = {
@@ -191,6 +192,7 @@ const ProtectedLayout: React.FC = () => {
 function App() {
   return (
     <BrowserRouter>
+      <DefaultSeo />
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<HomeRedirect />} />

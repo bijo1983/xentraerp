@@ -6,6 +6,32 @@ import { useCurrency } from '../../hooks/useCurrency';
 import { CurrencySelector } from '../ui/CurrencySelector';
 import { GroupBookingPage } from '../bookings/GroupBookingPage';
 import { format, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isBefore } from 'date-fns';
+import { PageMetadata } from '../seo/PageMetadata';
+
+const BOOK_COURT_KEYWORDS = [
+  'book badminton court online',
+  'badminton court reservation platform',
+  'indoor court booking software',
+  'badminton facility scheduling',
+  'sports venue booking system',
+];
+
+const BOOK_COURT_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  serviceType: 'Badminton court booking',
+  provider: {
+    '@type': 'Organization',
+    name: 'Badminton Booking Platform',
+    url: 'https://badmintonbooking.com/book-court',
+  },
+  areaServed: {
+    '@type': 'Place',
+    name: 'Global',
+  },
+  description:
+    'Reserve badminton courts in real time with flexible pricing, availability filters, and automated booking confirmations.',
+};
 
 const BOOKING_STATUS_DEFAULT = 'pending';
 const PAYMENT_STATUS_DEFAULT = 'pending';
@@ -746,5 +772,16 @@ const handleBooking = async () => {
     </div>
   );
 
-  return renderForGroup(standardView);
+  return (
+    <>
+      <PageMetadata
+        title="Book Badminton Courts Online | Badminton Booking"
+        description="Search badminton clubs, compare pricing, and reserve available courts instantly through the Badminton Booking platform."
+        path="/book-court"
+        keywords={BOOK_COURT_KEYWORDS}
+        structuredData={BOOK_COURT_SCHEMA}
+      />
+      {renderForGroup(standardView)}
+    </>
+  );
 };

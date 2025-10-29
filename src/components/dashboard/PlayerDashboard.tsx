@@ -2,6 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Trophy, MapPin, Clock, Star } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
+import { PageMetadata } from '../seo/PageMetadata';
+
+const PLAYER_DASHBOARD_KEYWORDS = [
+  'badminton player dashboard',
+  'manage badminton bookings online',
+  'badminton tournament tracker',
+  'sports reservation analytics',
+  'badminton schedule management',
+];
+
+const PLAYER_DASHBOARD_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Badminton Booking Player Dashboard',
+  url: 'https://badmintonbooking.com/dashboard',
+  applicationCategory: 'SportsApplication',
+  operatingSystem: 'Web',
+  description:
+    'The Badminton Booking player dashboard centralises upcoming court reservations, tournament participation, and performance insights for badminton athletes.',
+};
 
 export const PlayerDashboard: React.FC = () => {
   const { userProfile } = useAuthStore();
@@ -87,7 +107,15 @@ export const PlayerDashboard: React.FC = () => {
     );
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <>
+      <PageMetadata
+        title="Player Dashboard | Badminton Booking"
+        description="Monitor badminton court bookings, tournament entries, and performance analytics from the Badminton Booking player dashboard."
+        path="/dashboard"
+        keywords={PLAYER_DASHBOARD_KEYWORDS}
+        structuredData={PLAYER_DASHBOARD_SCHEMA}
+      />
+      <div className="space-y-6 sm:space-y-8">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-500 rounded-xl p-6 sm:p-8 text-white">
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Welcome back, {userProfile?.name}!</h1>
@@ -209,6 +237,7 @@ export const PlayerDashboard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
