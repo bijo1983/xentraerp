@@ -39,6 +39,7 @@ import { AdminConsole } from './components/admin/AdminConsole';
 import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
 import { RequireRole } from './components/auth/RequireRole';
 import LandingPage from './components/home/LandingPage';
+import FAQPage from './components/marketing/FAQPage';
 import { DefaultSeo } from './components/seo/PageMetadata';
 
 
@@ -198,6 +199,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/home" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/faq" element={<FAQPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/db-connection" element={<DatabaseConnection />} />
 

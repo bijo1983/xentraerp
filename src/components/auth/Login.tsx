@@ -228,30 +228,15 @@ export const Login = () => {
                       Insightful dashboards showing revenue, utilisation, and membership growth trends.
                     </li>
                   </ul>
-                </section>
-
-                <section className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 sm:p-6 space-y-4">
-                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Badminton Booking FAQs</h2>
-                  <dl className="space-y-3 text-sm sm:text-base text-gray-700">
-                    <div>
-                      <dt className="font-semibold text-gray-900">How does Badminton Booking improve day-to-day operations?</dt>
-                      <dd className="mt-1 text-gray-600">
-                        Administrators can monitor utilisation, approve reservation requests, and reconcile payments from a central dashboard designed specifically for badminton facilities.
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-gray-900">What size of badminton organisation is supported?</dt>
-                      <dd className="mt-1 text-gray-600">
-                        The platform scales from local community groups and academies to national federations that require multi-club oversight and multi-venue scheduling.
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-semibold text-gray-900">Do players need an account to book courts?</dt>
-                      <dd className="mt-1 text-gray-600">
-                        Yes. Players can create a profile, join clubs, and manage personal reservations, ensuring accurate participant records and secure payments for every court booking.
-                      </dd>
-                    </div>
-                  </dl>
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-sm text-gray-600">
+                      Need more details? Visit our{' '}
+                      <Link to="/faq" className="text-blue-600 hover:text-blue-800 font-semibold">
+                        Frequently Asked Questions
+                      </Link>{' '}
+                      for common setup and onboarding answers.
+                    </p>
+                  </div>
                 </section>
               </div>
 

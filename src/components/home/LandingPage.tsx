@@ -1,157 +1,205 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarCheck, MapPin, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowRight, Calendar, Trophy, Users } from 'lucide-react';
+import badmintonLogo from '../../assets/logo/badminton-booking-logo.svg';
+import { Footer } from '../layout/Footer';
+import { PageMetadata } from '../seo/PageMetadata';
 import { useAuthStore } from '../../store/authStore';
+
+const HOME_KEYWORDS = [
+  'badminton booking software',
+  'badminton club management',
+  'badminton court reservation system',
+  'badminton tournament software',
+  'sports facility scheduling platform',
+];
 
 export const LandingPage: React.FC = () => {
   const { userProfile } = useAuthStore();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex flex-col">
-      <header className="bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <Link to="/" className="text-xl font-bold text-slate-900 tracking-tight">
-            Badminton Booking
-          </Link>
+    <>
+      <PageMetadata
+        title="Badminton Booking | Court & Tournament Management"
+        description="Streamline badminton court bookings, tournaments, and community management with Badminton Booking. Real-time availability, analytics, and communication tools in one platform."
+        path="/"
+        keywords={HOME_KEYWORDS}
+      />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex flex-col">
+        <header className="bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <Link to="/" className="text-xl font-bold text-slate-900 tracking-tight">
+              Badminton Booking
+            </Link>
 
-          <nav className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-600 sm:hidden">
-            <Link to="/" className="hover:text-slate-900 transition-colors">
-              Home
-            </Link>
-            <Link to="/login" className="hover:text-slate-900 transition-colors">
-              Login
-            </Link>
-            <a href="#contact" className="hover:text-slate-900 transition-colors">
-              Contact Us
-            </a>
-          </nav>
-
-          <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
-            <Link to="/" className="hover:text-slate-900 transition-colors">
-              Home
-            </Link>
-            <Link to="/login" className="hover:text-slate-900 transition-colors">
-              Login
-            </Link>
-            <a href="#contact" className="hover:text-slate-900 transition-colors">
-              Contact Us
-            </a>
-          </nav>
-
-          <div className="flex items-center space-x-3">
-            {userProfile ? (
-              <Link
-                to="/dashboard"
-                className="hidden sm:inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 transition"
-              >
-                Go to Dashboard
-                <ArrowRight className="h-4 w-4" />
+            <nav className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-600 sm:hidden">
+              <Link to="/" className="hover:text-slate-900 transition-colors">
+                Home
               </Link>
-            ) : (
-              <Link
-                to="/register"
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
-              >
-                Sign Up
-                <ArrowRight className="h-4 w-4" />
+              <Link to="/faq" className="hover:text-slate-900 transition-colors">
+                FAQ
               </Link>
-            )}
-          </div>
-        </div>
-      </header>
+              <Link to="/login" className="hover:text-slate-900 transition-colors">
+                Login
+              </Link>
+            </nav>
 
-      <main className="flex-1">
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <p className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 shadow">
-                Seamless court scheduling
-              </p>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight">
-                Organize and book badminton courts without the back-and-forth.
-              </h1>
-              <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
-                Manage your club, tournaments, and player bookings in one intuitive dashboard inspired by the simplicity of leading booking platforms like AllBooked. Give players the power to reserve courts instantly while keeping operations running smoothly.
-              </p>
-              <div className="flex flex-wrap gap-3">
+            <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
+              <Link to="/" className="hover:text-slate-900 transition-colors">
+                Home
+              </Link>
+              <Link to="/faq" className="hover:text-slate-900 transition-colors">
+                FAQ
+              </Link>
+              <Link to="/login" className="hover:text-slate-900 transition-colors">
+                Login
+              </Link>
+            </nav>
+
+            <div className="flex items-center space-x-3">
+              {userProfile ? (
                 <Link
-                  to="/register"
-                  className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
+                  to="/dashboard"
+                  className="hidden sm:inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 transition"
                 >
-                  Create your free account
+                  Go to Dashboard
                   <ArrowRight className="h-4 w-4" />
                 </Link>
+              ) : (
                 <Link
-                  to="/login"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:text-slate-900 transition"
+                  to="/register"
+                  className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 transition"
                 >
-                  Sign in
+                  Sign Up
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1">
+          <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <img
+                    src={badmintonLogo}
+                    alt="Badminton Booking logo"
+                    className="h-12 w-auto sm:h-16"
+                  />
+                  <div className="flex items-center space-x-3">
+                    <Activity className="h-10 w-10 text-blue-600" />
+                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 leading-tight">
+                      Badminton club management made simple
+                    </h1>
+                  </div>
+                  <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
+                    Bring bookings, competitions, and member communication into a single badminton-specific workspace. Eliminate double bookings, automate reminders, and keep every player informed.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                    <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center mb-3">
+                      <Calendar className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Court Booking</h3>
+                    <p className="text-sm text-gray-600">
+                      Manage court schedules and bookings with real-time availability.
+                    </p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                    <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center mb-3">
+                      <Trophy className="h-6 w-6 text-green-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Tournaments</h3>
+                    <p className="text-sm text-gray-600">
+                      Organize and manage tournaments with bracket generation.
+                    </p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                    <div className="h-12 w-12 bg-orange-100 rounded-lg flex items-center justify-center mb-3">
+                      <Users className="h-6 w-6 text-orange-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Community</h3>
+                    <p className="text-sm text-gray-600">
+                      Connect players, clubs, and organizers in one place.
+                    </p>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                    <div className="h-12 w-12 bg-cyan-100 rounded-lg flex items-center justify-center mb-3">
+                      <Activity className="h-6 w-6 text-cyan-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Analytics</h3>
+                    <p className="text-sm text-gray-600">
+                      Track bookings, payments, and performance metrics.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="hidden sm:block bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl p-6 text-white">
+                  <p className="text-sm font-medium mb-1">Trusted by clubs and players</p>
+                  <p className="text-2xl font-bold">Streamline your badminton operations</p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    to="/register"
+                    className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700 transition"
+                  >
+                    Create your free account
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-700 hover:border-blue-300 hover:text-blue-900 transition"
+                  >
+                    Sign in
+                  </Link>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-xl p-6 sm:p-8 space-y-4">
+                <h2 className="text-2xl font-semibold text-gray-900">Streamline your badminton operations</h2>
+                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                  Real-time court availability with adjustable pricing and peak-hour controls. Tournament workflows covering registrations, draws, officiating checklists, and live scoring. Automated updates that keep badminton players engaged and insightful dashboards showing revenue, utilisation, and membership growth trends.
+                </p>
+                <ul className="space-y-3 text-sm sm:text-base text-gray-700">
+                  <li className="flex items-start">
+                    <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-blue-500"></span>
+                    Real-time court availability with adjustable pricing and peak-hour controls.
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-green-500"></span>
+                    Tournament workflows covering registrations, draws, officiating checklists, and live scoring.
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-orange-500"></span>
+                    Automated email and SMS updates that keep badminton players engaged and informed.
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1 mr-2 h-2 w-2 rounded-full bg-cyan-500"></span>
+                    Insightful dashboards showing revenue, utilisation, and membership growth trends.
+                  </li>
+                </ul>
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-sm text-gray-600">
+                    Looking for common questions? Explore our{' '}
+                    <Link to="/faq" className="text-blue-600 hover:text-blue-800 font-semibold">
+                      Frequently Asked Questions
+                    </Link>
+                    .
+                  </p>
+                </div>
               </div>
             </div>
+          </section>
+        </main>
 
-            <div className="bg-white/80 backdrop-blur shadow-xl rounded-3xl p-6 sm:p-8 space-y-6 border border-slate-100">
-              <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 shadow-sm">
-                  <CalendarCheck className="h-6 w-6 text-emerald-500 mb-3" />
-                  <h3 className="text-base font-semibold text-slate-900">Smart scheduling</h3>
-                  <p>Open or block time slots, manage tournaments, and keep track of every booking.</p>
-                </div>
-                <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 shadow-sm">
-                  <MapPin className="h-6 w-6 text-sky-500 mb-3" />
-                  <h3 className="text-base font-semibold text-slate-900">Club visibility</h3>
-                  <p>Help players discover courts nearby and promote your facilities effortlessly.</p>
-                </div>
-                <div className="rounded-2xl border border-purple-100 bg-purple-50/60 p-4 shadow-sm">
-                  <ShieldCheck className="h-6 w-6 text-purple-500 mb-3" />
-                  <h3 className="text-base font-semibold text-slate-900">Secure access</h3>
-                  <p>Role-based dashboards ensure organizers, clubs, and players have the tools they need.</p>
-                </div>
-                <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 shadow-sm">
-                  <h3 className="text-base font-semibold text-slate-900">Always in sync</h3>
-                  <p>Real-time updates keep everyone aligned on schedules and results.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="contact" className="bg-white/90 border-y border-slate-200">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14 space-y-6 text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">We&apos;re here to help</h2>
-            <p className="text-slate-600 max-w-2xl mx-auto">
-              Questions about onboarding your club or organizing a tournament? Reach out and our team will make sure you get started the right way.
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-sm text-slate-700">
-              <a href="mailto:support@badmintonbooking.com" className="rounded-full border border-slate-300 px-5 py-3 hover:border-slate-400 hover:text-slate-900 transition">
-                support@badmintonbooking.com
-              </a>
-              <span className="text-slate-400">|</span>
-              <a href="tel:+1234567890" className="rounded-full border border-slate-300 px-5 py-3 hover:border-slate-400 hover:text-slate-900 transition">
-                +1 (234) 567-890
-              </a>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <footer className="bg-slate-900 text-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-          <p>&copy; {new Date().getFullYear()} Badminton Booking. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <Link to="/login" className="hover:text-white transition">
-              Login
-            </Link>
-            <Link to="/register" className="hover:text-white transition">
-              Sign Up
-            </Link>
-            <a href="#contact" className="hover:text-white transition">
-              Contact Us
-            </a>
-          </div>
-        </div>
-      </footer>
-    </div>
+        <Footer />
+      </div>
+    </>
   );
 };
 
