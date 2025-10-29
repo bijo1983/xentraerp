@@ -14,6 +14,13 @@ type AuthFormProps = {
 
 type SignupUserType = 'Player' | 'Club' | 'Organizer' | 'Group';
 
+const USER_TYPE_DESCRIPTIONS: Record<SignupUserType, string> = {
+  Player: 'For individual players who want to reserve courts, join clubs, and keep track of personal bookings.',
+  Club: 'For venues that manage multiple courts, pricing rules, staff access, and member communication.',
+  Organizer: 'For tournament directors who run registrations, draws, and live scoring across events.',
+  Group: 'For community leaders or coaches coordinating training squads and linking players to partner clubs.',
+};
+
 export const AuthForm: React.FC<AuthFormProps> = ({
   initialMode = 'login',
   afterAuthRedirectTo = '/',
@@ -491,6 +498,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({
                   <option value="Organizer">Organizer</option>
                   <option value="Group">Group</option>
                 </select>
+                <p className="mt-2 text-xs text-text-secondary">
+                  {USER_TYPE_DESCRIPTIONS[formData.userType]}
+                </p>
               </div>
 
               <div>
