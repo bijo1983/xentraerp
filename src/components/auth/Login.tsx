@@ -17,37 +17,6 @@ const LOGIN_KEYWORDS = [
   'badminton club software platform',
 ];
 
-const LOGIN_FAQ_SCHEMA = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: [
-    {
-      '@type': 'Question',
-      name: 'How do badminton clubs manage court bookings online?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: 'Badminton Booking centralises court schedules, availability, and payments so clubs can confirm badminton reservations in seconds without juggling spreadsheets or messaging apps.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: 'Can I run badminton tournaments with Badminton Booking?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: 'Yes. Organisers can publish registration pages, build brackets, assign draws, and track live results from the same badminton operations dashboard.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: 'Is Badminton Booking suitable for community groups?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: 'Community captains can reserve training slots, invite players, send updates, and analyse attendance trends with tools designed specifically for badminton activities.',
-      },
-    },
-  ],
-};
-
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -134,7 +103,6 @@ export const Login = () => {
         description="Sign in to Badminton Booking to manage badminton court reservations, publish tournaments, and coordinate your club or community in one connected platform."
         path="/login"
         keywords={LOGIN_KEYWORDS}
-        structuredData={LOGIN_FAQ_SCHEMA}
       />
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex flex-col">
         <div className="flex-1">
