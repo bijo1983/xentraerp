@@ -33,9 +33,9 @@ export const Login = () => {
   } = useAuthStore();
 
   useEffect(() => {
-    console.log("🔍 Login state:", { loading, user, userProfile });
+    console.log('🔍 Login state:', { loading, user, userProfile });
     if (user && userProfile) {
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [user, userProfile, navigate]);
 

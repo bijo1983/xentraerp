@@ -39,9 +39,15 @@ export const LandingPage: React.FC = () => {
               <Link to="/faq" className="hover:text-slate-900 transition-colors">
                 FAQ
               </Link>
-              <Link to="/login" className="hover:text-slate-900 transition-colors">
-                Login
-              </Link>
+              {userProfile ? (
+                <Link to="/dashboard" className="hover:text-slate-900 transition-colors">
+                  Dashboard
+                </Link>
+              ) : (
+                <Link to="/login" className="hover:text-slate-900 transition-colors">
+                  Login
+                </Link>
+              )}
             </nav>
 
             <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-600">
@@ -51,16 +57,22 @@ export const LandingPage: React.FC = () => {
               <Link to="/faq" className="hover:text-slate-900 transition-colors">
                 FAQ
               </Link>
-              <Link to="/login" className="hover:text-slate-900 transition-colors">
-                Login
-              </Link>
+              {userProfile ? (
+                <Link to="/dashboard" className="hover:text-slate-900 transition-colors">
+                  Dashboard
+                </Link>
+              ) : (
+                <Link to="/login" className="hover:text-slate-900 transition-colors">
+                  Login
+                </Link>
+              )}
             </nav>
 
             <div className="flex items-center space-x-3">
               {userProfile ? (
                 <Link
                   to="/dashboard"
-                  className="hidden sm:inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 transition"
+                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 transition"
                 >
                   Go to Dashboard
                   <ArrowRight className="h-4 w-4" />
