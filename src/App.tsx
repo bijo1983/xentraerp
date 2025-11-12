@@ -35,6 +35,7 @@ import { SupabaseSetup } from './components/debug/SupabaseSetup';
 import { DatabaseConnection } from './components/debug/DatabaseConnection';
 import { useAuthStore } from './store/authStore';
 import { Login } from './components/auth/Login';
+import ResetPassword from './components/auth/ResetPassword';
 import { AdminConsole } from './components/admin/AdminConsole';
 import ManageDropdownOptions from './components/tournaments/ManageDropdownOptions';
 import { RequireRole } from './components/auth/RequireRole';
@@ -199,6 +200,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/home" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/db-connection" element={<DatabaseConnection />} />
