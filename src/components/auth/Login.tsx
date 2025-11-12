@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { supabase } from '../../lib/supabase';
 import { Button } from '../../components/ui/Button';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -21,8 +20,6 @@ export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const navigate = useNavigate();
 
   const {
@@ -50,36 +47,6 @@ export const Login = () => {
       } else {
         setLocalError(error.message || 'Login failed. Please try again.');
       }
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setLocalError('Please enter your email address first');
-      return;
-    }
-
-    setIsResettingPassword(true);
-    setLocalError(null);
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-
-      if (error) throw error;
-
-      setResetEmailSent(true);
-      setLocalError(null);
-    } catch (error: any) {
-      console.error('Password reset error:', error);
-      if (error.message?.includes('Supabase is not configured') || error.message?.includes('Failed to fetch')) {
-        setLocalError('Database connection not configured. Please connect to Supabase first by clicking the "Connect to Supabase" button in the top right corner.');
-      } else {
-        setLocalError('Failed to send reset email. Please check your email address and try again.');
-      }
-    } finally {
-      setIsResettingPassword(false);
     }
   };
 
@@ -124,15 +91,6 @@ export const Login = () => {
                 </div>
               )}
 
-              {resetEmailSent && (
-                <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-700 text-xs sm:text-sm font-medium">Password reset email sent!</p>
-                  <p className="text-green-600 text-xs sm:text-sm mt-1">
-                    Check your inbox at <strong>{email}</strong> and follow the instructions.
-                  </p>
-                </div>
-              )}
-
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
                 <div>
                   <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
@@ -170,17 +128,11 @@ export const Login = () => {
               <div className="mt-3 sm:mt-4 text-center">
                 <button
                   type="button"
-                  onClick={handleForgotPassword}
-                  disabled={isResettingPassword || !email}
-                  className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => navigate('/reset-password')}
+                  className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium transition-colors"
                 >
-                  {isResettingPassword ? 'Sending reset email...' : 'Forgot your password?'}
+                  Forgot your password?
                 </button>
-                {!email && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter your email address first
-                  </p>
-                )}
               </div>
 
               <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 text-center">

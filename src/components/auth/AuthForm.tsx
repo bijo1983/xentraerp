@@ -42,7 +42,6 @@ export const AuthForm: React.FC<AuthFormProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [countriesLoading, setCountriesLoading] = useState(false);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [error, setError] = useState<string>('');
 
   const [formData, setFormData] = useState<{
@@ -251,27 +250,6 @@ export const AuthForm: React.FC<AuthFormProps> = ({
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!formData.email) {
-      setError('Please enter your email address first');
-      return;
-    }
-    setLoading(true);
-    setError('');
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (error) throw error;
-      setResetEmailSent(true);
-    } catch {
-      setError('Failed to send reset email. Please check your email address.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const switchAuthMode = () => {
     if (onLoginRoute) {
       navigate('/register');
@@ -371,19 +349,11 @@ export const AuthForm: React.FC<AuthFormProps> = ({
           </div>
         )}
 
-        {resetEmailSent && isLogin && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-700 text-sm">
-              Password reset email sent! Check your inbox and follow the instructions.
-            </p>
-          </div>
-        )}
-
         {isLogin && (
           <div className="text-center mb-4">
             <button
               type="button"
-              onClick={handleForgotPassword}
+              onClick={() => navigate('/reset-password')}
               className="text-primary-500 hover:text-primary-600 text-sm"
             >
               Forgot your password?
