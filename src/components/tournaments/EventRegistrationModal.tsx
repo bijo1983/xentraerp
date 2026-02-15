@@ -9,6 +9,8 @@ type Tournament = {
   currency_code: string;
   start_date: string;
   end_date: string;
+  max_participants?: number | null;
+  current_participants?: number;
 };
 
 type RegistrationEmailPayload = {
@@ -60,6 +62,13 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [pairMembers, setPairMembers] = useState<string[]>([]);
 
+
+  const isTournamentFull = useMemo(() => {
+    const maxParticipants = tournament.max_participants ?? null;
+    if (!maxParticipants) return false;
+    return (tournament.current_participants ?? 0) >= maxParticipants;
+  }, [tournament.current_participants, tournament.max_participants]);
+
   const eventLabel = useMemo(() => {
     const parts: string[] = [event.event_type];
     if (event.age_group) parts.push(event.age_group);
@@ -67,6 +76,12 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
     if (event.gender) parts.push(event.gender);
     return parts.filter(Boolean).join(" · ");
   }, [event]);
+
+  useEffect(() => {
+    if (isTournamentFull) {
+      setErrorMessage("Maximum number of players is reached, so registration is currently unavailable. Please coordinate with tournament management.");
+    }
+  }, [isTournamentFull]);
 
   const assertUniqueCategoryEntry = async (playerIds: string[]) => {
     const uniquePlayerIds = Array.from(new Set(playerIds.filter(Boolean)));
@@ -244,6 +259,9 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       if (!userProfile?.id) {
         throw new Error("Unable to determine your player profile.");
       }
+      if (isTournamentFull) {
+        throw new Error("Maximum number of players is reached, so registration is currently unavailable. Please coordinate with tournament management.");
+      }
 
       await assertUniqueCategoryEntry([userProfile.id]);
 
@@ -273,6 +291,9 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
       setSuccessTitle("Invitation sent!");
       if (!userProfile?.id) {
         throw new Error("Unable to determine your player profile.");
+      }
+      if (isTournamentFull) {
+        throw new Error("Maximum number of players is reached, so registration is currently unavailable. Please coordinate with tournament management.");
       }
       if (!selectedPartner) {
         throw new Error("Please select your doubles partner.");
@@ -495,7 +516,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
               }}
               placeholder="Start typing a name, email, or phone number"
               className="w-full border rounded p-2 mb-2"
-              disabled={loading}
+              disabled={loading || isTournamentFull}
             />
             {selectedPartner && (
               <div className="mb-2 flex items-center justify-between rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
@@ -541,7 +562,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
               type="button"
               className="bg-green-600 text-white px-4 py-2 rounded mt-4 w-full"
               onClick={registerDoubles}
-              disabled={loading || !selectedPartner}
+              disabled={loading || !selectedPartner || isTournamentFull}
             >
               Send Invitation
             </button>
@@ -551,7 +572,7 @@ const EventRegistrationModal: React.FC<Props> = ({ event, tournament, currency, 
             <button
               className="bg-green-600 text-white px-4 py-2 rounded w-full"
               onClick={registerSingles}
-              disabled={loading}
+              disabled={loading || isTournamentFull}
             >
               Register as Player
             </button>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { Link } from "react-router-dom";
 
 export type TournamentSummary = {
   id: string;
@@ -1009,12 +1010,12 @@ const ManageTournamentEvents: React.FC<Props> = ({ tournament }) => {
 
       <div className="text-sm text-gray-500">
         Need to add more event types, age groups, or skill levels?&nbsp;
-        <a
-          href="/admin/manage-dropdown-options"
+        <Link
+          to="/admin/manage-dropdown-options"
           className="text-blue-600 underline"
         >
           Manage Dropdown Options
-        </a>
+        </Link>
       </div>
     </div>
   );
