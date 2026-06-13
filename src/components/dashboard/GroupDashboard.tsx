@@ -4,7 +4,6 @@ import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useCurrency } from '../../hooks/useCurrency';
-import { Link } from 'react-router-dom';
 
 interface GroupDashboardStats {
   total: number;
@@ -181,8 +180,8 @@ export const GroupDashboard: React.FC = () => {
           </p>
         )}
         <div className="mt-4 flex gap-3 flex-wrap">
-          <Link
-            to="/book-court"
+          <a
+            href="/book-court"
             className={`px-4 py-2 rounded-lg text-sm font-medium ${
               clubAssigned
                 ? 'bg-green-600 text-white hover:bg-green-700'
@@ -190,13 +189,13 @@ export const GroupDashboard: React.FC = () => {
             }`}
           >
             {clubAssigned ? 'Plan monthly slots' : 'Browse clubs & slots'}
-          </Link>
-          <Link
-            to="/my-bookings"
+          </a>
+          <a
+            href="/my-bookings"
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
           >
             View booking history
-          </Link>
+          </a>
         </div>
       </div>
     </div>

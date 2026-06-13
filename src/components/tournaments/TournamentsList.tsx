@@ -84,7 +84,6 @@ type PublicTournament = {
   currency_code?: string | null;
   host_name?: string | null;
   country_id?: string | null;
-  max_participants?: number | null;
 };
 
 type TournamentEventSummary = {
@@ -112,13 +111,6 @@ const formatEventLabel = (event: TournamentEventSummary) => {
   return parts.filter(Boolean).join(" · ");
 };
 
-const hasRegistrationDeadlinePassed = (deadline?: string | null) => {
-  if (!deadline) return false;
-  const parsed = new Date(deadline);
-  if (Number.isNaN(parsed.getTime())) return false;
-  return parsed.getTime() < Date.now();
-};
-
 const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ userCountryId }) => {
   const [countries, setCountries] = useState<CountryRow[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(false);
@@ -134,7 +126,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
   const [modalEvent, setModalEvent] = useState<TournamentEventSummary | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [countryInitialized, setCountryInitialized] = useState(false);
-  const [participantCountByTournament, setParticipantCountByTournament] = useState<Record<string, number>>({});
   const { userProfile } = useAuthStore();
 
   const countryMap = useMemo(() => {
@@ -177,7 +168,7 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
 
       const { data, error } = await supabase
         .from("tournaments")
-        .select("id, name, description, location, start_date, end_date, registration_deadline, status, hosted_by, organizer_id, currency_code, max_participants")
+        .select("id, name, description, location, start_date, end_date, registration_deadline, status, hosted_by, organizer_id, currency_code")
         .eq("status", "registration_open")
         .order("start_date", { ascending: true });
 
@@ -189,32 +180,7 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
         return;
       }
 
-      const tournaments = ((data || []) as any[]).filter(
-        tournament => !hasRegistrationDeadlinePassed(tournament.registration_deadline),
-      );
-
-      const tournamentIds = tournaments
-        .map(tournament => tournament.id)
-        .filter((id): id is string => Boolean(id));
-
-      const countsByTournament: Record<string, number> = {};
-      if (tournamentIds.length) {
-        const { data: participantRows, error: participantError } = await supabase
-          .from("tournament_participants")
-          .select("tournament_id")
-          .in("tournament_id", tournamentIds);
-
-        if (participantError) {
-          console.error("Failed to load tournament participant counts", participantError);
-        } else {
-          (participantRows || []).forEach((row: { tournament_id?: string | null }) => {
-            if (!row.tournament_id) return;
-            countsByTournament[row.tournament_id] = (countsByTournament[row.tournament_id] || 0) + 1;
-          });
-        }
-      }
-
-      setParticipantCountByTournament(countsByTournament);
+      const tournaments = (data || []) as any[];
       const clubIds = Array.from(new Set(tournaments.filter(t => t.hosted_by === "club").map(t => t.organizer_id))).filter(Boolean);
       const organizerIds = Array.from(new Set(tournaments.filter(t => t.hosted_by === "organizer").map(t => t.organizer_id))).filter(Boolean);
 
@@ -260,7 +226,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
           hosted_by: t.hosted_by,
           organizer_id: t.organizer_id,
           currency_code: t.currency_code,
-          max_participants: t.max_participants,
           host_name:
             host?.club_name ??
             host?.organizer_name ??
@@ -335,17 +300,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
   }, [selectedTournament]);
 
   const handleOpenRegistration = (event: TournamentEventSummary) => {
-    if (!selectedTournament) return;
-
-    const maxParticipants = selectedTournament.max_participants ?? null;
-    const currentParticipants = participantCountByTournament[selectedTournament.id] ?? 0;
-    if (maxParticipants && currentParticipants >= maxParticipants) {
-      setSuccessMessage(
-        "Maximum number of players is reached, so registration is currently unavailable. Please coordinate with tournament management.",
-      );
-      return;
-    }
-
     setModalEvent(event);
   };
 
@@ -364,14 +318,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
 
     setSuccessMessage(`You have registered for ${formatEventLabel(event)}. Check your email for confirmation.`);
   };
-
-  const selectedTournamentParticipantCount = selectedTournament
-    ? participantCountByTournament[selectedTournament.id] ?? 0
-    : 0;
-  const selectedTournamentMaxParticipants = selectedTournament?.max_participants ?? null;
-  const selectedTournamentIsFull = Boolean(
-    selectedTournamentMaxParticipants && selectedTournamentParticipantCount >= selectedTournamentMaxParticipants,
-  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background-tint to-secondary-50">
@@ -476,11 +422,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
                       <div>{countryMap.get(selectedTournament.country_id)?.name}</div>
                     )}
                     <div className="font-semibold text-text-primary mt-1">Currency: {resolvedCurrency}</div>
-                    {selectedTournamentMaxParticipants ? (
-                      <div className="text-sm text-text-secondary mt-1">
-                        Players: {selectedTournamentParticipantCount}/{selectedTournamentMaxParticipants}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
 
@@ -491,12 +432,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
                 {successMessage && (
                   <div className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
                     {successMessage}
-                  </div>
-                )}
-
-                {selectedTournamentIsFull && (
-                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    Maximum number of players is reached, so registration is currently unavailable. Please coordinate with tournament management.
                   </div>
                 )}
 
@@ -523,11 +458,10 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
                             </div>
                           </div>
                           <button
-                            className="self-start md:self-auto rounded bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:bg-primary-300"
+                            className="self-start md:self-auto rounded bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600"
                             onClick={() => handleOpenRegistration(event)}
-                            disabled={selectedTournamentIsFull}
                           >
-                            {selectedTournamentIsFull ? "Registration Full" : "Register"}
+                            Register
                           </button>
                         </div>
                       ))}
@@ -553,8 +487,6 @@ const JoinTournamentsView: React.FC<{ userCountryId?: string | null }> = ({ user
             currency_code: resolvedCurrency,
             start_date: selectedTournament.start_date,
             end_date: selectedTournament.end_date,
-            max_participants: selectedTournament.max_participants ?? null,
-            current_participants: participantCountByTournament[selectedTournament.id] ?? 0,
           }}
           currency={resolvedCurrency}
           onClose={handleModalClose}

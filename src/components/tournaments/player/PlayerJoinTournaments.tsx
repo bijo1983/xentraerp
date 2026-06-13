@@ -50,13 +50,6 @@ const formatEventLabel = (event: TournamentEventSummary) => {
   return parts.filter(Boolean).join(' · ');
 };
 
-const hasRegistrationDeadlinePassed = (deadline?: string | null) => {
-  if (!deadline) return false;
-  const parsed = new Date(deadline);
-  if (Number.isNaN(parsed.getTime())) return false;
-  return parsed.getTime() < Date.now();
-};
-
 export const PlayerJoinTournaments: React.FC = () => {
   const { userProfile } = useAuthStore();
   const [countries, setCountries] = useState<CountryRow[]>([]);
@@ -126,9 +119,7 @@ export const PlayerJoinTournaments: React.FC = () => {
         return;
       }
 
-      const tournaments = ((data || []) as any[]).filter(
-        tournament => !hasRegistrationDeadlinePassed(tournament.registration_deadline),
-      );
+      const tournaments = (data || []) as any[];
       const clubIds = Array.from(new Set(tournaments.filter(t => t.hosted_by === 'club').map(t => t.organizer_id))).filter(Boolean);
       const organizerIds = Array.from(new Set(tournaments.filter(t => t.hosted_by === 'organizer').map(t => t.organizer_id))).filter(Boolean);
 
