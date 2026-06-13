@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
 import { supabase } from '../lib/supabase';
 
 export type SiteSettings = {
@@ -30,8 +30,6 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   updated_at: null,
   updated_by: null,
 };
-
-const SITE_SETTINGS_QUERY_KEY = ['site-settings', 'footer'] as const;
 
 const shouldFallbackToDefault = (status?: number, error?: unknown): boolean => {
   if (status && [401, 403, 404].includes(status)) {
@@ -87,39 +85,156 @@ const fetchSiteSettings = async (): Promise<SiteSettings> => {
   }
 };
 
+type SiteSettingsContextValue = {
+  data: SiteSettings;
+  setData: React.Dispatch<React.SetStateAction<SiteSettings>>;
+  isLoading: boolean;
+  isFetching: boolean;
+  error: Error | null;
+  refetch: () => Promise<SiteSettings>;
+};
+
+const SiteSettingsContext = React.createContext<SiteSettingsContextValue | null>(null);
+
+export const SiteSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [data, setDataState] = React.useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isFetching, setIsFetching] = React.useState(false);
+  const [error, setError] = React.useState<Error | null>(null);
+  const isMountedRef = React.useRef(true);
+  const latestDataRef = React.useRef<SiteSettings>(DEFAULT_SITE_SETTINGS);
+
+  const setData = React.useCallback((value: React.SetStateAction<SiteSettings>) => {
+    setDataState(prev => {
+      const next = typeof value === 'function' ? (value as (previous: SiteSettings) => SiteSettings)(prev) : value;
+      latestDataRef.current = next;
+      return next;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const loadSettings = React.useCallback(async () => {
+    if (!isMountedRef.current) {
+      return latestDataRef.current;
+    }
+
+    setIsFetching(true);
+
+    try {
+      const settings = await fetchSiteSettings();
+      if (!isMountedRef.current) {
+        return settings;
+      }
+
+      setData(settings);
+      setError(null);
+      return settings;
+    } catch (err) {
+      const normalizedError = err instanceof Error ? err : new Error('Failed to load site settings.');
+
+      if (isMountedRef.current) {
+        setError(normalizedError);
+        console.error('[SiteSettingsProvider] Failed to fetch site settings', err);
+      }
+
+      return latestDataRef.current;
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsFetching(false);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  const refetch = React.useCallback(async () => {
+    return loadSettings();
+  }, [loadSettings]);
+
+  const value = React.useMemo<SiteSettingsContextValue>(
+    () => ({
+      data,
+      setData,
+      isLoading,
+      isFetching,
+      error,
+      refetch,
+    }),
+    [data, isLoading, isFetching, error, refetch],
+  );
+
+  return <SiteSettingsContext.Provider value={value}>{children}</SiteSettingsContext.Provider>;
+};
+
+const useSiteSettingsContext = () => {
+  const context = React.useContext(SiteSettingsContext);
+
+  if (!context) {
+    throw new Error('useSiteSettings must be used within a SiteSettingsProvider');
+  }
+
+  return context;
+};
+
 export const useSiteSettings = () => {
-  return useQuery({
-    queryKey: SITE_SETTINGS_QUERY_KEY,
-    queryFn: fetchSiteSettings,
-  });
+  const { data, isLoading, isFetching, error, refetch } = useSiteSettingsContext();
+
+  return {
+    data,
+    isLoading,
+    isFetching,
+    error,
+    isError: Boolean(error),
+    refetch,
+  };
 };
 
 export const useUpdateSiteSettings = () => {
-  const queryClient = useQueryClient();
+  const { setData } = useSiteSettingsContext();
+  const [isPending, setIsPending] = React.useState(false);
 
-  return useMutation({
-    mutationFn: async (input: SiteSettingsUpdateInput) => {
-      const { data, error } = await supabase
-        .from('site_settings')
-        .update({
-          copyright_line: input.copyright_line,
-          powered_by_line: input.powered_by_line,
-          powered_by_link: input.powered_by_link,
-          contact_text: input.contact_text,
-          contact_href: input.contact_href,
-        })
-        .eq('slug', 'footer')
-        .select('*')
-        .single();
+  const mutateAsync = React.useCallback(
+    async (input: SiteSettingsUpdateInput) => {
+      setIsPending(true);
 
-      if (error) {
-        throw error;
+      try {
+        const { data: updatedData, error } = await supabase
+          .from('site_settings')
+          .update({
+            copyright_line: input.copyright_line,
+            powered_by_line: input.powered_by_line,
+            powered_by_link: input.powered_by_link,
+            contact_text: input.contact_text,
+            contact_href: input.contact_href,
+          })
+          .eq('slug', 'footer')
+          .select('*')
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        const siteSettings = (updatedData as SiteSettings | null) ?? DEFAULT_SITE_SETTINGS;
+        setData(siteSettings);
+        return siteSettings;
+      } finally {
+        setIsPending(false);
       }
+    },
+    [setData],
+  );
 
-      return data as SiteSettings;
-    },
-    onSuccess: data => {
-      queryClient.setQueryData(SITE_SETTINGS_QUERY_KEY, data);
-    },
-  });
+  return {
+    isPending,
+    mutateAsync,
+  };
 };

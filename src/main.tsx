@@ -3,7 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';                // ✅ make sure this line exists
 import App from './App';
-import QueryProvider from './components/ui/QueryProvider';
+import { SiteSettingsProvider } from './hooks/useSiteSettings';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Root #root not found');
@@ -21,10 +21,10 @@ const Spinner = (
 
 root.render(
   <React.StrictMode>
-    <QueryProvider>
+    <SiteSettingsProvider>
       <React.Suspense fallback={Spinner}>
         <App />
       </React.Suspense>
-    </QueryProvider>
+    </SiteSettingsProvider>
   </React.StrictMode>
 );
