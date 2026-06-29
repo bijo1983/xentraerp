@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ERP_URL = process.env.ERP_BACKEND_URL || 'http://127.0.0.1:8001';
-const ERP_HOST = process.env.ERP_BACKEND_HOST || 'erp.badmintonbooking.com';
+const ERP_URL = 'http://127.0.0.1:8001';
+const ERP_HOST = 'erp.badmintonbooking.com';
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
   const apiPath = params.path.join('/');
