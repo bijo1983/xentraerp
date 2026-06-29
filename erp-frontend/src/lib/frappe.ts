@@ -1,15 +1,23 @@
 import axios, { AxiosInstance } from 'axios';
 
 const BASE_URL = process.env.NEXT_PUBLIC_ERP_URL || '';
+const ERP_HOST = process.env.NEXT_PUBLIC_ERP_HOST || '';
 
 class FrappeClient {
   private http: AxiosInstance;
 
   constructor() {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (ERP_HOST) {
+      headers['Host'] = ERP_HOST;
+    }
     this.http = axios.create({
       baseURL: BASE_URL,
       withCredentials: true,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers,
     });
   }
 
