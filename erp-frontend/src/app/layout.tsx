@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Custom ERP',
-  description: 'ERP System powered by ERPNext & Frappe',
+  title: 'XentraERP - Modular Enterprise Resource Planning',
+  description: 'Next-generation modular ERP platform with configurable logistics, accounting, inventory, and CRM modules.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
