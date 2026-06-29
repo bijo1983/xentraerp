@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Package,
   BarChart3,
   Truck,
   Users,
@@ -16,6 +16,7 @@ import {
   Zap,
   Shield,
   Globe,
+  Blocks,
 } from 'lucide-react';
 
 const FEATURES = [
@@ -24,7 +25,7 @@ const FEATURES = [
   { icon: Warehouse, title: 'Inventory Control', desc: 'Real-time stock tracking across warehouses' },
   { icon: Users, title: 'CRM & Sales', desc: 'End-to-end customer lifecycle management' },
   { icon: BarChart3, title: 'Analytics', desc: 'Live dashboards and business intelligence' },
-  { icon: Package, title: 'Modular Design', desc: 'Pay only for the modules you need' },
+  { icon: Blocks, title: 'Modular Design', desc: 'Pay only for the modules you need' },
 ];
 
 const HIGHLIGHTS = [
@@ -54,15 +55,15 @@ export default function LoginPage() {
       {/* Left panel - Branding */}
       <div className="hidden lg:flex lg:w-[55%] flex-col justify-between bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-12 text-white">
         <div>
-          <div className="flex items-center gap-2 text-2xl font-bold">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Package className="h-6 w-6 text-primary-foreground" />
+          <div className="flex items-center gap-3">
+            <Image src="/logo.svg" alt="XentraERP" width={48} height={48} priority />
+            <div>
+              <span className="text-2xl font-bold tracking-tight">
+                <span className="text-primary">Xentra</span>ERP
+              </span>
+              <p className="text-sm text-slate-400">Next-Generation Modular ERP Platform</p>
             </div>
-            <span>
-              <span className="text-primary">Xentra</span>ERP
-            </span>
           </div>
-          <p className="mt-2 text-sm text-slate-400">Next-Generation Modular ERP Platform</p>
         </div>
 
         <div className="space-y-8">
@@ -104,12 +105,12 @@ export default function LoginPage() {
       {/* Right panel - Login */}
       <div className="flex w-full items-center justify-center bg-background px-6 lg:w-[45%]">
         <div className="w-full max-w-sm space-y-8">
-          <div className="lg:hidden text-center">
-            <div className="inline-flex items-center gap-2 text-2xl font-bold">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                <Package className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span><span className="text-primary">Xentra</span>ERP</span>
+          <div className="lg:hidden flex justify-center">
+            <div className="flex items-center gap-2">
+              <Image src="/logo.svg" alt="XentraERP" width={40} height={40} priority />
+              <span className="text-2xl font-bold tracking-tight">
+                <span className="text-primary">Xentra</span>ERP
+              </span>
             </div>
           </div>
 
