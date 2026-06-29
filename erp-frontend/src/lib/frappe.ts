@@ -1,23 +1,16 @@
 import axios, { AxiosInstance } from 'axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_ERP_URL || '';
-const ERP_HOST = process.env.NEXT_PUBLIC_ERP_HOST || '';
-
 class FrappeClient {
   private http: AxiosInstance;
 
   constructor() {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-    if (ERP_HOST) {
-      headers['Host'] = ERP_HOST;
-    }
     this.http = axios.create({
-      baseURL: BASE_URL,
+      baseURL: '',
       withCredentials: true,
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
     });
   }
 
@@ -31,50 +24,50 @@ class FrappeClient {
 
   // ── Authentication ──────────────────────────────────────────────
   async login(usr: string, pwd: string) {
-    const res = await this.http.post('/api/method/login', { usr, pwd });
+    const res = await this.http.post('/api/erp/method/login', { usr, pwd });
     return res.data;
   }
 
   async logout() {
-    const res = await this.http.post('/api/method/logout');
+    const res = await this.http.post('/api/erp/method/logout');
     this.clearToken();
     return res.data;
   }
 
   async getLoggedUser() {
-    const res = await this.http.get('/api/method/frappe.auth.get_logged_user');
+    const res = await this.http.get('/api/erp/method/frappe.auth.get_logged_user');
     return res.data.message;
   }
 
   // ── Generic CRUD (Frappe REST) ──────────────────────────────────
   async getList(doctype: string, params?: Record<string, unknown>) {
-    const res = await this.http.get(`/api/resource/${doctype}`, { params });
+    const res = await this.http.get(`/api/erp/resource/${doctype}`, { params });
     return res.data.data;
   }
 
   async getDoc(doctype: string, name: string) {
-    const res = await this.http.get(`/api/resource/${doctype}/${name}`);
+    const res = await this.http.get(`/api/erp/resource/${doctype}/${name}`);
     return res.data.data;
   }
 
   async createDoc(doctype: string, data: Record<string, unknown>) {
-    const res = await this.http.post(`/api/resource/${doctype}`, data);
+    const res = await this.http.post(`/api/erp/resource/${doctype}`, data);
     return res.data.data;
   }
 
   async updateDoc(doctype: string, name: string, data: Record<string, unknown>) {
-    const res = await this.http.put(`/api/resource/${doctype}/${name}`, data);
+    const res = await this.http.put(`/api/erp/resource/${doctype}/${name}`, data);
     return res.data.data;
   }
 
   async deleteDoc(doctype: string, name: string) {
-    const res = await this.http.delete(`/api/resource/${doctype}/${name}`);
+    const res = await this.http.delete(`/api/erp/resource/${doctype}/${name}`);
     return res.data;
   }
 
   // ── Custom API Methods ──────────────────────────────────────────
   async call(method: string, args?: Record<string, unknown>) {
-    const res = await this.http.post(`/api/method/${method}`, args);
+    const res = await this.http.post(`/api/erp/method/${method}`, args);
     return res.data.message;
   }
 
