@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useERPStore } from '@/store/erp-store';
+import { XentraLogo } from '@/components/ui/xentra-logo';
 
 const navSections = [
   {
@@ -73,11 +74,11 @@ export function Sidebar() {
         sidebarOpen ? 'w-64' : 'w-16'
       )}
     >
-      <div className="flex h-16 items-center justify-between border-b px-4">
-        {sidebarOpen && (
-          <span className="text-lg font-bold">
-            <span className="text-primary">Xentra</span>ERP
-          </span>
+      <div className="flex h-16 items-center justify-between border-b px-3">
+        {sidebarOpen ? (
+          <XentraLogo size="sm" />
+        ) : (
+          <XentraLogo size="sm" showText={false} />
         )}
         <button onClick={toggleSidebar} className="rounded p-1 hover:bg-accent">
           <ChevronLeft className={cn('h-5 w-5 transition-transform', !sidebarOpen && 'rotate-180')} />

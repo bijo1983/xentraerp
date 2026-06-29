@@ -3,13 +3,14 @@
 import { LogOut, User } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
+import { XentraLogo } from '@/components/ui/xentra-logo';
 
 export function Header() {
   const { user, logout } = useAuthStore();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
-      <h1 className="text-lg font-semibold"><span className="text-primary">Xentra</span>ERP</h1>
+      <XentraLogo size="sm" />
       <div className="flex items-center gap-4">
         {user && (
           <>
