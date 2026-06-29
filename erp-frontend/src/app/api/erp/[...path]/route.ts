@@ -3,9 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 const ERP_URL = process.env.ERP_BACKEND_URL || 'http://127.0.0.1:8001';
 const ERP_HOST = process.env.ERP_BACKEND_HOST || 'erp.badmintonbooking.com';
 
-async function proxyRequest(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  const { path } = await params;
-  const apiPath = path.join('/');
+async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const apiPath = params.path.join('/');
   const url = `${ERP_URL}/api/${apiPath}`;
 
   const headers: Record<string, string> = {
@@ -27,21 +26,25 @@ async function proxyRequest(req: NextRequest, { params }: { params: Promise<{ pa
     if (body) fetchOptions.body = body;
   }
 
-  const res = await fetch(url, fetchOptions);
-  const data = await res.text();
+  try {
+    const res = await fetch(url, fetchOptions);
+    const data = await res.text();
 
-  const responseHeaders = new Headers();
-  responseHeaders.set('Content-Type', res.headers.get('Content-Type') || 'application/json');
+    const responseHeaders = new Headers();
+    responseHeaders.set('Content-Type', res.headers.get('Content-Type') || 'application/json');
 
-  const setCookie = res.headers.getSetCookie?.() || [];
-  for (const c of setCookie) {
-    responseHeaders.append('Set-Cookie', c);
+    const setCookie = res.headers.getSetCookie?.() || [];
+    for (const c of setCookie) {
+      responseHeaders.append('Set-Cookie', c);
+    }
+
+    return new NextResponse(data, {
+      status: res.status,
+      headers: responseHeaders,
+    });
+  } catch {
+    return NextResponse.json({ error: 'Backend unavailable' }, { status: 502 });
   }
-
-  return new NextResponse(data, {
-    status: res.status,
-    headers: responseHeaders,
-  });
 }
 
 export const GET = proxyRequest;
