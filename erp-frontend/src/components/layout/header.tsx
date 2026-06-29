@@ -9,7 +9,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-6">
-      <h1 className="text-lg font-semibold">Custom ERP</h1>
+      <h1 className="text-lg font-semibold"><span className="text-primary">Xentra</span>ERP</h1>
       <div className="flex items-center gap-4">
         {user && (
           <>
