@@ -6,7 +6,7 @@ const ERP_PORT = 8001;
 const ERP_HOST = 'erp.badmintonbooking.com';
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
-  const apiPath = params.path.join('/');
+  const apiPath = params.path.map((segment) => encodeURIComponent(segment)).join('/');
   const search = req.nextUrl.search || '';
   const path = `/api/${apiPath}${search}`;
 
