@@ -23,25 +23,31 @@ export function useFrappeList<T>({
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
 
+  // Serialize fields/filters so the callback identity stays stable across
+  // renders. The page components pass fresh array/object literals on every
+  // render; depending on them directly causes an infinite fetch loop.
+  const fieldsKey = JSON.stringify(fields);
+  const filtersKey = filters ? JSON.stringify(filters) : undefined;
+
   const fetch = useCallback(async () => {
     if (!enabled) return;
     setLoading(true);
     try {
       const params = {
-        fields: JSON.stringify(fields),
-        filters: filters ? JSON.stringify(filters) : undefined,
+        fields: fieldsKey,
+        filters: filtersKey,
         order_by: orderBy,
         limit_start: page * pageSize,
         limit_page_length: pageSize,
       };
       const result = await frappe.getList(doctype, params);
       setData(result);
-      const count = await frappe.getCount(doctype, filters);
+      const count = await frappe.getCount(doctype, filtersKey ? JSON.parse(filtersKey) : undefined);
       setTotal(count as number);
     } finally {
       setLoading(false);
     }
-  }, [doctype, fields, filters, orderBy, page, pageSize, enabled]);
+  }, [doctype, fieldsKey, filtersKey, orderBy, page, pageSize, enabled]);
 
   useEffect(() => {
     fetch();
