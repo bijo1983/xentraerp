@@ -14,6 +14,15 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
 
   const cookie = req.headers.get('cookie');
 
+  const reqHeaders: Record<string, string | number> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    Host: ERP_HOST,
+    ...(cookie ? { Cookie: cookie } : {}),
+    ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
+  };
+  console.log('[erp-proxy] ->', req.method, `${ERP_HOST_IP}:${ERP_PORT}${path}`, JSON.stringify(reqHeaders));
+
   return new Promise<NextResponse>((resolve) => {
     const proxyReq = http.request(
       {
@@ -21,15 +30,10 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
         port: ERP_PORT,
         path,
         method: req.method,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Host: ERP_HOST,
-          ...(cookie ? { Cookie: cookie } : {}),
-          ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
-        },
+        headers: reqHeaders,
       },
       (proxyRes) => {
+        console.log('[erp-proxy] <-', proxyRes.statusCode, JSON.stringify(proxyRes.headers));
         const chunks: Buffer[] = [];
         proxyRes.on('data', (chunk) => chunks.push(chunk));
         proxyRes.on('end', () => {
