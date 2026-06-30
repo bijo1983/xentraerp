@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import {
   useReactTable,
   getCoreRowModel,
@@ -67,7 +68,9 @@ export default function SalesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Sales Orders</h2>
-        <Button>New Sales Order</Button>
+        <Button asChild>
+          <Link href="/sales/new">New Sales Order</Link>
+        </Button>
       </div>
       <Card>
         <CardHeader>

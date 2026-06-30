@@ -82,6 +82,13 @@ class FrappeClient {
   async getCount(doctype: string, filters?: Record<string, unknown>) {
     return this.call('frappe.client.get_count', { doctype, filters });
   }
+
+  // ── Submit a draft document (docstatus 0 -> 1) ──────────────────
+  async submitDoc(doctype: string, name: string) {
+    return this.call('frappe.client.submit', {
+      doc: JSON.stringify({ doctype, name }),
+    });
+  }
 }
 
 export const frappe = new FrappeClient();
