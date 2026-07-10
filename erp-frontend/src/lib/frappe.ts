@@ -83,6 +83,17 @@ class FrappeClient {
     return this.call('frappe.client.get_count', { doctype, filters });
   }
 
+  // ── Run a Query Report (Trial Balance, P&L, GL, etc.) ───────────
+  async runReport(reportName: string, filters: Record<string, unknown>) {
+    const res = await this.http.get('/api/erp/method/frappe.desk.query_report.run', {
+      params: { report_name: reportName, filters: JSON.stringify(filters) },
+    });
+    return (res.data?.message || res.data) as {
+      result?: unknown[];
+      columns?: { label: string; fieldname: string; fieldtype?: string; width?: number }[];
+    };
+  }
+
   // ── Submit a draft document (docstatus 0 -> 1) ──────────────────
   async submitDoc(doctype: string, name: string) {
     return this.call('frappe.client.submit', {
