@@ -5,14 +5,14 @@ import { ArrowLeft } from 'lucide-react';
 import { DynamicForm } from '@/components/dynamic/dynamic-form';
 
 /**
- * Metadata-driven create screen for ANY ERPNext DocType.
- * Route: /app/<DocType>/new  (e.g. /app/Sales%20Order/new)
- * The form is generated entirely from ERPNext metadata (Phase 1/2).
+ * Metadata-driven edit screen for ANY ERPNext DocType record.
+ * Route: /app/<DocType>/<name>
  */
-export default function DynamicNewPage() {
+export default function DynamicEditPage() {
   const router = useRouter();
   const params = useParams();
   const doctype = decodeURIComponent(String(params.doctype));
+  const name = decodeURIComponent(String(params.name));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -20,17 +20,17 @@ export default function DynamicNewPage() {
         <button onClick={() => router.back()} className="rounded p-1.5 hover:bg-accent">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-2xl font-bold">New {doctype}</h2>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{doctype}</p>
+          <h2 className="text-2xl font-bold">{name}</h2>
+        </div>
       </div>
 
       <DynamicForm
         doctype={doctype}
-        onSaved={(name) => {
-          router.push(
-            name
-              ? `/app/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`
-              : `/app/${encodeURIComponent(doctype)}`
-          );
+        name={name}
+        onSaved={() => {
+          router.push(`/app/${encodeURIComponent(doctype)}`);
           router.refresh();
         }}
       />

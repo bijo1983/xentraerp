@@ -90,6 +90,23 @@ class FrappeClient {
     });
   }
 
+  // ── Cancel a submitted document (docstatus 1 -> 2) ──────────────
+  async cancelDoc(doctype: string, name: string) {
+    return this.call('frappe.client.cancel', { doctype, name });
+  }
+
+  // ── Amend a cancelled document (new draft from amended_from) ────
+  async amendDoc(doctype: string, name: string) {
+    const source = await this.getDoc(doctype, name);
+    const { name: _omit, ...rest } = source as Record<string, unknown>;
+    void _omit;
+    return this.createDoc(doctype, {
+      ...rest,
+      amended_from: name,
+      docstatus: 0,
+    });
+  }
+
   // ── DocType metadata (merges standard + custom fields) ──────────
   // Uses frappe.desk.form.load.getdoctype which returns the meta
   // (including Custom Fields / Property Setters) under `docs`.

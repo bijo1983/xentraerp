@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { frappe } from '@/lib/frappe';
 import { evalDepends } from '@/lib/eval-depends';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
@@ -15,6 +15,7 @@ type DocModel = Record<string, unknown>;
 
 interface DynamicFormProps {
   doctype: string;
+  name?: string; // when set, edit an existing document
   initial?: DocModel;
   onSaved?: (name: string) => void;
 }
@@ -22,18 +23,43 @@ interface DynamicFormProps {
 const selectClass =
   'h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
-export function DynamicForm({ doctype, initial, onSaved }: DynamicFormProps) {
+export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProps) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
   const [doc, setDoc] = useState<DocModel>(initial || {});
   const [activeTab, setActiveTab] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(!!name);
 
-  const setField = (name: string, value: unknown) => setDoc((d) => ({ ...d, [name]: value }));
+  // Edit mode: load the existing document.
+  useEffect(() => {
+    if (!name) return;
+    let active = true;
+    setLoadingDoc(true);
+    (async () => {
+      try {
+        const existing = await frappe.getDoc(doctype, name);
+        if (active && existing) setDoc(existing);
+      } catch {
+        if (active) setFormError('Failed to load document.');
+      } finally {
+        if (active) setLoadingDoc(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [doctype, name]);
+
+  const docstatus = Number(doc.docstatus ?? 0);
+  const isNew = !name;
+
+  const setField = (fname: string, value: unknown) => setDoc((d) => ({ ...d, [fname]: value }));
 
   const isVisible = (f: RenderField) => evalDepends(f.dependsOn, doc, true);
+  // Submitted (1) or cancelled (2) documents lock all fields.
   const isReadOnly = (f: RenderField) =>
-    f.readOnly || evalDepends(f.readOnlyDependsOn, doc, false);
+    docstatus !== 0 || f.readOnly || evalDepends(f.readOnlyDependsOn, doc, false);
   const isRequired = (f: RenderField) =>
     f.reqd || evalDepends(f.mandatoryDependsOn, doc, false);
 
@@ -53,26 +79,35 @@ export function DynamicForm({ doctype, initial, onSaved }: DynamicFormProps) {
     return null;
   };
 
-  const handleSave = async (submitAfter: boolean) => {
+  const runAction = async (fn: () => Promise<{ name?: string } | unknown>) => {
     setFormError(null);
-    const err = validate();
-    if (err) return setFormError(err);
     setSubmitting(true);
     try {
-      const saved = await frappe.createDoc(doctype, doc);
-      if (submitAfter && saved?.name) await frappe.submitDoc(doctype, saved.name);
-      onSaved?.(saved?.name);
+      const res = (await fn()) as { name?: string } | undefined;
+      onSaved?.(res?.name || name || '');
     } catch (e: unknown) {
       const message =
         (e as { response?: { data?: { exception?: string } } })?.response?.data?.exception ||
-        (e instanceof Error ? e.message : 'Failed to save.');
+        (e instanceof Error ? e.message : 'Action failed.');
       setFormError(message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
+  const handleSave = async (submitAfter: boolean) => {
+    const err = validate();
+    if (err) return setFormError(err);
+    await runAction(async () => {
+      const saved = isNew
+        ? await frappe.createDoc(doctype, doc)
+        : await frappe.updateDoc(doctype, name!, doc);
+      if (submitAfter && saved?.name) await frappe.submitDoc(doctype, saved.name);
+      return saved;
+    });
+  };
+
+  if (loading || loadingDoc) {
     return (
       <div className="flex h-40 items-center justify-center">
         <div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -250,13 +285,49 @@ export function DynamicForm({ doctype, initial, onSaved }: DynamicFormProps) {
         </Card>
       ))}
 
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" type="button" disabled={submitting} onClick={() => handleSave(false)}>
-          {submitting ? 'Saving…' : 'Save as Draft'}
-        </Button>
-        {schema.isSubmittable && (
-          <Button type="button" disabled={submitting} onClick={() => handleSave(true)}>
-            {submitting ? 'Submitting…' : 'Save & Submit'}
+      <div className="flex items-center justify-end gap-3">
+        {docstatus === 1 && (
+          <span className="mr-auto rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+            Submitted
+          </span>
+        )}
+        {docstatus === 2 && (
+          <span className="mr-auto rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+            Cancelled
+          </span>
+        )}
+
+        {docstatus === 0 && (
+          <>
+            <Button variant="outline" type="button" disabled={submitting} onClick={() => handleSave(false)}>
+              {submitting ? 'Saving…' : isNew ? 'Save as Draft' : 'Save'}
+            </Button>
+            {schema.isSubmittable && (
+              <Button type="button" disabled={submitting} onClick={() => handleSave(true)}>
+                {submitting ? 'Submitting…' : 'Save & Submit'}
+              </Button>
+            )}
+          </>
+        )}
+
+        {docstatus === 1 && schema.isSubmittable && (
+          <Button
+            variant="destructive"
+            type="button"
+            disabled={submitting}
+            onClick={() => runAction(() => frappe.cancelDoc(doctype, name!))}
+          >
+            {submitting ? 'Cancelling…' : 'Cancel'}
+          </Button>
+        )}
+
+        {docstatus === 2 && schema.isSubmittable && (
+          <Button
+            type="button"
+            disabled={submitting}
+            onClick={() => runAction(() => frappe.amendDoc(doctype, name!))}
+          >
+            {submitting ? 'Amending…' : 'Amend'}
           </Button>
         )}
       </div>
