@@ -21,11 +21,50 @@ import { cn } from '@/lib/utils';
 import { useERPStore } from '@/store/erp-store';
 import { XentraLogo } from '@/components/ui/xentra-logo';
 
+// Links to a DocType's metadata-driven screen (/app/<DocType>).
+const dt = (doctype: string) => `/app/${encodeURIComponent(doctype)}`;
+
 const navSections = [
   {
     title: 'General',
+    items: [{ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    title: 'Sales',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { label: 'Leads', href: dt('Lead'), icon: Users },
+      { label: 'Opportunities', href: dt('Opportunity'), icon: BarChart3 },
+      { label: 'Quotations', href: dt('Quotation'), icon: FileText },
+      { label: 'Sales Orders', href: dt('Sales Order'), icon: ShoppingCart },
+      { label: 'Delivery Notes', href: dt('Delivery Note'), icon: Truck },
+      { label: 'Sales Invoices', href: dt('Sales Invoice'), icon: CreditCard },
+    ],
+  },
+  {
+    title: 'Purchase',
+    items: [
+      { label: 'Material Requests', href: dt('Material Request'), icon: FileText },
+      { label: 'Purchase Orders', href: dt('Purchase Order'), icon: ShoppingCart },
+      { label: 'Purchase Receipts', href: dt('Purchase Receipt'), icon: Package },
+      { label: 'Purchase Invoices', href: dt('Purchase Invoice'), icon: CreditCard },
+    ],
+  },
+  {
+    title: 'Accounts',
+    items: [
+      { label: 'Journal Entries', href: dt('Journal Entry'), icon: FileText },
+      { label: 'Payments', href: dt('Payment Entry'), icon: CreditCard },
+      { label: 'Chart of Accounts', href: dt('Account'), icon: CreditCard },
+      { label: 'Cost Centers', href: dt('Cost Center'), icon: Building2 },
+    ],
+  },
+  {
+    title: 'Masters',
+    items: [
+      { label: 'Customers', href: dt('Customer'), icon: Users },
+      { label: 'Suppliers', href: dt('Supplier'), icon: Truck },
+      { label: 'Items', href: dt('Item'), icon: Package },
+      { label: 'Warehouses', href: dt('Warehouse'), icon: Warehouse },
     ],
   },
   {
@@ -34,32 +73,12 @@ const navSections = [
       { label: 'Overview', href: '/logistics', icon: Truck },
       { label: 'Shipments', href: '/logistics/shipments', icon: Package },
       { label: 'Carriers', href: '/logistics/carriers', icon: Truck },
-      { label: 'Warehouses', href: '/logistics/warehouses', icon: Building2 },
       { label: 'Shipping Zones', href: '/logistics/zones', icon: MapPin },
     ],
   },
   {
-    title: 'Operations',
-    items: [
-      { label: 'Sales Orders', href: '/sales', icon: ShoppingCart },
-      { label: 'Purchase Orders', href: '/purchase', icon: FileText },
-      { label: 'Customers', href: '/customers', icon: Users },
-      { label: 'Items', href: '/items', icon: Package },
-      { label: 'Inventory', href: '/inventory', icon: Warehouse },
-    ],
-  },
-  {
-    title: 'Finance',
-    items: [
-      { label: 'Accounts', href: '/accounts', icon: CreditCard },
-      { label: 'Reports', href: '/reports', icon: BarChart3 },
-    ],
-  },
-  {
     title: 'System',
-    items: [
-      { label: 'Settings', href: '/settings', icon: Settings },
-    ],
+    items: [{ label: 'Settings', href: '/settings', icon: Settings }],
   },
 ];
 
