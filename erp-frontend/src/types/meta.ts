@@ -22,6 +22,20 @@ export interface DocField {
   collapsible?: 0 | 1;
 }
 
+export interface DocPerm {
+  role: string;
+  permlevel?: number;
+  read?: 0 | 1;
+  write?: 0 | 1;
+  create?: 0 | 1;
+  submit?: 0 | 1;
+  cancel?: 0 | 1;
+  amend?: 0 | 1;
+  delete?: 0 | 1;
+  report?: 0 | 1;
+  export?: 0 | 1;
+}
+
 export interface DocTypeMeta {
   name: string;
   module?: string;
@@ -31,8 +45,41 @@ export interface DocTypeMeta {
   autoname?: string;
   title_field?: string;
   fields: DocField[];
+  permissions?: DocPerm[];
   // schema fingerprint computed client-side for cache invalidation
   schema_hash?: string;
+}
+
+// ── Workflow (§15) ──────────────────────────────────────────────
+export interface WorkflowState {
+  state: string;
+  doc_status?: string;
+  allow_edit?: string;
+}
+export interface WorkflowTransition {
+  state: string; // from state
+  action: string;
+  next_state: string;
+  allowed: string; // role
+  condition?: string;
+}
+export interface WorkflowDef {
+  name: string;
+  document_type: string;
+  workflow_state_field: string;
+  states: WorkflowState[];
+  transitions: WorkflowTransition[];
+}
+
+// Effective, role-resolved permission matrix for the current user (§14).
+export interface PermissionSet {
+  read: boolean;
+  write: boolean;
+  create: boolean;
+  submit: boolean;
+  cancel: boolean;
+  amend: boolean;
+  delete: boolean;
 }
 
 // ── Compiled render schema (Phase 2) ────────────────────────────
@@ -89,5 +136,6 @@ export interface RenderSchema {
   isSubmittable: boolean;
   titleField?: string;
   tabs: RenderTab[];
+  permissions: DocPerm[];
   schema_hash?: string;
 }

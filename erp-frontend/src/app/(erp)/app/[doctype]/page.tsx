@@ -5,9 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { frappe } from '@/lib/frappe';
+import { resolvePermissions } from '@/lib/meta-compiler';
+import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import type { DocField, DocTypeMeta } from '@/types/meta';
+import type { DocField, DocTypeMeta, PermissionSet } from '@/types/meta';
 
 const PAGE_SIZE = 20;
 
@@ -21,14 +23,16 @@ export default function DynamicListPage() {
   const params = useParams();
   const doctype = decodeURIComponent(String(params.doctype));
 
+  const { user } = useAuthStore();
   const [columns, setColumns] = useState<DocField[]>([]);
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [perms, setPerms] = useState<PermissionSet | null>(null);
 
-  // Load metadata to determine list columns.
+  // Load metadata to determine list columns + permissions.
   useEffect(() => {
     let active = true;
     (async () => {
@@ -39,7 +43,10 @@ export default function DynamicListPage() {
             f.in_list_view === 1 &&
             !['Section Break', 'Column Break', 'Tab Break', 'Table', 'HTML'].includes(f.fieldtype)
         );
-        if (active) setColumns(cols);
+        if (active) {
+          setColumns(cols);
+          setPerms(resolvePermissions(meta?.permissions || [], user?.roles || []));
+        }
       } catch {
         if (active) setError('Failed to load list metadata.');
       }
@@ -47,7 +54,7 @@ export default function DynamicListPage() {
     return () => {
       active = false;
     };
-  }, [doctype]);
+  }, [doctype, user]);
 
   // Load records once columns are known.
   useEffect(() => {
@@ -83,11 +90,13 @@ export default function DynamicListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{doctype}</h2>
-        <Button asChild>
-          <Link href={`/app/${encodeURIComponent(doctype)}/new`}>
-            <Plus className="mr-1 h-4 w-4" /> New {doctype}
-          </Link>
-        </Button>
+        {perms?.create && (
+          <Button asChild>
+            <Link href={`/app/${encodeURIComponent(doctype)}/new`}>
+              <Plus className="mr-1 h-4 w-4" /> New {doctype}
+            </Link>
+          </Button>
+        )}
       </div>
 
       {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}

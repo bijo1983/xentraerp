@@ -122,6 +122,29 @@ class FrappeClient {
     return meta || docs[0];
   }
 
+  // ── Active workflow for a DocType (if any) ──────────────────────
+  async getWorkflow(doctype: string) {
+    const list = await this.getList('Workflow', {
+      fields: JSON.stringify(['name']),
+      filters: JSON.stringify([
+        ['document_type', '=', doctype],
+        ['is_active', '=', 1],
+      ]),
+      limit_page_length: 1,
+    });
+    const wfName = Array.isArray(list) && list[0]?.name;
+    if (!wfName) return null;
+    return this.getDoc('Workflow', wfName);
+  }
+
+  // ── Apply a workflow transition (returns updated doc) ───────────
+  async applyWorkflow(doc: Record<string, unknown>, action: string) {
+    return this.call('frappe.model.workflow.apply_workflow', {
+      doc: JSON.stringify(doc),
+      action,
+    });
+  }
+
   // ── Link-field search (async dropdowns) ─────────────────────────
   async searchLink(doctype: string, txt: string, filters?: unknown) {
     const res = await this.http.get('/api/erp/method/frappe.desk.search.search_link', {

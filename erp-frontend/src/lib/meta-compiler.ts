@@ -1,6 +1,8 @@
 import type {
   DocField,
   DocTypeMeta,
+  DocPerm,
+  PermissionSet,
   ComponentType,
   RenderField,
   RenderSection,
@@ -147,6 +149,34 @@ export function compileSchema(meta: DocTypeMeta): RenderSchema {
     isSubmittable: meta.is_submittable === 1,
     titleField: meta.title_field,
     tabs,
+    permissions: meta.permissions || [],
     schema_hash: hashMeta(meta),
   };
+}
+
+// Resolve DocPerm rows against the user's roles into an effective matrix (§14).
+// permlevel 0 only (field-level permlevels handled separately). Fail closed.
+export function resolvePermissions(perms: DocPerm[], roles: string[]): PermissionSet {
+  const roleSet = new Set(roles);
+  const base: PermissionSet = {
+    read: false,
+    write: false,
+    create: false,
+    submit: false,
+    cancel: false,
+    amend: false,
+    delete: false,
+  };
+  for (const p of perms || []) {
+    if ((p.permlevel ?? 0) !== 0) continue;
+    if (!roleSet.has(p.role)) continue;
+    base.read = base.read || p.read === 1;
+    base.write = base.write || p.write === 1;
+    base.create = base.create || p.create === 1;
+    base.submit = base.submit || p.submit === 1;
+    base.cancel = base.cancel || p.cancel === 1;
+    base.amend = base.amend || p.amend === 1;
+    base.delete = base.delete || p.delete === 1;
+  }
+  return base;
 }

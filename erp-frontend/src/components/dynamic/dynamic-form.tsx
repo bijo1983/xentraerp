@@ -3,13 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { frappe } from '@/lib/frappe';
 import { evalDepends } from '@/lib/eval-depends';
+import { resolvePermissions } from '@/lib/meta-compiler';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
+import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LinkField } from './link-field';
 import { ChildTable } from './child-table';
-import type { RenderField } from '@/types/meta';
+import { WorkflowBar } from './workflow-bar';
+import type { RenderField, WorkflowDef } from '@/types/meta';
 
 type DocModel = Record<string, unknown>;
 
@@ -25,11 +28,35 @@ const selectClass =
 
 export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProps) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
+  const { user } = useAuthStore();
   const [doc, setDoc] = useState<DocModel>(initial || {});
   const [activeTab, setActiveTab] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(!!name);
+  const [workflow, setWorkflow] = useState<WorkflowDef | null>(null);
+
+  // Effective permission matrix for the current user (§14). Fail closed.
+  const perms = useMemo(
+    () => resolvePermissions(schema?.permissions || [], user?.roles || []),
+    [schema, user]
+  );
+
+  // Load the active workflow (if any) for this DocType (§15).
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const wf = (await frappe.getWorkflow(doctype)) as WorkflowDef | null;
+        if (active) setWorkflow(wf);
+      } catch {
+        /* no workflow → docstatus buttons */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [doctype]);
 
   // Edit mode: load the existing document.
   useEffect(() => {
@@ -106,6 +133,12 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
       return saved;
     });
   };
+
+  const handleTransition = async (action: string) => {
+    await runAction(() => frappe.applyWorkflow(doc, action));
+  };
+
+  const hasWorkflow = !!workflow && !isNew;
 
   if (loading || loadingDoc) {
     return (
@@ -285,6 +318,18 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
         </Card>
       ))}
 
+      {/* Workflow state tracker + role-filtered transition buttons (§15) */}
+      {hasWorkflow && (
+        <WorkflowBar
+          workflow={workflow!}
+          currentState={String(doc[workflow!.workflow_state_field] || '')}
+          roles={user?.roles || []}
+          doc={doc}
+          disabled={submitting}
+          onTransition={handleTransition}
+        />
+      )}
+
       <div className="flex items-center justify-end gap-3">
         {docstatus === 1 && (
           <span className="mr-auto rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
@@ -297,12 +342,13 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
           </span>
         )}
 
-        {docstatus === 0 && (
+        {docstatus === 0 && (perms.write || (isNew && perms.create)) && (
           <>
             <Button variant="outline" type="button" disabled={submitting} onClick={() => handleSave(false)}>
               {submitting ? 'Saving…' : isNew ? 'Save as Draft' : 'Save'}
             </Button>
-            {schema.isSubmittable && (
+            {/* When a workflow governs the doc, submission happens via transitions. */}
+            {schema.isSubmittable && !hasWorkflow && perms.submit && (
               <Button type="button" disabled={submitting} onClick={() => handleSave(true)}>
                 {submitting ? 'Submitting…' : 'Save & Submit'}
               </Button>
@@ -310,7 +356,7 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
           </>
         )}
 
-        {docstatus === 1 && schema.isSubmittable && (
+        {docstatus === 1 && schema.isSubmittable && !hasWorkflow && perms.cancel && (
           <Button
             variant="destructive"
             type="button"
@@ -321,7 +367,7 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
           </Button>
         )}
 
-        {docstatus === 2 && schema.isSubmittable && (
+        {docstatus === 2 && schema.isSubmittable && perms.amend && (
           <Button
             type="button"
             disabled={submitting}
