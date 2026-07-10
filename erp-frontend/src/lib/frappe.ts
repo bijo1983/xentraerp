@@ -89,6 +89,36 @@ class FrappeClient {
       doc: JSON.stringify({ doctype, name }),
     });
   }
+
+  // ── DocType metadata (merges standard + custom fields) ──────────
+  // Uses frappe.desk.form.load.getdoctype which returns the meta
+  // (including Custom Fields / Property Setters) under `docs`.
+  async getDocTypeMeta(doctype: string) {
+    const res = await this.http.get('/api/erp/method/frappe.desk.form.load.getdoctype', {
+      params: { doctype, with_parent: 1 },
+    });
+    const docs = res.data?.docs || res.data?.message?.docs || [];
+    // The DocType meta doc is the one whose name matches the requested doctype.
+    const meta = docs.find(
+      (d: { doctype?: string; name?: string }) => d.doctype === 'DocType' && d.name === doctype
+    );
+    return meta || docs[0];
+  }
+
+  // ── Link-field search (async dropdowns) ─────────────────────────
+  async searchLink(doctype: string, txt: string, filters?: unknown) {
+    const res = await this.http.get('/api/erp/method/frappe.desk.search.search_link', {
+      params: {
+        doctype,
+        txt,
+        ...(filters ? { filters: JSON.stringify(filters) } : {}),
+      },
+    });
+    return (res.data?.message || res.data?.results || []) as {
+      value: string;
+      description?: string;
+    }[];
+  }
 }
 
 export const frappe = new FrappeClient();
