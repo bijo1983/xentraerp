@@ -70,6 +70,14 @@ export const SAAS_DOCTYPES: DocTypeDef[] = [
       { fieldname: 'tenant_code', label: 'Tenant Code (URL slug)', fieldtype: 'Data', reqd: 1, unique: 1, in_list_view: 1 },
       { fieldname: 'company_name', label: 'Company Name', fieldtype: 'Data', reqd: 1, in_list_view: 1 },
       { fieldname: 'erp_company', label: 'ERPNext Company', fieldtype: 'Link', options: 'Company' },
+      // ── Site-per-tenant binding ──────────────────────────────────
+      // 'site' = its own Frappe site (Administrator = full control, hard
+      // isolation); 'company' = a Company on the shared site.
+      { fieldname: 'tenancy_model', label: 'Tenancy Model', fieldtype: 'Select', options: 'site\ncompany', default: 'site', in_list_view: 1 },
+      { fieldname: 'site_name', label: 'Frappe Site Name', fieldtype: 'Data' },
+      { fieldname: 'backend_host', label: 'Backend Host (Host header)', fieldtype: 'Data' },
+      { fieldname: 'backend_ip', label: 'Backend IP', fieldtype: 'Data', default: '127.0.0.1' },
+      { fieldname: 'backend_port', label: 'Backend Port', fieldtype: 'Int', default: '8001' },
       { fieldname: 'status', label: 'Status', fieldtype: 'Select', options: 'Trial\nActive\nSuspended\nExpired', default: 'Trial', in_list_view: 1 },
       { fieldname: 'plan', label: 'Subscription Plan', fieldtype: 'Link', options: 'Xentra Subscription Plan', in_list_view: 1 },
       { fieldname: 'country', label: 'Country', fieldtype: 'Link', options: 'Country' },
