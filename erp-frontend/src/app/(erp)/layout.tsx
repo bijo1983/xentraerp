@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useERPStore } from '@/store/erp-store';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { TenantTheme } from '@/components/tenant/tenant-theme';
 import { cn } from '@/lib/utils';
 
 export default function ERPLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-muted/30">
+      <TenantTheme />
       <Sidebar />
       <div className={cn('transition-all duration-300', sidebarOpen ? 'ml-64' : 'ml-16')}>
         <Header />

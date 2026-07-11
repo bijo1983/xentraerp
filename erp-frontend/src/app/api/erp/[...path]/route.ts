@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
+import { resolveTenant } from '@/lib/tenancy/registry';
 
-const ERP_HOST_IP = '127.0.0.1';
-const ERP_PORT = 8001;
-const ERP_HOST = 'erp.badmintonbooking.com';
+// Reads the tenant slug from a header the middleware/edge can set later
+// (thin-slice S1: absent → default tenant, identical to prior behavior).
+function tenantSlug(req: NextRequest): string | undefined {
+  return req.headers.get('x-xentra-tenant') || undefined;
+}
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
+  // Resolve the ERPNext backend binding for this tenant.
+  const tenant = await resolveTenant(tenantSlug(req));
+  const { hostIp, port, host } = tenant.backend;
+
   const apiPath = params.path.map((segment) => encodeURIComponent(segment)).join('/');
   const search = req.nextUrl.search || '';
   const path = `/api/${apiPath}${search}`;
@@ -17,17 +24,17 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
   const reqHeaders: Record<string, string | number> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    Host: ERP_HOST,
+    Host: host,
     ...(cookie ? { Cookie: cookie } : {}),
     ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
   };
-  console.log('[erp-proxy] ->', req.method, `${ERP_HOST_IP}:${ERP_PORT}${path}`, JSON.stringify(reqHeaders));
+  console.log('[erp-proxy] ->', req.method, `${hostIp}:${port}${path}`, JSON.stringify(reqHeaders));
 
   return new Promise<NextResponse>((resolve) => {
     const proxyReq = http.request(
       {
-        hostname: ERP_HOST_IP,
-        port: ERP_PORT,
+        hostname: hostIp,
+        port,
         path,
         method: req.method,
         headers: reqHeaders,
