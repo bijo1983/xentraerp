@@ -25,11 +25,15 @@ const SYSTEM = `You are XentraERP's data assistant. You ONLY propose guided ques
 function masterPrompt(b: Body) {
   return `DocType: ${b.doctype}
 Company context: ${JSON.stringify(b.ctx || {})}
-User intent: ${b.intent || '(none given)'}
+User intent / party name: ${b.intent || '(none given)'}
 Known answers: ${JSON.stringify(b.answers || {})}
 Fields (fieldname, label, required, options): ${JSON.stringify((b.fields || []).slice(0, 60))}
-Task: Return up to 5 concise guided questions for the mandatory/high-value fields still missing, and a one-line tip.
-JSON schema: {"questions":[{"field":string,"text":string}],"tip":string}`;
+Task: Help set up this record with minimal manual entry.
+1) Suggest country-appropriate defaults you can INFER from the name/country/company context: territory, default_currency, likely customer/supplier group, and the correct TAX ID *format/label* for that country (e.g. Bahrain VAT "2xxxxxxxxxxx").
+2) List up to 5 concise guided questions for the mandatory/high-value fields still missing (name, tax id, address, contact).
+3) One short tip.
+IMPORTANT: For tax IDs, registration numbers, and addresses, only suggest the FORMAT/placeholder and ASK the user — never fabricate a real number or address. Never invent Link values not in the options.
+JSON schema: {"suggested":[{"field":string,"value":string,"note":string}],"questions":[{"field":string,"text":string}],"tip":string}`;
 }
 
 function txnPrompt(b: Body) {

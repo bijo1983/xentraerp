@@ -45,6 +45,7 @@ export function AiAssistant({ doctype, schema, doc, isNew, ctx, onApply, onSaveR
     enabled: boolean;
     questions?: { field: string; text: string }[];
     explanations?: { field: string; why: string }[];
+    suggested?: { field: string; value: string; note?: string }[];
     tip?: string;
   } | null>(null);
 
@@ -129,6 +130,16 @@ export function AiAssistant({ doctype, schema, doc, isNew, ctx, onApply, onSaveR
                 <Wand2 className="h-3.5 w-3.5" /> AI guidance
               </div>
               {enrich.tip && <p className="text-sm text-muted-foreground">{enrich.tip}</p>}
+              {mode === 'master' && enrich.suggested && enrich.suggested.length > 0 && (
+                <ul className="mt-2 space-y-1 text-sm">
+                  {enrich.suggested.map((s, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{s.field}:</span> {s.value}
+                      {s.note && <span className="ml-1 text-xs text-muted-foreground">({s.note})</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {mode === 'master' && enrich.questions && enrich.questions.length > 0 && (
                 <ul className="mt-2 space-y-1 text-sm">
                   {enrich.questions.map((q, i) => (
