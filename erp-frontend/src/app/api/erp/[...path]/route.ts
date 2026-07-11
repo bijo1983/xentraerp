@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
 import { resolveTenant } from '@/lib/tenancy/registry';
 
-// Reads the tenant slug from a header the middleware/edge can set later
-// (thin-slice S1: absent → default tenant, identical to prior behavior).
+// Resolve the tenant from the header or the `xentra_tenant` cookie the
+// routing middleware sets (absent → default tenant, prior behavior).
 function tenantSlug(req: NextRequest): string | undefined {
-  return req.headers.get('x-xentra-tenant') || undefined;
+  return req.headers.get('x-xentra-tenant') || req.cookies.get('xentra_tenant')?.value || undefined;
 }
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
