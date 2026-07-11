@@ -54,11 +54,58 @@ export function ChildTable({ childDoctype, rows, onChange }: ChildTableProps) {
     })().catch(() => setColumns([]));
   }, [childDoctype]);
 
-  const updateCell = (idx: number, fieldname: string, value: unknown) => {
-    onChange(rows.map((r, i) => (i === idx ? { ...r, [fieldname]: value } : r)));
+  // Recompute derived fields on an item row: amount = qty × rate.
+  const recompute = (r: Row): Row => {
+    if ('qty' in r || 'rate' in r || 'amount' in r) {
+      const qty = Number(r.qty) || 0;
+      const rate = Number(r.rate) || 0;
+      return { ...r, amount: +(qty * rate).toFixed(2) };
+    }
+    return r;
   };
+
+  const updateCell = (idx: number, fieldname: string, value: unknown) => {
+    onChange(
+      rows.map((r, i) => {
+        if (i !== idx) return r;
+        const next = { ...r, [fieldname]: value };
+        return fieldname === 'qty' || fieldname === 'rate' ? recompute(next) : next;
+      })
+    );
+  };
+
+  // When an Item link is chosen, fetch the item and fill row defaults
+  // (name, description, UOM, stock UOM, and a starting rate) in one atomic
+  // update so the qty/rate/amount stays consistent.
+  const selectItem = async (idx: number, fieldname: string, code: string) => {
+    const patch: Row = { [fieldname]: code };
+    if (code) {
+      try {
+        const item = (await frappe.getDoc('Item', code)) as Record<string, unknown>;
+        patch.item_name = item.item_name;
+        patch.description = (item.description as string) || (item.item_name as string) || code;
+        patch.uom = item.sales_uom || item.stock_uom;
+        patch.stock_uom = item.stock_uom;
+        if (item.standard_rate != null && Number(item.standard_rate) > 0) patch.rate = item.standard_rate;
+      } catch {
+        /* keep the code even if the item lookup fails */
+      }
+    }
+    onChange(rows.map((r, i) => (i === idx ? recompute({ ...r, ...patch }) : r)));
+  };
+
   const addRow = () => onChange([...rows, {}]);
   const removeRow = (idx: number) => onChange(rows.filter((_, i) => i !== idx));
+
+  // Per-field minimum widths so the grid shows full details.
+  const colWidth = (f: DocField): string => {
+    if (f.fieldname === 'description' || f.fieldname === 'item_name') return 'min-w-[220px]';
+    if (f.fieldtype === 'Link') return 'min-w-[170px]';
+    if (f.fieldtype === 'Date') return 'min-w-[150px]';
+    if (['Int', 'Float', 'Currency', 'Percent'].includes(f.fieldtype)) return 'min-w-[90px]';
+    return 'min-w-[130px]';
+  };
+  const isAmount = (f: DocField) => f.fieldname === 'amount';
 
   return (
     <div className="space-y-2">
@@ -86,18 +133,31 @@ export function ChildTable({ childDoctype, rows, onChange }: ChildTableProps) {
             {rows.map((row, idx) => (
               <tr key={idx} className="border-b last:border-0">
                 {columns.map((c) => (
-                  <td key={c.fieldname} className="px-2 py-1.5">
+                  <td key={c.fieldname} className={`px-2 py-1.5 ${colWidth(c)}`}>
                     {c.fieldtype === 'Link' ? (
                       <LinkField
                         target={c.options || ''}
                         value={(row[c.fieldname] as string) || ''}
-                        onChange={(v) => updateCell(idx, c.fieldname, v)}
+                        onChange={(v) =>
+                          c.options === 'Item'
+                            ? selectItem(idx, c.fieldname, v)
+                            : updateCell(idx, c.fieldname, v)
+                        }
                       />
                     ) : c.fieldtype === 'Check' ? (
                       <input
                         type="checkbox"
                         checked={!!row[c.fieldname]}
                         onChange={(e) => updateCell(idx, c.fieldname, e.target.checked ? 1 : 0)}
+                      />
+                    ) : isAmount(c) ? (
+                      // Amount is derived (qty × rate) — show read-only.
+                      <Input
+                        type="number"
+                        readOnly
+                        tabIndex={-1}
+                        className="bg-muted/50"
+                        value={(row[c.fieldname] as number) ?? 0}
                       />
                     ) : (
                       <Input
