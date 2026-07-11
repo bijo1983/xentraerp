@@ -56,7 +56,7 @@ export default function LoginPage() {
       // (xentra_tenant cookie → backend routing) is established at login.
       // Slug is configurable per deployment; defaults to this tenant.
       const slug = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG || 'jjcompany';
-      router.push(loginAs === 'admin' ? '/admin' : `/${slug}`);
+      router.push(loginAs === 'admin' ? '/admin' : `/${slug}/dashboard`);
     } catch {
       // error is set in store
     }

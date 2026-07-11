@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useTenant } from '@/lib/tenant-path';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -135,8 +135,10 @@ const navSections = [
 ];
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const { href: tHref, strip, pathname } = useTenant();
   const { sidebarOpen, toggleSidebar } = useERPStore();
+  // Compare against the slug-stripped path so /jjcompany/app/Item still
+  // highlights the Items nav item.
 
   return (
     <aside
@@ -169,14 +171,15 @@ export function Sidebar() {
                 {section.items.map((item) => {
                   // Exact match or a sub-path (href + '/…'), so /app/Item
                   // doesn't also light up /app/Item Group.
+                  const path = strip(pathname);
                   const active =
                     item.href === '/logistics'
-                      ? pathname === '/logistics'
-                      : pathname === item.href || pathname.startsWith(item.href + '/');
+                      ? path === '/logistics'
+                      : path === item.href || path.startsWith(item.href + '/');
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
+                      href={tHref(item.href)}
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent',
                         active && 'bg-accent text-accent-foreground'
