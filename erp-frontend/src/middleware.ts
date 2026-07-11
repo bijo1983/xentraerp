@@ -39,9 +39,12 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const first = pathname.split('/')[1] || '';
 
-  // Root → SaaS admin platform.
+  // Root → SaaS admin platform. Use a redirect (not a rewrite): rewriting
+  // the root to a different app-router page breaks RSC client-module
+  // resolution ("Cannot read properties of undefined (reading
+  // 'clientModules')"). A redirect renders /admin cleanly.
   if (pathname === '/') {
-    return NextResponse.rewrite(new URL('/admin', req.url));
+    return NextResponse.redirect(new URL('/admin', req.url));
   }
 
   // Reserved routes or static assets → pass through unchanged.
