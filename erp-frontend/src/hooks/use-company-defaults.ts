@@ -3,6 +3,7 @@ import { frappe } from '@/lib/frappe';
 
 export interface CompanyDefaults {
   company: string | null;
+  abbr: string | null;
   currency: string | null;
   country: string | null;
 }
@@ -15,6 +16,7 @@ export interface CompanyDefaults {
 export function useCompanyDefaults() {
   const [defaults, setDefaults] = useState<CompanyDefaults>({
     company: null,
+    abbr: null,
     currency: null,
     country: null,
   });
@@ -25,13 +27,14 @@ export function useCompanyDefaults() {
     (async () => {
       try {
         const companies = await frappe.getList('Company', {
-          fields: JSON.stringify(['name', 'default_currency', 'country']),
+          fields: JSON.stringify(['name', 'abbr', 'default_currency', 'country']),
           limit_page_length: 1,
         });
         const c = Array.isArray(companies) ? companies[0] : undefined;
         if (active && c) {
           setDefaults({
             company: c.name ?? null,
+            abbr: c.abbr ?? null,
             currency: c.default_currency ?? null,
             country: c.country ?? null,
           });

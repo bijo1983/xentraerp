@@ -94,6 +94,14 @@ class FrappeClient {
     };
   }
 
+  // ── Single field value from a document ──────────────────────────
+  async getValue(doctype: string, name: string, fieldname: string) {
+    const res = await this.http.get(`/api/erp/resource/${doctype}/${encodeURIComponent(name)}`, {
+      params: { fields: JSON.stringify([fieldname]) },
+    });
+    return res.data?.data?.[fieldname];
+  }
+
   // ── Submit a draft document (docstatus 0 -> 1) ──────────────────
   async submitDoc(doctype: string, name: string) {
     return this.call('frappe.client.submit', {

@@ -16,6 +16,7 @@ import {
   Truck,
   Building2,
   MapPin,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useERPStore } from '@/store/erp-store';
@@ -78,7 +79,10 @@ const navSections = [
   },
   {
     title: 'System',
-    items: [{ label: 'Settings', href: '/settings', icon: Settings }],
+    items: [
+      { label: 'Company Setup', href: '/setup', icon: SlidersHorizontal },
+      { label: 'Settings', href: '/settings', icon: Settings },
+    ],
   },
 ];
 
