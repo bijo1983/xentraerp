@@ -38,9 +38,14 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-muted/30">
       <TenantTheme />
       <Sidebar />
-      <div className={cn('transition-all duration-300', sidebarOpen ? 'ml-64' : 'ml-16')}>
+      <div className={cn('flex min-h-screen flex-col transition-all duration-300', sidebarOpen ? 'ml-64' : 'ml-16')}>
         <Header />
-        <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">{children}</main>
+        {/* flex-1 lets short pages fill the viewport and long pages grow;
+            the footer below always sits after the content, never over it. */}
+        <main className="mx-auto w-full max-w-7xl flex-1 p-4 pb-10 sm:p-6 lg:p-8">{children}</main>
+        <footer className="border-t bg-background px-6 py-4 text-center text-xs text-muted-foreground">
+          © {new Date().getFullYear()} XentraERP · Powered by a modern SaaS ERP platform
+        </footer>
       </div>
     </div>
   );

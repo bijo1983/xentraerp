@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Building2 } from 'lucide-react';
 import { frappe } from '@/lib/frappe';
+import { ensureCurrencyEnabled } from '@/lib/setup/engine';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +24,23 @@ export function CreateCompany({ onCreated }: { onCreated: () => void }) {
   const [currency, setCurrency] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ccyBusy, setCcyBusy] = useState(false);
+  const [ccyMsg, setCcyMsg] = useState<string | null>(null);
+
+  const enableGccCurrencies = async () => {
+    setCcyBusy(true);
+    setCcyMsg(null);
+    try {
+      for (const c of ['BHD', 'KWD', 'OMR', 'AED', 'SAR', 'QAR']) {
+        await ensureCurrencyEnabled(c);
+      }
+      setCcyMsg('GCC currencies enabled — search BHD in the Currency field now.');
+    } catch {
+      setCcyMsg('Could not enable currencies. Enable BHD manually under Configuration → Currencies.');
+    } finally {
+      setCcyBusy(false);
+    }
+  };
 
   const submit = async () => {
     setError(null);
@@ -79,6 +97,16 @@ export function CreateCompany({ onCreated }: { onCreated: () => void }) {
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Country</label>
           <LinkField target="Country" value={country} onChange={setCountry} placeholder="Search country…" />
+        </div>
+
+        <div className="rounded-md bg-muted/40 p-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground">BHD or other GCC currency not listed?</span>
+            <Button size="sm" variant="outline" onClick={enableGccCurrencies} disabled={ccyBusy}>
+              {ccyBusy ? 'Enabling…' : 'Enable GCC currencies'}
+            </Button>
+          </div>
+          {ccyMsg && <p className="mt-2 text-green-600 dark:text-green-400">{ccyMsg}</p>}
         </div>
 
         <Button className="w-full" onClick={submit} disabled={submitting}>

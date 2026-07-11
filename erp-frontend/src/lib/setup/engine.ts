@@ -51,6 +51,38 @@ async function countOf(doctype: string, filters?: unknown): Promise<number> {
   return Number(c) || 0;
 }
 
+// GCC currencies that ERPNext often ships disabled (so they don't appear
+// in the currency picker). BHD in particular needs 3-decimal formatting.
+const GCC_CURRENCIES: Record<string, { symbol: string; number_format: string; fraction?: string; fraction_units?: number; smallest?: number }> = {
+  BHD: { symbol: 'BD', number_format: '#,###.###', fraction: 'Fils', fraction_units: 1000, smallest: 0.001 },
+  KWD: { symbol: 'KD', number_format: '#,###.###', fraction: 'Fils', fraction_units: 1000, smallest: 0.001 },
+  OMR: { symbol: 'OMR', number_format: '#,###.###', fraction: 'Baisa', fraction_units: 1000, smallest: 0.001 },
+  AED: { symbol: 'AED', number_format: '#,###.##' },
+  SAR: { symbol: 'SAR', number_format: '#,###.##' },
+  QAR: { symbol: 'QAR', number_format: '#,###.##' },
+};
+
+// Ensure a currency exists AND is enabled (so it shows in pickers).
+export async function ensureCurrencyEnabled(code: string) {
+  const cfg = GCC_CURRENCIES[code] || { symbol: code, number_format: '#,###.##' };
+  const payload = {
+    enabled: 1,
+    symbol: cfg.symbol,
+    number_format: cfg.number_format,
+    ...(cfg.fraction ? { fraction: cfg.fraction } : {}),
+    ...(cfg.fraction_units ? { fraction_units: cfg.fraction_units } : {}),
+    ...(cfg.smallest ? { smallest_currency_fraction_value: cfg.smallest } : {}),
+  };
+  try {
+    // Exists? enable + fix formatting.
+    await frappe.getDoc('Currency', code);
+    await frappe.updateDoc('Currency', code, payload);
+  } catch {
+    // Doesn't exist → create it.
+    await ensure('Currency', { currency_name: code, ...payload });
+  }
+}
+
 // Country → standard VAT/GST rate + label. Drives auto tax-template setup.
 export const COUNTRY_TAX: Record<string, { label: string; rate: number }> = {
   // GCC
@@ -218,6 +250,23 @@ export const SETUP_ITEMS: SetupItem[] = [
     },
   },
   // ── Accounts (best-effort mapping from existing CoA) ───────
+  {
+    key: 'gcc_currencies',
+    label: 'GCC Currencies (BHD, KWD…)',
+    group: 'Accounts',
+    mandatory: false,
+    description: 'Enable GCC currencies including BHD (symbol BD, 3 decimals) so they appear in every currency picker.',
+    check: async () => {
+      try {
+        return !!(await frappe.getValue('Currency', 'BHD', 'enabled'));
+      } catch {
+        return false;
+      }
+    },
+    fix: async () => {
+      for (const c of Object.keys(GCC_CURRENCIES)) await ensureCurrencyEnabled(c);
+    },
+  },
   {
     key: 'tax_templates',
     label: 'Tax Templates',
