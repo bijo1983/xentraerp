@@ -286,17 +286,27 @@ class FrappeClient {
   }
 
   async getLinkedDocs(doctype: string, name: string) {
-    // Two-step ERPNext linked-documents lookup.
-    const linkRes = await this.http.get('/api/erp/method/frappe.desk.form.linked_with.get_linked_doctypes', {
-      params: { doctype },
-    });
-    const linkinfo = linkRes.data?.message || {};
-    const res = await this.http.post('/api/erp/method/frappe.desk.form.linked_with.get_linked_docs', {
-      doctype,
-      docname: name,
-      linkinfo: JSON.stringify(linkinfo),
-    });
-    return (res.data?.message || {}) as Record<string, { name: string; status?: string }[]>;
+    // Two-step ERPNext linked-documents lookup. Both endpoints can be
+    // unavailable/unwhitelisted or return 403 depending on the site and
+    // the doctype (Singles like Stock Settings have no connections), so
+    // fail soft and return {} instead of surfacing a console error.
+    try {
+      const linkRes = await this.http.get(
+        '/api/erp/method/frappe.desk.form.linked_with.get_linked_doctypes',
+        { params: { doctype } }
+      );
+      const linkinfo = linkRes.data?.message || {};
+      // No linked doctypes → nothing to fetch; skip the (often unwhitelisted) POST.
+      if (!linkinfo || Object.keys(linkinfo).length === 0) return {};
+      const res = await this.http.post('/api/erp/method/frappe.desk.form.linked_with.get_linked_docs', {
+        doctype,
+        docname: name,
+        linkinfo: JSON.stringify(linkinfo),
+      });
+      return (res.data?.message || {}) as Record<string, { name: string; status?: string }[]>;
+    } catch {
+      return {} as Record<string, { name: string; status?: string }[]>;
+    }
   }
 
   // ── Link-field search (async dropdowns) ─────────────────────────
