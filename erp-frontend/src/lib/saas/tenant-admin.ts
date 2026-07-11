@@ -160,10 +160,10 @@ export async function diagnoseTenantAdmin(email: string): Promise<TenantAdminDia
   if (belongsToTenant) userType = isPrimaryAdmin ? 'Tenant Admin' : 'Tenant User';
   else if (currentRoles.includes('System Manager')) userType = 'Platform Admin';
 
-  // Required vs missing roles (tenant admins only).
-  const requiredRoles = userType === 'Tenant Admin' || userType === 'Tenant User'
-    ? rolesForTenantAdmin(tenant?.modules || [])
-    : [];
+  // Required vs missing roles. Computed for anyone who is (or could be) a
+  // tenant admin — i.e. everyone except a clear Platform Admin — so the
+  // report shows what a tenant admin still needs even when not yet mapped.
+  const requiredRoles = userType === 'Platform Admin' ? [] : rolesForTenantAdmin(tenant?.modules || []);
   const missingRoles = requiredRoles.filter((r) => !currentRoles.includes(r));
 
   // User Permission restrictions.
@@ -234,53 +234,81 @@ export interface RepairResult {
  */
 export async function ensureTenantAdminAccess(
   email: string,
-  opts: { clearUserPermissions?: boolean; markPrimaryAdmin?: boolean } = {}
+  opts: { clearUserPermissions?: boolean; markPrimaryAdmin?: boolean; assignTenant?: string } = {}
 ): Promise<RepairResult> {
   const actions: string[] = [];
   try {
-    const diag = await diagnoseTenantAdmin(email);
-    if (!diag.userExists) return { actions, ok: false, error: `User ${email} does not exist.` };
-    if (diag.userType === 'Platform Admin') {
-      return {
-        actions,
-        ok: false,
-        error:
-          'This user is not mapped to a tenant (looks like a Platform Admin). Map it to a tenant first; ' +
-          'platform admins must not be given tenant ERP rights here.',
+    // Load the user + roles.
+    let user: { enabled?: number; roles?: { role: string }[] };
+    try {
+      user = (await frappe.getDoc('User', email)) as typeof user;
+    } catch {
+      return { actions, ok: false, error: `User ${email} does not exist.` };
+    }
+    const currentRoles = new Set((user.roles || []).map((r) => r.role));
+
+    // Resolve the tenant context: an explicit assignment wins, else the
+    // tenant already mapped to this email. Without a tenant we refuse —
+    // granting ERP admin roles to an unmapped user could elevate a
+    // platform admin, so the operator must pick the tenant explicitly.
+    let tenantName = opts.assignTenant;
+    let modules: string[] = [];
+    if (tenantName) {
+      const t = (await frappe.getDoc('Xentra Tenant', tenantName)) as {
+        enabled_modules?: string;
+        admin_email?: string;
+        tenant_code?: string;
       };
+      modules = parseModules(t.enabled_modules);
+      // Map this user as the tenant's admin if requested or if none set.
+      if (opts.markPrimaryAdmin || !t.admin_email) {
+        await frappe.updateDoc('Xentra Tenant', tenantName, { admin_email: email });
+        actions.push(`Mapped ${email} as admin of tenant ${t.tenant_code || tenantName}.`);
+      }
+    } else {
+      const mapped = await findTenantForEmail(email);
+      if (!mapped) {
+        return {
+          actions,
+          ok: false,
+          error:
+            'This user is not mapped to any tenant. Choose the tenant to assign them to (so we grant the ' +
+            'correct, module-based roles) — this prevents accidentally elevating a platform admin.',
+        };
+      }
+      tenantName = mapped.name;
+      modules = parseModules(mapped.enabled_modules);
     }
 
-    // 1) Enable the user if disabled.
-    if (!diag.enabled) {
+    // Enable the user if disabled.
+    if (user.enabled === 0) {
       await frappe.updateDoc('User', email, { enabled: 1 });
       actions.push('Enabled the user account.');
     }
 
-    // 2) Clear invalid record-level restrictions (opt-in).
-    if (opts.clearUserPermissions && diag.userPermissions.length) {
-      for (const p of diag.userPermissions) await frappe.deleteDoc('User Permission', p.name);
-      actions.push(`Cleared ${diag.userPermissions.length} User Permission restriction(s).`);
-    } else if (diag.userPermissions.length) {
-      actions.push(`Left ${diag.userPermissions.length} User Permission(s) in place (not requested to clear).`);
+    // Clear record-level restrictions (opt-in).
+    if (opts.clearUserPermissions) {
+      const perms = (await frappe.getList('User Permission', {
+        fields: JSON.stringify(['name']),
+        filters: JSON.stringify([['user', '=', email]]),
+        limit_page_length: 500,
+      })) as { name: string }[];
+      for (const p of perms) await frappe.deleteDoc('User Permission', p.name);
+      actions.push(`Cleared ${perms.length} User Permission restriction(s).`);
     }
 
-    // 3) Grant missing required roles (append; never removes existing).
-    if (diag.missingRoles.length) {
-      const user = (await frappe.getDoc('User', email)) as { roles?: { role: string }[] };
-      const roles = [...(user.roles || []), ...diag.missingRoles.map((role) => ({ role }))];
+    // Grant the full required role set (System Manager + module managers).
+    const required = rolesForTenantAdmin(modules);
+    const missing = required.filter((r) => !currentRoles.has(r));
+    if (missing.length) {
+      const roles = [...(user.roles || []), ...missing.map((role) => ({ role }))];
       await frappe.updateDoc('User', email, { roles });
-      actions.push(`Added role(s): ${diag.missingRoles.join(', ')}.`);
+      actions.push(`Added role(s): ${missing.join(', ')}.`);
     } else {
       actions.push('All required roles already present.');
     }
 
-    // 4) Optionally mark as the tenant's primary admin.
-    if (opts.markPrimaryAdmin && diag.tenant && !diag.isPrimaryAdmin) {
-      await frappe.updateDoc('Xentra Tenant', diag.tenant.name, { admin_email: email });
-      actions.push(`Set ${email} as primary admin of tenant ${diag.tenant.code || diag.tenant.name}.`);
-    }
-
-    actions.push('Ask the user to sign out and back in so the new roles load into their session.');
+    actions.push('IMPORTANT: the user must sign out and sign back in so the new roles load into their session.');
     return { actions, ok: true };
   } catch (e) {
     return { actions, ok: false, error: frappeErrorMessage(e, 'Repair failed.') };

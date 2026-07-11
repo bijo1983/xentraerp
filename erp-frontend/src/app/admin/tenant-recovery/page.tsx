@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Stethoscope, Wrench, Loader2, CheckCircle2, AlertTriangle, ShieldCheck, XCircle } from 'lucide-react';
 import { diagnoseTenantAdmin, ensureTenantAdminAccess, type TenantAdminDiagnostic } from '@/lib/saas/tenant-admin';
+import { saas } from '@/lib/saas/control-plane';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,27 @@ export default function TenantRecoveryPage() {
   const [clearPerms, setClearPerms] = useState(true);
   const [markPrimary, setMarkPrimary] = useState(true);
   const [repairActions, setRepairActions] = useState<string[] | null>(null);
+  const [tenants, setTenants] = useState<{ name: string; label: string }[]>([]);
+  const [assignTenant, setAssignTenant] = useState('');
+
+  useEffect(() => {
+    saas
+      .listTenants()
+      .then((rows) =>
+        setTenants(
+          ((rows as { name: string; tenant_code?: string; company_name?: string }[]) || []).map((t) => ({
+            name: t.name,
+            label: `${t.company_name || t.name}${t.tenant_code ? ` (/${t.tenant_code})` : ''}`,
+          }))
+        )
+      )
+      .catch(() => setTenants([]));
+  }, []);
+
+  // Default the tenant selection to the one the user is already mapped to.
+  useEffect(() => {
+    if (diag?.tenant?.name) setAssignTenant(diag.tenant.name);
+  }, [diag?.tenant?.name]);
 
   const run = async () => {
     setErr(null);
@@ -48,6 +70,7 @@ export default function TenantRecoveryPage() {
       const res = await ensureTenantAdminAccess(email.trim(), {
         clearUserPermissions: clearPerms,
         markPrimaryAdmin: markPrimary,
+        assignTenant: assignTenant || undefined,
       });
       setRepairActions(res.actions);
       if (!res.ok) setErr(res.error || 'Repair reported an issue.');
@@ -170,25 +193,45 @@ export default function TenantRecoveryPage() {
               <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
                 <Wrench className="h-4 w-4" /> Repair
               </p>
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Tenant to make this user the admin of
+                  </label>
+                  <select
+                    value={assignTenant}
+                    onChange={(e) => setAssignTenant(e.target.value)}
+                    className="h-9 w-full max-w-md rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">— Select tenant —</option>
+                    {tenants.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  {!diag.belongsToTenant && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      This user isn&apos;t mapped to a tenant yet. Pick the tenant so we grant the correct
+                      module-based roles (and record them as its admin).
+                    </p>
+                  )}
+                </div>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={clearPerms} onChange={(e) => setClearPerms(e.target.checked)} />
                   Clear the user&apos;s User Permission restrictions (recommended for a full tenant admin)
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={markPrimary} onChange={(e) => setMarkPrimary(e.target.checked)} />
-                  Mark as the tenant&apos;s primary admin (if the tenant has none)
+                  Record as the tenant&apos;s primary admin
                 </label>
               </div>
-              <Button className="mt-3" onClick={repair} disabled={busy || diag.userType === 'Platform Admin'}>
+              <Button className="mt-3" onClick={repair} disabled={busy || !assignTenant}>
                 {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1.5 h-4 w-4" />}
                 Repair Tenant Admin Access
               </Button>
-              {diag.userType === 'Platform Admin' && (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                  This user isn&apos;t mapped to a tenant — repair is disabled to avoid giving a platform admin
-                  tenant ERP rights. Map it to a tenant first.
-                </p>
+              {!assignTenant && (
+                <p className="mt-2 text-xs text-muted-foreground">Select a tenant above to enable repair.</p>
               )}
             </div>
           </CardContent>
