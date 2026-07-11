@@ -41,11 +41,26 @@ export default function PlatformSettingsPage() {
     }
     setUBusy(true);
     try {
-      // Company user gets ERP-operational roles; platform user gets System Manager.
+      // Company user gets a full "company admin" role set (manage masters
+      // + transactions) so they can set up and run their ERP without System
+      // Manager. Platform user gets System Manager for the SaaS platform.
       const roles =
         uRole === 'platform'
           ? ['System Manager']
-          : ['Sales User', 'Purchase User', 'Accounts User', 'Stock User', 'Item Manager'];
+          : [
+              'Sales Manager',
+              'Sales Master Manager',
+              'Purchase Manager',
+              'Purchase Master Manager',
+              'Stock Manager',
+              'Accounts Manager',
+              'Item Manager',
+              'Maintenance Manager',
+              'Sales User',
+              'Purchase User',
+              'Accounts User',
+              'Stock User',
+            ];
       await frappe.createUser(uEmail, uName, uPass, roles);
       // Restrict a company user to their company (record-level isolation).
       if (uRole === 'company' && uCompany) {

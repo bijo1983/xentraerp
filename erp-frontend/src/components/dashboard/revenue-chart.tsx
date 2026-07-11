@@ -38,6 +38,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
   };
 
   const series = [{ name: 'Revenue', data: data.map((d) => d.amount) }];
+  const hasData = data.length > 0;
 
   return (
     <Card className="col-span-2">
@@ -45,7 +46,13 @@ export function RevenueChart({ data }: RevenueChartProps) {
         <CardTitle className="text-base">Revenue Trend</CardTitle>
       </CardHeader>
       <CardContent>
-        <Chart options={options} series={series} type="area" height={300} />
+        {hasData ? (
+          <Chart options={options} series={series} type="area" height={300} />
+        ) : (
+          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            No revenue data yet.
+          </div>
+        )}
       </CardContent>
     </Card>
   );

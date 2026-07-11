@@ -18,13 +18,21 @@ export function OrderStatusChart({ data }: OrderStatusChartProps) {
     dataLabels: { enabled: true },
   };
 
+  const hasData = data.length > 0 && data.some((d) => d.count > 0);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Order Status</CardTitle>
       </CardHeader>
       <CardContent>
-        <Chart options={options} series={data.map((d) => d.count)} type="donut" height={300} />
+        {hasData ? (
+          <Chart options={options} series={data.map((d) => d.count)} type="donut" height={300} />
+        ) : (
+          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            No orders yet.
+          </div>
+        )}
       </CardContent>
     </Card>
   );
