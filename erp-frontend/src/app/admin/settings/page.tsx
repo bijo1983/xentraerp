@@ -47,13 +47,16 @@ export default function PlatformSettingsPage() {
     }
     setUBusy(true);
     try {
-      // Company user gets a full "company admin" role set (manage masters
-      // + transactions) so they can set up and run their ERP without System
-      // Manager. Platform user gets System Manager for the SaaS platform.
+      // Company user is a FULL company admin: System Manager (settings,
+      // users, all modules) PLUS the manager/user roles — but scoped to
+      // their own company via the User Permission applied below, so they
+      // cannot see other tenants' data. Platform user administers the SaaS
+      // platform itself.
       const roles =
         uRole === 'platform'
           ? ['System Manager']
           : [
+              'System Manager',
               'Sales Manager',
               'Sales Master Manager',
               'Purchase Manager',
@@ -165,8 +168,9 @@ export default function PlatformSettingsPage() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Keep the platform admin separate from company users. A <strong>Company user</strong> signs in via
-            “Customer Sign In” and is restricted to their company; a <strong>Platform admin</strong> signs in via
-            “Admin Sign In” with full System Manager access.
+            “Customer Sign In” and becomes a <strong>full admin of their own company</strong> (System Manager,
+            scoped to that company only). A <strong>Platform admin</strong> signs in via “Admin Sign In” to
+            administer the SaaS platform itself.
           </p>
           {uErr && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{uErr}</div>}
           {uMsg && <div className="rounded-md bg-green-100 p-3 text-sm text-green-700 dark:bg-green-500/15 dark:text-green-400">{uMsg}</div>}
