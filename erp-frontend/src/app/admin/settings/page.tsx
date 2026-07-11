@@ -41,27 +41,42 @@ export default function PlatformSettingsPage() {
   const resetUserPermissions = async () => {
     setPMsg(null);
     setPErr(null);
-    if (!pEmail.trim()) {
+    const email = pEmail.trim();
+    if (!email) {
       setPErr('Enter the user email.');
       return;
     }
     setPBusy(true);
     try {
+      // 1) Delete ALL record-level User Permissions on this user.
       const rows = (await frappe.getList('User Permission', {
-        fields: JSON.stringify(['name', 'allow', 'for_value']),
-        filters: JSON.stringify([['user', '=', pEmail.trim()]]),
+        fields: JSON.stringify(['name']),
+        filters: JSON.stringify([['user', '=', email]]),
         limit_page_length: 500,
-      })) as { name: string; allow: string; for_value: string }[];
-      if (!rows.length) {
-        setPMsg(`No User Permissions found for ${pEmail.trim()} — already clear.`);
-        return;
-      }
+      })) as { name: string }[];
       let deleted = 0;
       for (const r of rows) {
         await frappe.deleteDoc('User Permission', r.name);
         deleted++;
       }
-      setPMsg(`Deleted ${deleted} User Permission${deleted === 1 ? '' : 's'} for ${pEmail.trim()}. Ask them to sign out and back in.`);
+
+      // 2) Ensure the full-admin roles are present (append, don't replace).
+      const user = (await frappe.getDoc('User', email)) as { roles?: { role: string }[] };
+      const have = new Set((user.roles || []).map((r) => r.role));
+      const want = ['System Manager', 'Stock Manager', 'Accounts Manager'];
+      const missing = want.filter((r) => !have.has(r));
+      let rolesAdded = 0;
+      if (missing.length) {
+        const roles = [...(user.roles || []), ...missing.map((role) => ({ role }))];
+        await frappe.updateDoc('User', email, { roles });
+        rolesAdded = missing.length;
+      }
+
+      setPMsg(
+        `Done for ${email}: removed ${deleted} User Permission${deleted === 1 ? '' : 's'}, ` +
+          `added ${rolesAdded} role${rolesAdded === 1 ? '' : 's'}${rolesAdded ? ` (${missing.join(', ')})` : ''}. ` +
+          `The user must sign out and back in for it to take effect.`
+      );
     } catch (e) {
       setPErr(frappeErrorMessage(e, 'Failed. You must be signed in as Administrator / System Manager.'));
     } finally {
@@ -205,14 +220,15 @@ export default function PlatformSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="h-5 w-5 text-primary" /> Fix User Access (reset permissions)
+            <ShieldCheck className="h-5 w-5 text-primary" /> Make Full Admin (fix access)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Removes ALL <strong>User Permission</strong> record-level restrictions from a user. Use this when a
-            full admin is wrongly blocked from settings (e.g. &quot;does not have access to this document&quot;).
-            You must be signed in as <strong>Administrator</strong>. The user must sign out and back in afterward.
+            One click: removes ALL <strong>User Permission</strong> record-level restrictions AND grants the
+            full-admin roles (System Manager, Stock Manager, Accounts Manager). Use when an admin is wrongly
+            blocked from settings (&quot;does not have access&quot; or &quot;insufficient permission&quot;). You must be
+            signed in as <strong>Administrator</strong>; the user must sign out and back in afterward.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Input
