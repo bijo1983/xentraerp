@@ -171,6 +171,43 @@ export function reviewTransaction(schema: RenderSchema, doc: Record<string, unkn
     }
   }
 
+  // 3b. Item rows: non-positive quantities.
+  if (itemsField) {
+    const rows = (doc[itemsField.fieldname] as Record<string, unknown>[]) || [];
+    rows.forEach((row, i) => {
+      const qty = Number(row.qty);
+      if (row.qty !== undefined && row.qty !== '' && (isNaN(qty) || qty <= 0)) {
+        issues.push({
+          field: `${itemsField.fieldname}[${i}].qty`,
+          label: `Row ${i + 1} qty`,
+          severity: 'Block',
+          message: `Row ${i + 1}: quantity must be greater than zero.`,
+          current: row.qty,
+          fixable: false,
+          ruleId: 'qty-positive',
+        });
+      }
+    });
+  }
+
+  // 3c. Date order: delivery/schedule date should not precede the doc date.
+  const baseDate = (doc.transaction_date || doc.posting_date) as string | undefined;
+  for (const df of ['delivery_date', 'schedule_date', 'due_date']) {
+    const d = doc[df] as string | undefined;
+    if (baseDate && d && d < baseDate) {
+      issues.push({
+        field: df,
+        label: df,
+        severity: 'Warn',
+        message: `${df} (${d}) is before the document date (${baseDate}).`,
+        current: d,
+        suggested: baseDate,
+        fixable: true,
+        ruleId: 'date-order',
+      });
+    }
+  }
+
   // 4. Currency / exchange-rate sanity.
   if (fields.some((f) => f.fieldname === 'currency') && ctx.currency) {
     const cur = doc.currency as string | undefined;

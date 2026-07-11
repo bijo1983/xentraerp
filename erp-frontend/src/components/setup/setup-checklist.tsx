@@ -77,7 +77,7 @@ export function SetupChecklist({ ctx, onProgress, showHeaderAction = true }: Set
     setBusy(false);
   };
 
-  const groups = ['Inventory', 'Sales', 'Purchase', 'Accounts'] as const;
+  const groups = ['Inventory', 'Sales', 'Purchase', 'Accounts', 'Configuration'] as const;
 
   return (
     <div className="space-y-6">

@@ -14,7 +14,7 @@ export interface SetupContext {
   country?: string;
 }
 
-export type SetupGroup = 'Inventory' | 'Sales' | 'Purchase' | 'Accounts';
+export type SetupGroup = 'Inventory' | 'Sales' | 'Purchase' | 'Accounts' | 'Configuration';
 
 export interface SetupItem {
   key: string;
@@ -251,6 +251,35 @@ export const SETUP_ITEMS: SetupItem[] = [
       await ensure('Supplier Group', { supplier_group_name: 'All Supplier Groups', is_group: 1 });
       await ensure('Supplier Group', { supplier_group_name: 'Local', parent_supplier_group: 'All Supplier Groups' });
       await ensure('Supplier Group', { supplier_group_name: 'Distributor', parent_supplier_group: 'All Supplier Groups' });
+    },
+  },
+  // ── Configuration masters ──────────────────────────────────
+  {
+    key: 'salutations',
+    label: 'Salutations',
+    group: 'Configuration',
+    mandatory: false,
+    description: 'Standard salutations (Mr, Mrs, Ms, Dr, Prof…) for contacts and leads.',
+    check: async () => (await countOf('Salutation')) > 0,
+    fix: async () => {
+      for (const s of ['Mr', 'Mrs', 'Ms', 'Miss', 'Dr', 'Prof', 'Madam', 'Master']) {
+        await ensure('Salutation', { salutation: s });
+      }
+    },
+  },
+  {
+    key: 'departments',
+    label: 'Departments',
+    group: 'Configuration',
+    mandatory: false,
+    description: 'Common organizational departments for the company.',
+    check: async (ctx) => (await countOf('Department', [['company', '=', ctx.company]])) > 1,
+    fix: async (ctx) => {
+      const root = `All Departments - ${ctx.abbr}`;
+      await ensure('Department', { department_name: 'All Departments', is_group: 1, company: ctx.company });
+      for (const d of ['Management', 'Sales', 'Accounts', 'Operations', 'Human Resources', 'Procurement']) {
+        await ensure('Department', { department_name: d, company: ctx.company, parent_department: root });
+      }
     },
   },
   // ── Accounts (best-effort mapping from existing CoA) ───────

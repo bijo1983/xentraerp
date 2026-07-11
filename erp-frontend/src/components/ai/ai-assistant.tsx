@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Sparkles, X, CheckCircle2, AlertTriangle, Info, ShieldCheck } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Sparkles, X, CheckCircle2, AlertTriangle, Info, ShieldCheck, Wand2 } from 'lucide-react';
 import { planMaster, reviewTransaction, type AiContext } from '@/lib/ai/engine';
 import { getAiSettings, logAiAudit } from '@/lib/ai/settings';
 import type { RenderSchema } from '@/types/meta';
@@ -39,6 +39,36 @@ export function AiAssistant({ doctype, schema, doc, isNew, ctx, onApply, onSaveR
     () => Object.fromEntries((plan?.suggestions || []).map((s) => [s.fieldname, true]))
   );
   const [pickedFixes, setPickedFixes] = useState<Record<string, boolean>>({});
+
+  // Optional LLM enrichment (guided questions / explanations + a tip).
+  const [enrich, setEnrich] = useState<{
+    enabled: boolean;
+    questions?: { field: string; text: string }[];
+    explanations?: { field: string; why: string }[];
+    tip?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const fields = schema.tabs
+      .flatMap((t) => t.sections.flatMap((s) => s.columns.flatMap((c) => c.fields)))
+      .map((f) => ({ fieldname: f.fieldname, label: f.label, reqd: f.reqd, options: f.options }));
+    fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode,
+        doctype,
+        fields,
+        doc,
+        issues: issues.map((i) => ({ field: i.field, message: i.message })),
+        ctx,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => setEnrich(d))
+      .catch(() => setEnrich({ enabled: false }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const applyMaster = (thenSave: boolean) => {
     const fields: Record<string, unknown> = {};
@@ -93,6 +123,31 @@ export function AiAssistant({ doctype, schema, doc, isNew, ctx, onApply, onSaveR
         </div>
 
         <div className="flex-1 overflow-auto p-4">
+          {enrich?.enabled && (enrich.tip || (enrich.questions?.length ?? 0) > 0 || (enrich.explanations?.length ?? 0) > 0) && (
+            <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3">
+              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-primary">
+                <Wand2 className="h-3.5 w-3.5" /> AI guidance
+              </div>
+              {enrich.tip && <p className="text-sm text-muted-foreground">{enrich.tip}</p>}
+              {mode === 'master' && enrich.questions && enrich.questions.length > 0 && (
+                <ul className="mt-2 space-y-1 text-sm">
+                  {enrich.questions.map((q, i) => (
+                    <li key={i} className="text-muted-foreground">· {q.text}</li>
+                  ))}
+                </ul>
+              )}
+              {mode === 'transaction' && enrich.explanations && enrich.explanations.length > 0 && (
+                <ul className="mt-2 space-y-1 text-sm">
+                  {enrich.explanations.map((e, i) => (
+                    <li key={i} className="text-muted-foreground">
+                      <span className="font-medium">{e.field}:</span> {e.why}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {mode === 'master' && plan && (
             <div className="space-y-5">
               {plan.suggestions.length > 0 && (

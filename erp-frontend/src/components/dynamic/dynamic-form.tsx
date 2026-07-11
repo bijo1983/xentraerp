@@ -76,8 +76,14 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
       try {
         const existing = await frappe.getDoc(doctype, name);
         if (active && existing) setDoc(existing);
-      } catch {
-        if (active) setFormError('Failed to load document.');
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        if (active)
+          setFormError(
+            status === 403
+              ? `You don't have permission to view/edit ${doctype}. Settings like this usually require an administrator (sign in via Admin Sign In).`
+              : 'Failed to load document.'
+          );
       } finally {
         if (active) setLoadingDoc(false);
       }
