@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Stethoscope,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const NAV = [
   { label: 'Subscriptions', href: dt('Xentra Subscription'), icon: ScrollText },
   { label: 'Invoices', href: dt('Xentra Invoice'), icon: ReceiptText },
   { label: 'Receipts', href: dt('Xentra Receipt'), icon: Landmark },
+  { label: 'Tenant Admin Recovery', href: '/admin/tenant-recovery', icon: Stethoscope },
   { label: 'Platform Settings', href: '/admin/settings', icon: Settings },
 ];
 

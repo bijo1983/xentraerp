@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Loader2, CheckCircle2, Database, Sparkles, UserPlus, ShieldCheck } from 'lucide-react';
 import { frappe, frappeErrorMessage } from '@/lib/frappe';
 import { isControlPlaneReady, provisionControlPlane } from '@/lib/saas/control-plane';
@@ -32,57 +33,6 @@ export default function PlatformSettingsPage() {
   const [uMsg, setUMsg] = useState<string | null>(null);
   const [uErr, setUErr] = useState<string | null>(null);
 
-  // Reset-user-permissions tool (run as Administrator).
-  const [pEmail, setPEmail] = useState('');
-  const [pBusy, setPBusy] = useState(false);
-  const [pMsg, setPMsg] = useState<string | null>(null);
-  const [pErr, setPErr] = useState<string | null>(null);
-
-  const resetUserPermissions = async () => {
-    setPMsg(null);
-    setPErr(null);
-    const email = pEmail.trim();
-    if (!email) {
-      setPErr('Enter the user email.');
-      return;
-    }
-    setPBusy(true);
-    try {
-      // 1) Delete ALL record-level User Permissions on this user.
-      const rows = (await frappe.getList('User Permission', {
-        fields: JSON.stringify(['name']),
-        filters: JSON.stringify([['user', '=', email]]),
-        limit_page_length: 500,
-      })) as { name: string }[];
-      let deleted = 0;
-      for (const r of rows) {
-        await frappe.deleteDoc('User Permission', r.name);
-        deleted++;
-      }
-
-      // 2) Ensure the full-admin roles are present (append, don't replace).
-      const user = (await frappe.getDoc('User', email)) as { roles?: { role: string }[] };
-      const have = new Set((user.roles || []).map((r) => r.role));
-      const want = ['System Manager', 'Stock Manager', 'Accounts Manager'];
-      const missing = want.filter((r) => !have.has(r));
-      let rolesAdded = 0;
-      if (missing.length) {
-        const roles = [...(user.roles || []), ...missing.map((role) => ({ role }))];
-        await frappe.updateDoc('User', email, { roles });
-        rolesAdded = missing.length;
-      }
-
-      setPMsg(
-        `Done for ${email}: removed ${deleted} User Permission${deleted === 1 ? '' : 's'}, ` +
-          `added ${rolesAdded} role${rolesAdded === 1 ? '' : 's'}${rolesAdded ? ` (${missing.join(', ')})` : ''}. ` +
-          `The user must sign out and back in for it to take effect.`
-      );
-    } catch (e) {
-      setPErr(frappeErrorMessage(e, 'Failed. You must be signed in as Administrator / System Manager.'));
-    } finally {
-      setPBusy(false);
-    }
-  };
 
   const createUser = async () => {
     setUMsg(null);
@@ -216,37 +166,31 @@ export default function PlatformSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Reset a user's record-level restrictions (run as Administrator) */}
+      {/* Access model: platform vs tenant admin */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="h-5 w-5 text-primary" /> Make Full Admin (fix access)
+            <ShieldCheck className="h-5 w-5 text-primary" /> Administration model
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            One click: removes ALL <strong>User Permission</strong> record-level restrictions AND grants the
-            full-admin roles (System Manager, Stock Manager, Accounts Manager). Use when an admin is wrongly
-            blocked from settings (&quot;does not have access&quot; or &quot;insufficient permission&quot;). You must be
-            signed in as <strong>Administrator</strong>; the user must sign out and back in afterward.
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            <strong className="text-foreground">Platform Admin</strong> manages SaaS tenants, subscriptions,
+            provisioning, and tenant-administrator recovery. It does <em>not</em> operate any tenant&apos;s ERP.
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={pEmail}
-              onChange={(e) => setPEmail(e.target.value)}
-              placeholder="admin@jjcompany.com"
-              className="max-w-xs"
-            />
-            <Button variant="outline" onClick={resetUserPermissions} disabled={pBusy}>
-              {pBusy ? 'Working…' : 'Reset User Permissions'}
-            </Button>
-          </div>
-          {pMsg && (
-            <div className="rounded-md bg-green-100 p-3 text-sm text-green-700 dark:bg-green-500/15 dark:text-green-400">
-              {pMsg}
-            </div>
-          )}
-          {pErr && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{pErr}</div>}
+          <p>
+            <strong className="text-foreground">Tenant Admin</strong> manages ERP configuration, users, roles,
+            modules, masters, and transactions inside their assigned company — with the ERPNext roles their
+            subscription grants (System Manager plus module managers).
+          </p>
+          <p>
+            To fix a tenant admin who cannot access or save ERP settings, use the role-aware{' '}
+            <Link href="/admin/tenant-recovery" className="font-medium text-primary underline">
+              Tenant Admin Recovery
+            </Link>{' '}
+            tool — it diagnoses the exact cause (missing role, user permission, module, mapping) and applies only
+            the needed fix, instead of a blind permission reset.
+          </p>
         </CardContent>
       </Card>
 
