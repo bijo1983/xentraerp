@@ -60,6 +60,11 @@ export default function DynamicListPage() {
     (async () => {
       try {
         const meta = (await frappe.getDocTypeMeta(doctype)) as DocTypeMeta | undefined;
+        // Single DocTypes (Settings) have no list — go straight to the record.
+        if (meta?.issingle === 1) {
+          router.replace(`/app/${encodeURIComponent(doctype)}/${encodeURIComponent(doctype)}`);
+          return;
+        }
         const cols = (meta?.fields || []).filter(
           (f) =>
             f.in_list_view === 1 &&
