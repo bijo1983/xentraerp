@@ -46,6 +46,11 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
         proxyRes.on('end', () => {
           const data = Buffer.concat(chunks).toString('utf-8');
 
+          // Log the response body on errors so 4xx/5xx are debuggable.
+          if ((proxyRes.statusCode || 0) >= 400) {
+            console.error('[erp-proxy] ERROR body', proxyRes.statusCode, path, data.slice(0, 1500));
+          }
+
           const responseHeaders = new Headers();
           responseHeaders.set(
             'Content-Type',
