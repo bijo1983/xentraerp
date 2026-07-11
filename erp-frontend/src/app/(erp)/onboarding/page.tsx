@@ -32,7 +32,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('xentra_onboarding') || '{}');
-      if (typeof saved.step === 'number') setStep(saved.step);
+      if (typeof saved.step === 'number') setStep(Math.max(0, Math.min(STEPS.length - 1, saved.step)));
       if (Array.isArray(saved.modules)) setModules(saved.modules);
       if (saved.productName) setProductName(saved.productName);
     } catch {

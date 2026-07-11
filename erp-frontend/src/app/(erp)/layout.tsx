@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { useERPStore } from '@/store/erp-store';
@@ -11,20 +11,23 @@ import { cn } from '@/lib/utils';
 
 export default function ERPLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, loading, checkSession } = useAuthStore();
+  const { user, checkSession } = useAuthStore();
   const { sidebarOpen } = useERPStore();
+  // Only decide on redirect AFTER the session check resolves, otherwise a
+  // logged-in user gets bounced to /login on hard refresh.
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    checkSession();
+    checkSession().finally(() => setChecked(true));
   }, [checkSession]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (checked && !user) {
       router.replace('/login');
     }
-  }, [user, loading, router]);
+  }, [checked, user, router]);
 
-  if (loading) {
+  if (!checked) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

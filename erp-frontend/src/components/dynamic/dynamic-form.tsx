@@ -137,7 +137,12 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
     if (has('plc_conversion_rate')) d.plc_conversion_rate = 1;
     if (has('transaction_date')) d.transaction_date = today;
     if (has('posting_date')) d.posting_date = today;
-    if (has('order_type')) d.order_type = 'Sales';
+    // Only default order_type to "Sales" when that is a valid option
+    // (Purchase Order's order_type options differ).
+    const orderTypeField = allFields.find((f) => f.fieldname === 'order_type');
+    if (orderTypeField && (orderTypeField.options || '').split('\n').includes('Sales')) {
+      d.order_type = 'Sales';
+    }
     if (has('selling_price_list')) d.selling_price_list = 'Standard Selling';
     if (has('buying_price_list')) d.buying_price_list = 'Standard Buying';
 
@@ -148,9 +153,14 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
   const validate = (): string | null => {
     for (const f of allFields) {
       if (!isVisible(f)) continue;
-      if (isRequired(f) && f.component !== 'child_table') {
-        const v = doc[f.fieldname];
-        if (v === undefined || v === null || v === '') return `“${f.label}” is required.`;
+      if (!isRequired(f)) continue;
+      const v = doc[f.fieldname];
+      if (f.component === 'child_table') {
+        if (!Array.isArray(v) || v.length === 0) return `Add at least one row to “${f.label}”.`;
+      } else if (f.component === 'check') {
+        if (!v) return `“${f.label}” must be checked.`;
+      } else if (v === undefined || v === null || v === '') {
+        return `“${f.label}” is required.`;
       }
     }
     return null;

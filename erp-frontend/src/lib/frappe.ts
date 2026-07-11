@@ -1,5 +1,37 @@
 import axios, { AxiosInstance } from 'axios';
 
+// Server-managed fields that must not be carried into a new/amended doc.
+const SERVER_FIELDS = new Set([
+  'name',
+  'owner',
+  'creation',
+  'modified',
+  'modified_by',
+  'idx',
+  'docstatus',
+  'parent',
+  'parentfield',
+  'parenttype',
+  '__islocal',
+  '__unsaved',
+  'amended_from',
+]);
+
+// Deep-clean a fetched document (and its child rows) of server-managed
+// fields so it can be re-inserted as a fresh document.
+function stripServerFields(doc: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(doc)) {
+    if (SERVER_FIELDS.has(k)) continue;
+    if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object' && v[0] !== null) {
+      out[k] = v.map((row) => stripServerFields(row as Record<string, unknown>));
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 class FrappeClient {
   private http: AxiosInstance;
 
@@ -145,10 +177,11 @@ class FrappeClient {
   }
 
   // ── Submit a draft document (docstatus 0 -> 1) ──────────────────
+  // frappe.client.submit rebuilds the doc from the JSON it's given, so it
+  // must receive the FULL saved document, not just {doctype, name}.
   async submitDoc(doctype: string, name: string) {
-    return this.call('frappe.client.submit', {
-      doc: JSON.stringify({ doctype, name }),
-    });
+    const doc = await this.getDoc(doctype, name);
+    return this.call('frappe.client.submit', { doc: JSON.stringify(doc) });
   }
 
   // ── Cancel a submitted document (docstatus 1 -> 2) ──────────────
@@ -158,11 +191,10 @@ class FrappeClient {
 
   // ── Amend a cancelled document (new draft from amended_from) ────
   async amendDoc(doctype: string, name: string) {
-    const source = await this.getDoc(doctype, name);
-    const { name: _omit, ...rest } = source as Record<string, unknown>;
-    void _omit;
+    const source = (await this.getDoc(doctype, name)) as Record<string, unknown>;
+    const cleaned = stripServerFields(source);
     return this.createDoc(doctype, {
-      ...rest,
+      ...cleaned,
       amended_from: name,
       docstatus: 0,
     });

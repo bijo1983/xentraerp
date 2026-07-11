@@ -22,7 +22,7 @@ export function RevenueChart({ data, currency }: RevenueChartProps) {
     yaxis: {
       labels: {
         formatter: (val: number) =>
-          new Intl.NumberFormat('en-IN', { notation: 'compact', compactDisplay: 'short' }).format(val),
+          new Intl.NumberFormat('en-US', { notation: 'compact', compactDisplay: 'short' }).format(val),
       },
     },
     fill: {

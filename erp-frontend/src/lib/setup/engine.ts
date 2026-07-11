@@ -34,7 +34,9 @@ async function ensure(doctype: string, payload: Record<string, unknown>) {
     const msg =
       (e as { response?: { data?: { exception?: string } } })?.response?.data?.exception ||
       (e instanceof Error ? e.message : '');
-    if (/exists|Duplicate/i.test(String(msg))) return; // already there
+    // Only swallow genuine duplicate-insert errors, not any message that
+    // happens to contain "exists".
+    if (/DuplicateEntry|already exists/i.test(String(msg))) return;
     throw e;
   }
 }
@@ -299,7 +301,8 @@ export const SETUP_ITEMS: SetupItem[] = [
         limit_page_length: 1,
       });
       const acc = Array.isArray(accts) && accts[0]?.name;
-      if (acc) await frappe.updateDoc('Company', ctx.company, { default_receivable_account: acc });
+      if (!acc) throw new Error('No Receivable account found in the Chart of Accounts. Create one first (e.g. Debtors).');
+      await frappe.updateDoc('Company', ctx.company, { default_receivable_account: acc });
     },
   },
   {
@@ -323,7 +326,8 @@ export const SETUP_ITEMS: SetupItem[] = [
         limit_page_length: 1,
       });
       const acc = Array.isArray(accts) && accts[0]?.name;
-      if (acc) await frappe.updateDoc('Company', ctx.company, { default_payable_account: acc });
+      if (!acc) throw new Error('No Payable account found in the Chart of Accounts. Create one first (e.g. Creditors).');
+      await frappe.updateDoc('Company', ctx.company, { default_payable_account: acc });
     },
   },
 ];

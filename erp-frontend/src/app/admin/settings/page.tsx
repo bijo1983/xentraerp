@@ -39,6 +39,12 @@ export default function PlatformSettingsPage() {
       setUErr('Email, full name and password are required.');
       return;
     }
+    // A company user without a company restriction could read every
+    // tenant's data on a shared site — require it.
+    if (uRole === 'company' && !uCompany) {
+      setUErr('Select the company to restrict this user to (required for tenant isolation).');
+      return;
+    }
     setUBusy(true);
     try {
       // Company user gets a full "company admin" role set (manage masters
@@ -200,7 +206,7 @@ export default function PlatformSettingsPage() {
             </div>
             {uRole === 'company' && (
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Restrict to Company (optional)</label>
+                <label className="text-sm font-medium">Restrict to Company <span className="text-destructive">*</span></label>
                 <LinkField target="Company" value={uCompany} onChange={setUCompany} placeholder="Search company…" />
               </div>
             )}

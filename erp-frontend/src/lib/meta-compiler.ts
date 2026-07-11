@@ -171,6 +171,21 @@ export function compileSchema(meta: DocTypeMeta): RenderSchema {
 // permlevel 0 only (field-level permlevels handled separately). Fail closed.
 export function resolvePermissions(perms: DocPerm[], roles: string[]): PermissionSet {
   const roleSet = new Set(roles);
+  // When the metadata carries no DocPerm rows (some getdoctype responses
+  // omit them), don't lock the UI down — the ERPNext server still enforces
+  // permissions on every write. Only fail-closed when perms ARE present but
+  // none match the user's roles.
+  const permissive: PermissionSet = {
+    read: true,
+    write: true,
+    create: true,
+    submit: true,
+    cancel: true,
+    amend: true,
+    delete: true,
+  };
+  if (!perms || perms.length === 0) return permissive;
+
   const base: PermissionSet = {
     read: false,
     write: false,

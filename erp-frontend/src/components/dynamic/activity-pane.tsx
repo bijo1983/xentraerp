@@ -122,7 +122,11 @@ export function ActivityPane({ doctype, name }: { doctype: string; name: string 
               {comments.map((c) => (
                 <li key={c.name} className="rounded-md bg-muted/40 p-2">
                   <p className="text-xs font-medium">{c.owner}</p>
-                  <div className="text-sm" dangerouslySetInnerHTML={{ __html: c.content || '' }} />
+                  {/* Render as text (React-escaped) to avoid stored XSS from
+                      arbitrary Comment HTML. */}
+                  <div className="whitespace-pre-wrap break-words text-sm">
+                    {(c.content || '').replace(/<[^>]*>/g, '')}
+                  </div>
                   <p className="mt-1 text-[10px] text-muted-foreground">{fmt(c.creation)}</p>
                 </li>
               ))}
@@ -162,7 +166,7 @@ export function ActivityPane({ doctype, name }: { doctype: string; name: string 
             {attachments.map((a) => (
               <li key={a.name}>
                 <a
-                  href={`/api/erp${a.file_url || ''}`}
+                  href={a.file_url || '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 rounded-md border px-2 py-1.5 hover:bg-accent"

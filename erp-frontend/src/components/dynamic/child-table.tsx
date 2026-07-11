@@ -108,7 +108,9 @@ export function ChildTable({ childDoctype, rows, onChange }: ChildTableProps) {
                             idx,
                             c.fieldname,
                             inputTypeFor(c.fieldtype) === 'number'
-                              ? Number(e.target.value)
+                              ? e.target.value === ''
+                                ? ''
+                                : Number(e.target.value)
                               : e.target.value
                           )
                         }

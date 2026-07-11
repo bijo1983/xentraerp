@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -33,17 +33,18 @@ const NAV = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading, checkSession, logout } = useAuthStore();
+  const { user, checkSession, logout } = useAuthStore();
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    checkSession();
+    checkSession().finally(() => setChecked(true));
   }, [checkSession]);
 
   useEffect(() => {
-    if (!loading && !user) router.replace('/login');
-  }, [user, loading, router]);
+    if (checked && !user) router.replace('/login');
+  }, [checked, user, router]);
 
-  if (loading) {
+  if (!checked) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

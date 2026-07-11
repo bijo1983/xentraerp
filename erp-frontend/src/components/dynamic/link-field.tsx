@@ -57,7 +57,15 @@ export function LinkField({ target, value, onChange, disabled, placeholder }: Li
           setOpen(true);
           runSearch(query);
         }}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onBlur={() =>
+          setTimeout(() => {
+            setOpen(false);
+            // If the user typed text but didn't pick an option (and isn't
+            // quick-creating), revert to the actually-stored value so the
+            // input never shows a value the document doesn't hold.
+            setQuery((q) => (creating || q === value ? q : value));
+          }, 200)
+        }
       />
 
       {open && (options.length > 0 || canCreate) && (

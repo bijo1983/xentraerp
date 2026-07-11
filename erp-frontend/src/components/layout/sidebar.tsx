@@ -151,10 +151,12 @@ export function Sidebar() {
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
+                // Exact match or a sub-path (href + '/…'), so /app/Item
+                // doesn't also light up /app/Item Group.
                 const active =
                   item.href === '/logistics'
                     ? pathname === '/logistics'
-                    : pathname.startsWith(item.href);
+                    : pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
                   <Link
                     key={item.href}
