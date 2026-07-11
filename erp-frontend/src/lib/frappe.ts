@@ -164,6 +164,67 @@ class FrappeClient {
     });
   }
 
+  // ── Activity pane data (§9) ─────────────────────────────────────
+  async getComments(doctype: string, name: string) {
+    return this.getList('Comment', {
+      fields: JSON.stringify(['name', 'content', 'owner', 'creation', 'comment_type']),
+      filters: JSON.stringify([
+        ['reference_doctype', '=', doctype],
+        ['reference_name', '=', name],
+        ['comment_type', '=', 'Comment'],
+      ]),
+      order_by: 'creation desc',
+      limit_page_length: 50,
+    });
+  }
+
+  async addComment(doctype: string, name: string, content: string) {
+    return this.createDoc('Comment', {
+      comment_type: 'Comment',
+      reference_doctype: doctype,
+      reference_name: name,
+      content,
+    });
+  }
+
+  async getVersions(doctype: string, name: string) {
+    return this.getList('Version', {
+      fields: JSON.stringify(['name', 'owner', 'creation']),
+      filters: JSON.stringify([
+        ['ref_doctype', '=', doctype],
+        ['docname', '=', name],
+      ]),
+      order_by: 'creation desc',
+      limit_page_length: 50,
+    });
+  }
+
+  async getAttachments(doctype: string, name: string) {
+    return this.getList('File', {
+      fields: JSON.stringify(['name', 'file_name', 'file_url', 'creation']),
+      filters: JSON.stringify([
+        ['attached_to_doctype', '=', doctype],
+        ['attached_to_name', '=', name],
+      ]),
+      order_by: 'creation desc',
+      limit_page_length: 50,
+    });
+  }
+
+  async getLinkedDocs(doctype: string, name: string) {
+    // Two-step ERPNext linked-documents lookup.
+    const linkRes = await this.http.get('/api/erp/method/frappe.desk.form.linked_with.get_linked_doctypes', {
+      params: { doctype },
+    });
+    const linkinfo = linkRes.data?.message || {};
+    const res = await this.http.post('/api/erp/method/frappe.desk.form.linked_with.get_linked_docs', {
+      doctype,
+      docname: name,
+      linkinfo: JSON.stringify(linkinfo),
+    });
+    return (res.data?.message || {}) as Record<string, { name: string; status?: string }[]>;
+  }
+
   // ── Link-field search (async dropdowns) ─────────────────────────
   async searchLink(doctype: string, txt: string, filters?: unknown) {
     const res = await this.http.get('/api/erp/method/frappe.desk.search.search_link', {
