@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle2, Database, Sparkles } from 'lucide-react';
+import { Loader2, CheckCircle2, Database, Sparkles, UserPlus } from 'lucide-react';
 import { frappe } from '@/lib/frappe';
 import { isControlPlaneReady, provisionControlPlane } from '@/lib/saas/control-plane';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LinkField } from '@/components/dynamic/link-field';
 
 const CORE_MODULES = ['Sales', 'Purchase', 'Accounts', 'CRM', 'Inventory'];
 const OPTIONAL_MODULES = ['Manufacturing', 'Projects', 'HR', 'Fixed Assets', 'Quality'];
@@ -19,6 +21,50 @@ export default function PlatformSettingsPage() {
   const [ready, setReady] = useState<boolean | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // Create-user form (separate platform admin vs company user).
+  const [uEmail, setUEmail] = useState('');
+  const [uName, setUName] = useState('');
+  const [uPass, setUPass] = useState('');
+  const [uRole, setURole] = useState<'company' | 'platform'>('company');
+  const [uCompany, setUCompany] = useState('');
+  const [uBusy, setUBusy] = useState(false);
+  const [uMsg, setUMsg] = useState<string | null>(null);
+  const [uErr, setUErr] = useState<string | null>(null);
+
+  const createUser = async () => {
+    setUMsg(null);
+    setUErr(null);
+    if (!uEmail || !uName || !uPass) {
+      setUErr('Email, full name and password are required.');
+      return;
+    }
+    setUBusy(true);
+    try {
+      // Company user gets ERP-operational roles; platform user gets System Manager.
+      const roles =
+        uRole === 'platform'
+          ? ['System Manager']
+          : ['Sales User', 'Purchase User', 'Accounts User', 'Stock User', 'Item Manager'];
+      await frappe.createUser(uEmail, uName, uPass, roles);
+      // Restrict a company user to their company (record-level isolation).
+      if (uRole === 'company' && uCompany) {
+        await frappe.addUserPermission(uEmail, 'Company', uCompany);
+      }
+      setUMsg(`User ${uEmail} created. They can sign in via ${uRole === 'platform' ? 'Admin' : 'Customer'} Sign In.`);
+      setUEmail('');
+      setUName('');
+      setUPass('');
+      setUCompany('');
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { exception?: string } } })?.response?.data?.exception ||
+        (e instanceof Error ? e.message : 'Failed to create user.');
+      setUErr(msg);
+    } finally {
+      setUBusy(false);
+    }
+  };
 
   useEffect(() => {
     isControlPlaneReady().then(setReady);
@@ -88,6 +134,66 @@ export default function PlatformSettingsPage() {
               <Sparkles className="mr-2 h-4 w-4" /> Seed Default Modules &amp; Plans
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Separate platform-admin vs company users */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UserPlus className="h-5 w-5 text-primary" /> Create User
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Keep the platform admin separate from company users. A <strong>Company user</strong> signs in via
+            “Customer Sign In” and is restricted to their company; a <strong>Platform admin</strong> signs in via
+            “Admin Sign In” with full System Manager access.
+          </p>
+          {uErr && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{uErr}</div>}
+          {uMsg && <div className="rounded-md bg-green-100 p-3 text-sm text-green-700 dark:bg-green-500/15 dark:text-green-400">{uMsg}</div>}
+
+          <div className="flex rounded-lg border bg-muted/40 p-1">
+            <button
+              type="button"
+              onClick={() => setURole('company')}
+              className={`flex-1 rounded-md py-2 text-sm font-medium ${uRole === 'company' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
+            >
+              Company User
+            </button>
+            <button
+              type="button"
+              onClick={() => setURole('platform')}
+              className={`flex-1 rounded-md py-2 text-sm font-medium ${uRole === 'platform' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
+            >
+              Platform Admin
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Full Name</label>
+              <Input value={uName} onChange={(e) => setUName(e.target.value)} placeholder="JJ Company Admin" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Email</label>
+              <Input type="email" value={uEmail} onChange={(e) => setUEmail(e.target.value)} placeholder="admin@jjcompany.com" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Password</label>
+              <Input type="password" value={uPass} onChange={(e) => setUPass(e.target.value)} placeholder="Set a strong password" />
+            </div>
+            {uRole === 'company' && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Restrict to Company (optional)</label>
+                <LinkField target="Company" value={uCompany} onChange={setUCompany} placeholder="Search company…" />
+              </div>
+            )}
+          </div>
+
+          <Button onClick={createUser} disabled={uBusy}>
+            {uBusy ? 'Creating…' : `Create ${uRole === 'platform' ? 'Platform Admin' : 'Company User'}`}
+          </Button>
         </CardContent>
       </Card>
 

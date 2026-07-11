@@ -34,6 +34,24 @@ class FrappeClient {
     return res.data;
   }
 
+  // ── Create a user with a password + roles (admin action) ────────
+  async createUser(email: string, fullName: string, password: string, roles: string[]) {
+    const [first, ...rest] = fullName.trim().split(' ');
+    return this.createDoc('User', {
+      email,
+      first_name: first || email,
+      last_name: rest.join(' ') || undefined,
+      new_password: password,
+      send_welcome_email: 0,
+      roles: roles.map((role) => ({ role })),
+    });
+  }
+
+  // ── Restrict a user to a Company (record-level isolation) ───────
+  async addUserPermission(user: string, allow: string, value: string) {
+    return this.createDoc('User Permission', { user, allow, for_value: value });
+  }
+
   // ── Self sign-up (ERPNext standard, if enabled on the site) ─────
   async signUp(email: string, fullName: string) {
     const res = await this.http.post('/api/erp/method/frappe.core.doctype.user.user.sign_up', {

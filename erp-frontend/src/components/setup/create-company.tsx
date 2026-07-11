@@ -42,6 +42,19 @@ export function CreateCompany({ onCreated }: { onCreated: () => void }) {
     }
   };
 
+  // ERPNext auto-creates a "Goods In Transit" warehouse on company insert,
+  // which needs a "Transit" Warehouse Type. On sites missing that standard
+  // fixture, company creation fails — so ensure the prerequisites first.
+  const ensurePrereqs = async () => {
+    for (const wt of ['Transit']) {
+      try {
+        await frappe.createDoc('Warehouse Type', { name: wt });
+      } catch {
+        /* already exists → fine */
+      }
+    }
+  };
+
   const submit = async () => {
     setError(null);
     if (!companyName || !abbr || !country || !currency) {
@@ -49,6 +62,7 @@ export function CreateCompany({ onCreated }: { onCreated: () => void }) {
     }
     setSubmitting(true);
     try {
+      await ensurePrereqs();
       await frappe.createDoc('Company', {
         company_name: companyName,
         abbr,
