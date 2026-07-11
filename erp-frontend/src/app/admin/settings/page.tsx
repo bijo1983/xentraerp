@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, Database, Sparkles, UserPlus } from 'lucide-react';
-import { frappe } from '@/lib/frappe';
+import { frappe, frappeErrorMessage } from '@/lib/frappe';
 import { isControlPlaneReady, provisionControlPlane } from '@/lib/saas/control-plane';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,10 +78,7 @@ export default function PlatformSettingsPage() {
       setUPass('');
       setUCompany('');
     } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { exception?: string } } })?.response?.data?.exception ||
-        (e instanceof Error ? e.message : 'Failed to create user.');
-      setUErr(msg);
+      setUErr(frappeErrorMessage(e, 'Failed to create user.'));
     } finally {
       setUBusy(false);
     }

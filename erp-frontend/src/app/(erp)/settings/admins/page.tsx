@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ShieldCheck, UserPlus, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { frappe } from '@/lib/frappe';
+import { frappe, frappeErrorMessage } from '@/lib/frappe';
 import { useCompanyDefaults } from '@/hooks/use-company-defaults';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,12 +112,7 @@ export default function CompanyAdminsPage() {
       setPassword('');
       await load();
     } catch (err) {
-      const msg =
-        (err as { response?: { data?: { _server_messages?: string; message?: string } } })?.response?.data
-          ?.message ||
-        (err as Error)?.message ||
-        'Failed to create the admin. The email may already exist.';
-      setError(String(msg));
+      setError(frappeErrorMessage(err, 'Failed to create the admin. The email may already exist.'));
     } finally {
       setSubmitting(false);
     }

@@ -316,3 +316,46 @@ class FrappeClient {
 }
 
 export const frappe = new FrappeClient();
+
+/**
+ * Turn a Frappe/axios error into a human message. ERPNext puts the
+ * user-facing text in `_server_messages` (a JSON array of stringified
+ * {message}) or `_error_message`; the raw `exception` string is the last
+ * resort. Also strips ERPNext's <details>/<strong> HTML wrappers.
+ */
+export function frappeErrorMessage(err: unknown, fallback = 'Something went wrong.'): string {
+  const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
+  const strip = (s: string) =>
+    s
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  if (data) {
+    // _server_messages: '["{\\"message\\": \\"...\\"}", ...]'
+    const sm = data._server_messages;
+    if (typeof sm === 'string') {
+      try {
+        const arr = JSON.parse(sm) as string[];
+        const msgs = arr
+          .map((raw) => {
+            try {
+              const obj = JSON.parse(raw) as { message?: string };
+              return obj.message ? strip(obj.message) : '';
+            } catch {
+              return strip(raw);
+            }
+          })
+          .filter(Boolean);
+        if (msgs.length) return msgs.join(' ');
+      } catch {
+        /* fall through */
+      }
+    }
+    if (typeof data._error_message === 'string' && data._error_message.trim())
+      return strip(data._error_message);
+    if (typeof data.exception === 'string' && data.exception.trim()) return strip(data.exception);
+    if (typeof data.message === 'string' && data.message.trim()) return strip(data.message);
+  }
+  return err instanceof Error && err.message ? err.message : fallback;
+}
