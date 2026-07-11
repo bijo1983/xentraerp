@@ -33,14 +33,21 @@ export function ChildTable({ childDoctype, rows, onChange }: ChildTableProps) {
   useEffect(() => {
     (async () => {
       const meta = (await frappe.getDocTypeMeta(childDoctype)) as DocTypeMeta | undefined;
-      const fields = (meta?.fields || []).filter(
+      const all = meta?.fields || [];
+      const fields = all.filter(
         (f) => f.in_list_view === 1 && f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
       );
+      // Also surface description + UOM in item grids even if not flagged.
+      const EXTRA = ['description', 'uom', 'stock_uom'];
+      for (const fn of EXTRA) {
+        const extra = all.find((f) => f.fieldname === fn);
+        if (extra && !fields.some((f) => f.fieldname === fn)) fields.push(extra);
+      }
       // Fall back to first few data-ish fields if none are flagged in_list_view.
       const cols =
         fields.length > 0
           ? fields
-          : (meta?.fields || [])
+          : all
               .filter((f) => !['Section Break', 'Column Break', 'Tab Break', 'HTML'].includes(f.fieldtype))
               .slice(0, 5);
       setColumns(cols);

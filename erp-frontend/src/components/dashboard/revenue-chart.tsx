@@ -7,9 +7,10 @@ const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 interface RevenueChartProps {
   data: { date: string; amount: number }[];
+  currency?: string;
 }
 
-export function RevenueChart({ data }: RevenueChartProps) {
+export function RevenueChart({ data, currency }: RevenueChartProps) {
   const options: ApexCharts.ApexOptions = {
     chart: { type: 'area', toolbar: { show: false }, zoom: { enabled: false } },
     dataLabels: { enabled: false },
@@ -32,7 +33,9 @@ export function RevenueChart({ data }: RevenueChartProps) {
     tooltip: {
       y: {
         formatter: (val: number) =>
-          new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val),
+          currency
+            ? new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(val)
+            : new Intl.NumberFormat('en-US').format(val),
       },
     },
   };

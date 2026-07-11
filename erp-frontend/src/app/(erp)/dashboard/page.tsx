@@ -2,12 +2,14 @@
 
 import { useEffect } from 'react';
 import { useERPStore } from '@/store/erp-store';
+import { useCompanyDefaults } from '@/hooks/use-company-defaults';
 import { KPICards } from '@/components/dashboard/kpi-cards';
 import { RevenueChart } from '@/components/dashboard/revenue-chart';
 import { OrderStatusChart } from '@/components/dashboard/order-status-chart';
 
 export default function DashboardPage() {
   const { kpi, kpiLoading, fetchKPI } = useERPStore();
+  const { currency } = useCompanyDefaults();
 
   useEffect(() => {
     fetchKPI();
@@ -41,7 +43,7 @@ export default function DashboardPage() {
       </div>
       <KPICards data={kpi} />
       <div className="grid gap-4 lg:grid-cols-3">
-        <RevenueChart data={kpi.revenue_trend} />
+        <RevenueChart data={kpi.revenue_trend} currency={currency || undefined} />
         <OrderStatusChart data={kpi.order_status_distribution} />
       </div>
     </div>

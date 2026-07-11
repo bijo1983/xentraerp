@@ -111,6 +111,20 @@ class FrappeClient {
     return this.call('frappe.client.get_count', { doctype, filters });
   }
 
+  // ── Live currency exchange rate (ERPNext fetches from the internet) ─
+  async getExchangeRate(fromCurrency: string, toCurrency: string) {
+    if (!fromCurrency || !toCurrency || fromCurrency === toCurrency) return 1;
+    try {
+      const res = await this.http.get('/api/erp/method/erpnext.setup.utils.get_exchange_rate', {
+        params: { from_currency: fromCurrency, to_currency: toCurrency },
+      });
+      const rate = Number(res.data?.message);
+      return rate && rate > 0 ? rate : 1;
+    } catch {
+      return 1;
+    }
+  }
+
   // ── Run a Query Report (Trial Balance, P&L, GL, etc.) ───────────
   async runReport(reportName: string, filters: Record<string, unknown>) {
     const res = await this.http.get('/api/erp/method/frappe.desk.query_report.run', {

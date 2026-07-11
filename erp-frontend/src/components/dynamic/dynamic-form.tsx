@@ -6,6 +6,7 @@ import { evalDepends } from '@/lib/eval-depends';
 import { resolvePermissions } from '@/lib/meta-compiler';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { useAuthStore } from '@/store/auth-store';
+import { useCompanyDefaults } from '@/hooks/use-company-defaults';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,12 +31,14 @@ const selectClass =
 export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProps) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
   const { user } = useAuthStore();
+  const { company, currency: companyCurrency } = useCompanyDefaults();
   const [doc, setDoc] = useState<DocModel>(initial || {});
   const [activeTab, setActiveTab] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(!!name);
   const [workflow, setWorkflow] = useState<WorkflowDef | null>(null);
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
   // Effective permission matrix for the current user (§14). Fail closed.
   const perms = useMemo(
@@ -82,7 +85,20 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
   const docstatus = Number(doc.docstatus ?? 0);
   const isNew = !name;
 
-  const setField = (fname: string, value: unknown) => setDoc((d) => ({ ...d, [fname]: value }));
+  const setField = (fname: string, value: unknown) => {
+    setDoc((d) => ({ ...d, [fname]: value }));
+    // When the transaction currency changes, refresh the exchange rate
+    // against the company currency (fetched live by ERPNext).
+    if (fname === 'currency' && companyCurrency) {
+      if (!value || value === companyCurrency) {
+        setDoc((d) => ({ ...d, conversion_rate: 1 }));
+      } else {
+        frappe.getExchangeRate(String(value), companyCurrency).then((rate) => {
+          setDoc((d) => ({ ...d, conversion_rate: rate }));
+        });
+      }
+    }
+  };
 
   const isVisible = (f: RenderField) => evalDepends(f.dependsOn, doc, true);
   // Submitted (1) or cancelled (2) documents lock all fields.
@@ -95,6 +111,39 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
     if (!schema) return [] as RenderField[];
     return schema.tabs.flatMap((t) => t.sections.flatMap((s) => s.columns.flatMap((c) => c.fields)));
   }, [schema]);
+
+  // ── Smart defaults on a new document ────────────────────────────
+  // Apply ERPNext field defaults + company-aware defaults (company,
+  // currency, price list, order type, today's date, conversion rate).
+  useEffect(() => {
+    if (!isNew || !schema || defaultsApplied) return;
+    const has = (fn: string) => allFields.some((f) => f.fieldname === fn);
+    const today = new Date().toISOString().slice(0, 10);
+    const d: DocModel = {};
+
+    // 1. Field metadata defaults.
+    for (const f of allFields) {
+      if (f.default && f.default !== '') {
+        d[f.fieldname] =
+          /today|now/i.test(f.default) && (f.component === 'date' || f.component === 'datetime')
+            ? today
+            : f.default;
+      }
+    }
+    // 2. Company-aware defaults.
+    if (has('company') && company) d.company = company;
+    if (has('currency') && companyCurrency) d.currency = companyCurrency;
+    if (has('conversion_rate')) d.conversion_rate = 1;
+    if (has('plc_conversion_rate')) d.plc_conversion_rate = 1;
+    if (has('transaction_date')) d.transaction_date = today;
+    if (has('posting_date')) d.posting_date = today;
+    if (has('order_type')) d.order_type = 'Sales';
+    if (has('selling_price_list')) d.selling_price_list = 'Standard Selling';
+    if (has('buying_price_list')) d.buying_price_list = 'Standard Buying';
+
+    setDoc((prev) => ({ ...d, ...prev })); // never override user-entered values
+    setDefaultsApplied(true);
+  }, [isNew, schema, defaultsApplied, allFields, company, companyCurrency]);
 
   const validate = (): string | null => {
     for (const f of allFields) {

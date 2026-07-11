@@ -3,6 +3,7 @@
 import { ShoppingCart, Users, DollarSign, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { useCompanyDefaults } from '@/hooks/use-company-defaults';
 import type { KPIData } from '@/types/erp';
 
 interface KPICardsProps {
@@ -10,10 +11,11 @@ interface KPICardsProps {
 }
 
 export function KPICards({ data }: KPICardsProps) {
+  const { currency } = useCompanyDefaults();
   const cards = [
     {
       title: 'Total Revenue',
-      value: formatCurrency(data.total_revenue),
+      value: formatCurrency(data.total_revenue, currency || undefined),
       icon: DollarSign,
       color: 'text-green-600 dark:text-green-400',
       chip: 'bg-green-100 dark:bg-green-500/15',
