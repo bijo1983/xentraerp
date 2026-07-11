@@ -144,11 +144,24 @@ export function compileSchema(meta: DocTypeMeta): RenderSchema {
     tabs.push({ label: 'Details', sections: [currentSection] });
   }
 
+  // Drop empty columns (ERPNext layouts often start a section with a
+  // Column Break, leaving a blank first column that wastes horizontal
+  // space) and drop sections/tabs left with no fields.
+  for (const tab of tabs) {
+    for (const section of tab.sections) {
+      section.columns = section.columns.filter((c) => c.fields.length > 0);
+      if (section.columns.length === 0) section.columns.push({ fields: [] });
+    }
+    tab.sections = tab.sections.filter((s) => s.columns.some((c) => c.fields.length > 0));
+  }
+
+  const nonEmptyTabs = tabs.filter((t) => t.sections.length > 0);
+
   return {
     doctype: meta.name,
     isSubmittable: meta.is_submittable === 1,
     titleField: meta.title_field,
-    tabs,
+    tabs: nonEmptyTabs.length > 0 ? nonEmptyTabs : tabs,
     permissions: meta.permissions || [],
     schema_hash: hashMeta(meta),
   };

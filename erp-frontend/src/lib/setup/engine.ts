@@ -51,6 +51,59 @@ async function countOf(doctype: string, filters?: unknown): Promise<number> {
   return Number(c) || 0;
 }
 
+// Country → standard VAT/GST rate + label. Drives auto tax-template setup.
+export const COUNTRY_TAX: Record<string, { label: string; rate: number }> = {
+  // GCC
+  'United Arab Emirates': { label: 'UAE VAT 5%', rate: 5 },
+  'Saudi Arabia': { label: 'KSA VAT 15%', rate: 15 },
+  Qatar: { label: 'Qatar VAT 5%', rate: 5 },
+  Bahrain: { label: 'Bahrain VAT 10%', rate: 10 },
+  Oman: { label: 'Oman VAT 5%', rate: 5 },
+  Kuwait: { label: 'Kuwait VAT 0%', rate: 0 },
+  // Others
+  India: { label: 'GST 18%', rate: 18 },
+  'United States': { label: 'US Sales Tax', rate: 0 },
+  'United Kingdom': { label: 'UK VAT 20%', rate: 20 },
+  Australia: { label: 'GST 10%', rate: 10 },
+};
+
+// Ensure country tax templates (best-effort; tolerant of CoA differences).
+async function ensureTaxTemplates(ctx: SetupContext) {
+  const cfg = ctx.country ? COUNTRY_TAX[ctx.country] : undefined;
+  if (!cfg) throw new Error(`No tax template preset for country "${ctx.country || 'unknown'}".`);
+
+  // Find or create a tax account to post to.
+  let accountHead: string | undefined;
+  const existing = await frappe.getList('Account', {
+    fields: JSON.stringify(['name']),
+    filters: JSON.stringify([
+      ['company', '=', ctx.company],
+      ['account_type', '=', 'Tax'],
+      ['is_group', '=', 0],
+    ]),
+    limit_page_length: 1,
+  });
+  if (Array.isArray(existing) && existing[0]?.name) {
+    accountHead = existing[0].name;
+  } else {
+    // Create under the standard "Duties and Taxes" group if present.
+    const parent = `Duties and Taxes - ${ctx.abbr}`;
+    await ensure('Account', {
+      account_name: cfg.label,
+      parent_account: parent,
+      company: ctx.company,
+      account_type: 'Tax',
+      tax_rate: cfg.rate,
+    });
+    accountHead = `${cfg.label} - ${ctx.abbr}`;
+  }
+
+  const taxes = [{ charge_type: 'On Net Total', account_head: accountHead, rate: cfg.rate, description: cfg.label }];
+  await ensure('Sales Taxes and Charges Template', { title: `${cfg.label} (Sales)`, company: ctx.company, taxes });
+  await ensure('Purchase Taxes and Charges Template', { title: `${cfg.label} (Purchase)`, company: ctx.company, taxes });
+  await ensure('Tax Category', { title: cfg.label });
+}
+
 export const SETUP_ITEMS: SetupItem[] = [
   // ── Inventory ──────────────────────────────────────────────
   {
@@ -165,6 +218,15 @@ export const SETUP_ITEMS: SetupItem[] = [
     },
   },
   // ── Accounts (best-effort mapping from existing CoA) ───────
+  {
+    key: 'tax_templates',
+    label: 'Tax Templates',
+    group: 'Accounts',
+    mandatory: false,
+    description: 'Country-specific sales & purchase tax templates (VAT / GST) based on the company country.',
+    check: async (ctx) => (await countOf('Sales Taxes and Charges Template', [['company', '=', ctx.company]])) > 0,
+    fix: ensureTaxTemplates,
+  },
   {
     key: 'receivable_account',
     label: 'Default Receivable Account',

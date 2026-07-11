@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuthStore } from '@/store/auth-store';
+import { frappe } from '@/lib/frappe';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -37,8 +38,13 @@ const HIGHLIGHTS = [
 export default function LoginPage() {
   const router = useRouter();
   const { login, loading, error } = useAuthStore();
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [signupMsg, setSignupMsg] = useState<string | null>(null);
+  const [signupErr, setSignupErr] = useState<string | null>(null);
+  const [signupBusy, setSignupBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +53,25 @@ export default function LoginPage() {
       router.push('/dashboard');
     } catch {
       // error is set in store
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupMsg(null);
+    setSignupErr(null);
+    setSignupBusy(true);
+    try {
+      await frappe.signUp(email, fullName);
+      setSignupMsg('Account request submitted. Check your email to set a password, then sign in.');
+      setMode('login');
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { exception?: string; _server_messages?: string } } })?.response?.data
+          ?.exception || 'Sign up is not enabled on this workspace. Contact your administrator.';
+      setSignupErr(message);
+    } finally {
+      setSignupBusy(false);
     }
   };
 
@@ -115,54 +140,113 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-sm text-muted-foreground">Sign in to your XentraERP workspace</p>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {mode === 'login' ? 'Welcome back' : 'Create your account'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {mode === 'login' ? 'Sign in to your XentraERP workspace' : 'Sign up to get started with XentraERP'}
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-            )}
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">Email or Username</label>
-              <Input
-                id="email"
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com or Administrator"
-                required
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-sm font-medium">Password</label>
-                <button type="button" className="text-xs text-primary hover:underline">
-                  Forgot password?
-                </button>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-11"
-              />
-            </div>
-            <Button type="submit" className="h-11 w-full text-sm font-semibold" disabled={loading}>
-              {loading ? 'Signing in...' : (
-                <span className="flex items-center justify-center gap-2">
-                  Sign In <ArrowRight className="h-4 w-4" />
-                </span>
+          {mode === 'login' ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
               )}
-            </Button>
-          </form>
+              {signupMsg && (
+                <div className="rounded-md bg-green-100 p-3 text-sm text-green-700">{signupMsg}</div>
+              )}
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium">Email or Username</label>
+                <Input
+                  id="email"
+                  type="text"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com or Administrator"
+                  required
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="text-sm font-medium">Password</label>
+                  <button type="button" className="text-xs text-primary hover:underline">
+                    Forgot password?
+                  </button>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-11"
+                />
+              </div>
+              <Button type="submit" className="h-11 w-full text-sm font-semibold" disabled={loading}>
+                {loading ? 'Signing in...' : (
+                  <span className="flex items-center justify-center gap-2">
+                    Sign In <ArrowRight className="h-4 w-4" />
+                  </span>
+                )}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignup} className="space-y-4">
+              {signupErr && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{signupErr}</div>
+              )}
+              <div className="space-y-2">
+                <label htmlFor="fullName" className="text-sm font-medium">Full Name</label>
+                <Input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Jane Doe"
+                  required
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="signupEmail" className="text-sm font-medium">Work Email</label>
+                <Input
+                  id="signupEmail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  required
+                  className="h-11"
+                />
+              </div>
+              <Button type="submit" className="h-11 w-full text-sm font-semibold" disabled={signupBusy}>
+                {signupBusy ? 'Submitting...' : (
+                  <span className="flex items-center justify-center gap-2">
+                    Sign Up <ArrowRight className="h-4 w-4" />
+                  </span>
+                )}
+              </Button>
+            </form>
+          )}
 
           <p className="text-center text-xs text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <button type="button" className="text-primary hover:underline">Request access</button>
+            {mode === 'login' ? (
+              <>
+                Don&apos;t have an account?{' '}
+                <button type="button" className="text-primary hover:underline" onClick={() => setMode('signup')}>
+                  Sign up
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button type="button" className="text-primary hover:underline" onClick={() => setMode('login')}>
+                  Sign in
+                </button>
+              </>
+            )}
           </p>
         </div>
       </div>

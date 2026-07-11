@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useCompanyDefaults } from '@/hooks/use-company-defaults';
 import { SetupChecklist } from '@/components/setup/setup-checklist';
+import { CreateCompany } from '@/components/setup/create-company';
 import type { SetupContext } from '@/lib/setup/engine';
 
 export default function SetupPage() {
@@ -18,8 +19,9 @@ export default function SetupPage() {
   }
   if (!company || !ctx) {
     return (
-      <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-        No Company is configured in ERPNext yet. Create a Company first — it drives currency, chart of accounts and these defaults.
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Company Setup</h2>
+        <CreateCompany onCreated={() => window.location.reload()} />
       </div>
     );
   }

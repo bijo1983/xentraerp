@@ -34,6 +34,16 @@ class FrappeClient {
     return res.data;
   }
 
+  // ── Self sign-up (ERPNext standard, if enabled on the site) ─────
+  async signUp(email: string, fullName: string) {
+    const res = await this.http.post('/api/erp/method/frappe.core.doctype.user.user.sign_up', {
+      email,
+      full_name: fullName,
+      redirect_to: '/',
+    });
+    return res.data.message;
+  }
+
   async getLoggedUser() {
     const res = await this.http.get('/api/erp/method/frappe.auth.get_logged_user');
     return res.data.message;
