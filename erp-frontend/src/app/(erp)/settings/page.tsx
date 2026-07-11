@@ -23,6 +23,7 @@ import {
   Layers,
   CreditCard,
   Building,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -50,6 +51,7 @@ const GROUPS: Group[] = [
       { label: 'Onboarding Wizard', desc: 'Guided step-by-step workspace setup and go-live checklist.', href: '/onboarding', icon: SlidersHorizontal },
       { label: 'System Settings', desc: 'Date/number format, time zone, session, security policies.', href: single('System Settings'), icon: SlidersHorizontal },
       { label: 'Print Settings', desc: 'Letterheads, print formats and PDF output options.', href: single('Print Settings'), icon: FileText },
+      { label: 'AI Assistant', desc: 'Govern the AI agents and the auto-save policy (default: suggest-only).', href: '/settings/ai', icon: Sparkles },
     ],
   },
   {

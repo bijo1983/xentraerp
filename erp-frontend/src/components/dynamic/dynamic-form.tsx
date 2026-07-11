@@ -14,6 +14,9 @@ import { LinkField } from './link-field';
 import { ChildTable } from './child-table';
 import { WorkflowBar } from './workflow-bar';
 import { SetupGuard } from '@/components/setup/setup-guard';
+import { AiAssistant } from '@/components/ai/ai-assistant';
+import { getAiSettings } from '@/lib/ai/settings';
+import { Sparkles } from 'lucide-react';
 import type { RenderField, WorkflowDef } from '@/types/meta';
 
 type DocModel = Record<string, unknown>;
@@ -31,7 +34,9 @@ const selectClass =
 export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProps) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
   const { user } = useAuthStore();
-  const { company, currency: companyCurrency } = useCompanyDefaults();
+  const { company, currency: companyCurrency, country } = useCompanyDefaults();
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiSettings = getAiSettings();
   const [doc, setDoc] = useState<DocModel>(initial || {});
   const [activeTab, setActiveTab] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -328,6 +333,28 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
   return (
     <div className="space-y-6">
       {isNew && <SetupGuard doctype={doctype} />}
+
+      {aiSettings.enabled && ((isNew && aiSettings.masterAgent) || (!isNew && aiSettings.txnAgent)) && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" type="button" onClick={() => setAiOpen(true)}>
+            <Sparkles className="mr-2 h-4 w-4 text-primary" />
+            AI Assist
+          </Button>
+        </div>
+      )}
+
+      {aiOpen && (
+        <AiAssistant
+          doctype={doctype}
+          schema={schema}
+          doc={doc}
+          isNew={isNew}
+          ctx={{ company, currency: companyCurrency, country }}
+          onApply={(fields) => setDoc((d) => ({ ...d, ...fields }))}
+          onSaveRequested={() => handleSave(false)}
+          onClose={() => setAiOpen(false)}
+        />
+      )}
 
       {formError && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{formError}</div>
