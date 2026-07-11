@@ -56,6 +56,7 @@ export function DoctypeList({ doctype, basePath = '/app' }: DoctypeListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [perms, setPerms] = useState<PermissionSet | null>(null);
+  const [isSingle, setIsSingle] = useState(false);
 
   const listHref = `${basePath}/${encodeURIComponent(doctype)}`;
   const newHref = `${listHref}/new`;
@@ -69,6 +70,7 @@ export function DoctypeList({ doctype, basePath = '/app' }: DoctypeListProps) {
         const meta = (await frappe.getDocTypeMeta(doctype)) as DocTypeMeta | undefined;
         // Single DocTypes (Settings) have no list — go straight to the record.
         if (meta?.issingle === 1) {
+          if (active) setIsSingle(true); // suppress the record-load query (Singles have no table → 500)
           router.replace(recordHref(doctype));
           return;
         }
@@ -93,6 +95,7 @@ export function DoctypeList({ doctype, basePath = '/app' }: DoctypeListProps) {
 
   // Load records once columns are known.
   useEffect(() => {
+    if (isSingle) return; // Single doctype → redirecting to its record; no list query.
     let active = true;
     setLoading(true);
     (async () => {
