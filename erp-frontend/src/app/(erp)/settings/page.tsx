@@ -24,6 +24,7 @@ import {
   CreditCard,
   Building,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -48,6 +49,7 @@ const GROUPS: Group[] = [
     accent: 'text-slate-600 dark:text-slate-300',
     items: [
       { label: 'Company Setup', desc: 'Create the company, install defaults and country masters.', href: '/setup', icon: Building },
+      { label: 'Company Admins', desc: 'Grant users admin access scoped to this company (roles + Company permission).', href: '/settings/admins', icon: ShieldCheck },
       { label: 'Onboarding Wizard', desc: 'Guided step-by-step workspace setup and go-live checklist.', href: '/onboarding', icon: SlidersHorizontal },
       { label: 'System Settings', desc: 'Date/number format, time zone, session, security policies.', href: single('System Settings'), icon: SlidersHorizontal },
       { label: 'Print Settings', desc: 'Letterheads, print formats and PDF output options.', href: single('Print Settings'), icon: FileText },
