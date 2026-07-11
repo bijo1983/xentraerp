@@ -39,6 +39,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, loading, error } = useAuthStore();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [loginAs, setLoginAs] = useState<'customer' | 'admin'>('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -50,7 +51,8 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       await login(email, password);
-      router.push('/dashboard');
+      // Customer → ERP workspace; Admin → SaaS Admin Platform.
+      router.push(loginAs === 'admin' ? '/admin' : '/dashboard');
     } catch {
       // error is set in store
     }
@@ -141,12 +143,44 @@ export default function LoginPage() {
 
           <div className="space-y-2 text-center">
             <h1 className="text-2xl font-bold tracking-tight">
-              {mode === 'login' ? 'Welcome back' : 'Create your account'}
+              {mode === 'signup'
+                ? 'Create your account'
+                : loginAs === 'admin'
+                  ? 'Admin Sign In'
+                  : 'Welcome back'}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {mode === 'login' ? 'Sign in to your XentraERP workspace' : 'Sign up to get started with XentraERP'}
+              {mode === 'signup'
+                ? 'Sign up to get started with XentraERP'
+                : loginAs === 'admin'
+                  ? 'Sign in to the SaaS Admin Platform'
+                  : 'Sign in to your XentraERP workspace'}
             </p>
           </div>
+
+          {/* Customer / Admin sign-in switch */}
+          {mode === 'login' && (
+            <div className="flex rounded-lg border bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => setLoginAs('customer')}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+                  loginAs === 'customer' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                Customer Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginAs('admin')}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
+                  loginAs === 'admin' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                Admin Sign In
+              </button>
+            </div>
+          )}
 
           {mode === 'login' ? (
             <form onSubmit={handleSubmit} className="space-y-4">
