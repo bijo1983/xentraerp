@@ -186,14 +186,20 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
         );
       case 'check':
         return (
-          <label className="flex h-10 items-center gap-2">
+          <label className="flex items-start gap-2 py-1">
             <input
               type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0"
               disabled={readOnly}
               checked={!!value}
               onChange={(e) => setField(f.fieldname, e.target.checked ? 1 : 0)}
             />
-            <span className="text-sm text-muted-foreground">{f.description || ''}</span>
+            <span className="text-sm">
+              <span className="font-medium">{f.label}</span>
+              {f.description && (
+                <span className="block text-xs text-muted-foreground">{f.description}</span>
+              )}
+            </span>
           </label>
         );
       case 'textarea':
