@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LinkField } from './link-field';
 import { ChildTable } from './child-table';
 import { WorkflowBar } from './workflow-bar';
+import { SetupGuard } from '@/components/setup/setup-guard';
 import type { RenderField, WorkflowDef } from '@/types/meta';
 
 type DocModel = Record<string, unknown>;
@@ -261,6 +262,8 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
 
   return (
     <div className="space-y-6">
+      {isNew && <SetupGuard doctype={doctype} />}
+
       {formError && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{formError}</div>
       )}
