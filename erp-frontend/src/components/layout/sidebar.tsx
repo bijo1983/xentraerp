@@ -34,6 +34,23 @@ import { XentraLogo } from '@/components/ui/xentra-logo';
 
 // Links to a DocType's metadata-driven screen (/app/<DocType>).
 const dt = (doctype: string) => `/app/${encodeURIComponent(doctype)}`;
+// Single DocTypes (Settings) have one record named after the doctype.
+const single = (doctype: string) =>
+  `/app/${encodeURIComponent(doctype)}/${encodeURIComponent(doctype)}`;
+
+// Per-section color accents (header + active icon).
+const SECTION_ACCENT: Record<string, string> = {
+  General: 'text-slate-500 dark:text-slate-400',
+  Sales: 'text-blue-600 dark:text-blue-400',
+  Purchase: 'text-amber-600 dark:text-amber-400',
+  Accounts: 'text-green-600 dark:text-green-400',
+  Masters: 'text-purple-600 dark:text-purple-400',
+  Configuration: 'text-cyan-600 dark:text-cyan-400',
+  Reports: 'text-pink-600 dark:text-pink-400',
+  Logistics: 'text-indigo-600 dark:text-indigo-400',
+  Settings: 'text-teal-600 dark:text-teal-400',
+  System: 'text-slate-500 dark:text-slate-400',
+};
 
 const navSections = [
   {
@@ -65,7 +82,7 @@ const navSections = [
     items: [
       { label: 'Journal Entries', href: dt('Journal Entry'), icon: FileText },
       { label: 'Payments', href: dt('Payment Entry'), icon: CreditCard },
-      { label: 'Chart of Accounts', href: dt('Account'), icon: CreditCard },
+      { label: 'Chart of Accounts', href: '/accounts', icon: ListTree },
       { label: 'Cost Centers', href: dt('Cost Center'), icon: Building2 },
     ],
   },
@@ -112,6 +129,20 @@ const navSections = [
     ],
   },
   {
+    title: 'Settings',
+    items: [
+      { label: 'Selling Settings', href: single('Selling Settings'), icon: ShoppingCart },
+      { label: 'Buying Settings', href: single('Buying Settings'), icon: Package },
+      { label: 'Stock Settings', href: single('Stock Settings'), icon: Warehouse },
+      { label: 'Accounts Settings', href: single('Accounts Settings'), icon: Landmark },
+      { label: 'Tax — Sales Templates', href: dt('Sales Taxes and Charges Template'), icon: Receipt },
+      { label: 'Tax — Purchase Templates', href: dt('Purchase Taxes and Charges Template'), icon: Receipt },
+      { label: 'Asset Categories', href: dt('Asset Category'), icon: Boxes },
+      { label: 'Print Settings', href: single('Print Settings'), icon: FileText },
+      { label: 'System Settings', href: single('System Settings'), icon: SlidersHorizontal },
+    ],
+  },
+  {
     title: 'System',
     items: [
       { label: 'Company Setup', href: '/setup', icon: SlidersHorizontal },
@@ -142,38 +173,41 @@ export function Sidebar() {
         </button>
       </div>
       <nav className="overflow-y-auto p-2" style={{ height: 'calc(100vh - 4rem)' }}>
-        {navSections.map((section) => (
-          <div key={section.title} className="mb-3">
-            {sidebarOpen && (
-              <p className="mb-1 px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {section.title}
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                // Exact match or a sub-path (href + '/…'), so /app/Item
-                // doesn't also light up /app/Item Group.
-                const active =
-                  item.href === '/logistics'
-                    ? pathname === '/logistics'
-                    : pathname === item.href || pathname.startsWith(item.href + '/');
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent',
-                      active && 'bg-accent text-accent-foreground'
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 shrink-0" />
-                    {sidebarOpen && <span>{item.label}</span>}
-                  </Link>
-                );
-              })}
+        {navSections.map((section) => {
+          const accent = SECTION_ACCENT[section.title] || 'text-muted-foreground';
+          return (
+            <div key={section.title} className="mb-3">
+              {sidebarOpen && (
+                <p className={cn('mb-1 px-3 pt-2 text-xs font-semibold uppercase tracking-wider', accent)}>
+                  {section.title}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  // Exact match or a sub-path (href + '/…'), so /app/Item
+                  // doesn't also light up /app/Item Group.
+                  const active =
+                    item.href === '/logistics'
+                      ? pathname === '/logistics'
+                      : pathname === item.href || pathname.startsWith(item.href + '/');
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent',
+                        active && 'bg-accent text-accent-foreground'
+                      )}
+                    >
+                      <item.icon className={cn('h-5 w-5 shrink-0', active ? accent : 'text-muted-foreground')} />
+                      {sidebarOpen && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
     </aside>
   );
