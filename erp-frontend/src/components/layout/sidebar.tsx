@@ -34,9 +34,6 @@ import { XentraLogo } from '@/components/ui/xentra-logo';
 
 // Links to a DocType's metadata-driven screen (/app/<DocType>).
 const dt = (doctype: string) => `/app/${encodeURIComponent(doctype)}`;
-// Single DocTypes (Settings) have one record named after the doctype.
-const single = (doctype: string) =>
-  `/app/${encodeURIComponent(doctype)}/${encodeURIComponent(doctype)}`;
 
 // Per-section color accents (header + active icon).
 const SECTION_ACCENT: Record<string, string> = {
@@ -126,20 +123,6 @@ const navSections = [
       { label: 'Shipments', href: '/logistics/shipments', icon: Package },
       { label: 'Carriers', href: '/logistics/carriers', icon: Truck },
       { label: 'Shipping Zones', href: '/logistics/zones', icon: MapPin },
-    ],
-  },
-  {
-    title: 'Settings',
-    items: [
-      { label: 'Selling Settings', href: single('Selling Settings'), icon: ShoppingCart },
-      { label: 'Buying Settings', href: single('Buying Settings'), icon: Package },
-      { label: 'Stock Settings', href: single('Stock Settings'), icon: Warehouse },
-      { label: 'Accounts Settings', href: single('Accounts Settings'), icon: Landmark },
-      { label: 'Tax — Sales Templates', href: dt('Sales Taxes and Charges Template'), icon: Receipt },
-      { label: 'Tax — Purchase Templates', href: dt('Purchase Taxes and Charges Template'), icon: Receipt },
-      { label: 'Asset Categories', href: dt('Asset Category'), icon: Boxes },
-      { label: 'Print Settings', href: single('Print Settings'), icon: FileText },
-      { label: 'System Settings', href: single('System Settings'), icon: SlidersHorizontal },
     ],
   },
   {
