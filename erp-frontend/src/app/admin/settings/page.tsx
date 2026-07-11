@@ -71,8 +71,14 @@ export default function PlatformSettingsPage() {
               'Stock User',
             ];
       await frappe.createUser(uEmail, uName, uPass, roles);
-      // Restrict a company user to their company (record-level isolation).
-      if (uRole === 'company' && uCompany) {
+      // Record-level Company isolation ONLY for non-admin users. A user with
+      // System Manager is a full admin — a Company User Permission cannot
+      // isolate them (System Manager doesn't bypass User Permissions, but it
+      // sees every company anyway) and it actively BLOCKS access to
+      // company-linked settings Singles (e.g. Stock Settings → 403). So we
+      // skip it for full admins.
+      const isFullAdmin = roles.includes('System Manager');
+      if (uRole === 'company' && uCompany && !isFullAdmin) {
         await frappe.addUserPermission(uEmail, 'Company', uCompany);
       }
       setUMsg(`User ${uEmail} created. They can sign in via ${uRole === 'platform' ? 'Admin' : 'Customer'} Sign In.`);
@@ -168,9 +174,10 @@ export default function PlatformSettingsPage() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
             Keep the platform admin separate from company users. A <strong>Company user</strong> signs in via
-            “Customer Sign In” and becomes a <strong>full admin of their own company</strong> (System Manager,
-            scoped to that company only). A <strong>Platform admin</strong> signs in via “Admin Sign In” to
-            administer the SaaS platform itself.
+            “Customer Sign In” and becomes a <strong>full admin of their company</strong> (System Manager) — they
+            can manage its settings, users and all modules. A <strong>Platform admin</strong> signs in via
+            “Admin Sign In” to administer the SaaS platform itself. Hard record-level isolation between companies
+            requires a separate site per tenant.
           </p>
           {uErr && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{uErr}</div>}
           {uMsg && <div className="rounded-md bg-green-100 p-3 text-sm text-green-700 dark:bg-green-500/15 dark:text-green-400">{uMsg}</div>}

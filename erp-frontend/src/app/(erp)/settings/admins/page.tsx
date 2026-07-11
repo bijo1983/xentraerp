@@ -102,9 +102,16 @@ export default function CompanyAdminsPage() {
     setSubmitting(true);
     try {
       // 1) Create the user with the selected roles.
-      await frappe.createUser(email.trim(), fullName.trim(), password, ROLE_PRESETS[presetIdx].roles);
-      // 2) Scope the user to this company (record-level isolation).
-      await frappe.addUserPermission(email.trim(), 'Company', company);
+      const roles = ROLE_PRESETS[presetIdx].roles;
+      await frappe.createUser(email.trim(), fullName.trim(), password, roles);
+      // 2) Scope the user to this company (record-level isolation) — but NOT
+      // for a full admin. System Manager doesn't bypass User Permissions, so
+      // a Company restriction would block that admin from company-linked
+      // settings Singles (e.g. Stock Settings → 403) while providing no real
+      // isolation. Only the non-admin presets get the Company restriction.
+      if (!roles.includes('System Manager')) {
+        await frappe.addUserPermission(email.trim(), 'Company', company);
+      }
 
       setSuccess(`${email.trim()} is now an admin of ${company}.`);
       setEmail('');
