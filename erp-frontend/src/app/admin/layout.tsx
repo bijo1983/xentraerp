@@ -18,7 +18,7 @@ import {
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
 
-const dt = (name: string) => `/app/${encodeURIComponent(name)}`;
+const dt = (name: string) => `/admin/app/${encodeURIComponent(name)}`;
 const NAV = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Tenants', href: '/admin/tenants', icon: Building2 },

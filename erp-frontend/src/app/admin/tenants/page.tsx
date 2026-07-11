@@ -64,7 +64,7 @@ export default function TenantsPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Tenants</h2>
         <Button asChild>
-          <Link href="/app/Xentra%20Tenant/new">
+          <Link href="/admin/app/Xentra%20Tenant/new">
             <Plus className="mr-1 h-4 w-4" /> New Tenant
           </Link>
         </Button>
@@ -94,7 +94,7 @@ export default function TenantsPage() {
                 {tenants.map((t) => (
                   <tr key={t.name} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <Link href={`/app/Xentra%20Tenant/${encodeURIComponent(t.name)}`} className="font-medium hover:underline">
+                      <Link href={`/admin/app/Xentra%20Tenant/${encodeURIComponent(t.name)}`} className="font-medium hover:underline">
                         {t.company_name || t.name}
                       </Link>
                     </td>

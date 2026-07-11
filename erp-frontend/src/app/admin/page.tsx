@@ -67,8 +67,8 @@ export default function AdminDashboard() {
   const kpis = [
     { label: 'Tenants', value: tenants.length, icon: Building2, href: '/admin/tenants' },
     { label: 'Active', value: activeTenants, icon: CheckCircle2, href: '/admin/tenants' },
-    { label: 'Plans', value: plans.length, icon: CreditCard, href: '/app/Xentra%20Subscription%20Plan' },
-    { label: 'Revenue Collected', value: collected.toFixed(2), icon: ReceiptText, href: '/app/Xentra%20Invoice' },
+    { label: 'Plans', value: plans.length, icon: CreditCard, href: '/admin/app/Xentra%20Subscription%20Plan' },
+    { label: 'Revenue Collected', value: collected.toFixed(2), icon: ReceiptText, href: '/admin/app/Xentra%20Invoice' },
   ];
 
   return (
