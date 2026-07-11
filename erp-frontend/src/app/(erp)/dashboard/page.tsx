@@ -15,15 +15,30 @@ export default function DashboardPage() {
 
   if (kpiLoading || !kpi) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-sm text-muted-foreground">Overview of your business performance</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-[104px] animate-pulse rounded-lg border bg-card shadow-sm" />
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="h-[380px] animate-pulse rounded-lg border bg-card shadow-sm lg:col-span-2" />
+          <div className="h-[380px] animate-pulse rounded-lg border bg-card shadow-sm" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Dashboard</h2>
+      <div className="space-y-1">
+        <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+        <p className="text-sm text-muted-foreground">Overview of your business performance</p>
+      </div>
       <KPICards data={kpi} />
       <div className="grid gap-4 lg:grid-cols-3">
         <RevenueChart data={kpi.revenue_trend} />

@@ -275,8 +275,10 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
               key={t.label + i}
               type="button"
               onClick={() => setActiveTab(i)}
-              className={`px-4 py-2 text-sm font-medium ${
-                i === activeTab ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground'
+              className={`-mb-px px-4 py-2 text-sm font-medium transition-colors ${
+                i === activeTab
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
               {t.label}
@@ -285,41 +287,53 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
         </div>
       )}
 
-      {tab.sections.map((section, si) => (
-        <Card key={si}>
-          {section.label && (
-            <CardHeader>
-              <CardTitle className="text-base">{section.label}</CardTitle>
-            </CardHeader>
-          )}
-          <CardContent className="pt-6">
-            <div
-              className="grid gap-4"
-              style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}
-            >
-              {section.columns.map((col, ci) => (
-                <div key={ci} className="space-y-4">
-                  {col.fields.map((f) => {
-                    if (!isVisible(f)) return null;
-                    const fullWidth = f.component === 'child_table' || f.component === 'textarea';
-                    return (
-                      <div key={f.fieldname} className={`space-y-1.5 ${fullWidth ? 'col-span-full' : ''}`}>
-                        {f.component !== 'check' && (
-                          <label className="text-sm font-medium">
-                            {f.label}
-                            {isRequired(f) && <span className="text-destructive"> *</span>}
-                          </label>
-                        )}
-                        {renderControl(f)}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      {tab.sections.map((section, si) => {
+        const singleColumn = section.columns.length === 1;
+        return (
+          <Card key={si}>
+            {section.label && (
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">{section.label}</CardTitle>
+              </CardHeader>
+            )}
+            <CardContent className={section.label ? '' : 'pt-6'}>
+              <div
+                className="grid gap-x-6 gap-y-5"
+                style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}
+              >
+                {section.columns.map((col, ci) => (
+                  <div key={ci} className="space-y-5">
+                    {col.fields.map((f) => {
+                      if (!isVisible(f)) return null;
+                      const wide = f.component === 'child_table' || f.component === 'textarea';
+                      // In a single-column section, cap plain inputs so they don't stretch
+                      // awkwardly across the whole card; wide controls still fill the row.
+                      const constrain = singleColumn && !wide && f.component !== 'check';
+                      return (
+                        <div
+                          key={f.fieldname}
+                          className={`space-y-1.5 ${constrain ? 'max-w-md' : ''}`}
+                        >
+                          {f.component !== 'check' && (
+                            <label className="flex items-center gap-1 text-sm font-medium text-foreground">
+                              {f.label}
+                              {isRequired(f) && <span className="text-destructive">*</span>}
+                            </label>
+                          )}
+                          {renderControl(f)}
+                          {f.component !== 'check' && f.description && (
+                            <p className="text-xs text-muted-foreground">{f.description}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
 
       {/* Workflow state tracker + role-filtered transition buttons (§15) */}
       {hasWorkflow && (
@@ -335,12 +349,12 @@ export function DynamicForm({ doctype, name, initial, onSaved }: DynamicFormProp
 
       <div className="flex items-center justify-end gap-3">
         {docstatus === 1 && (
-          <span className="mr-auto rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+          <span className="mr-auto inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-400">
             Submitted
           </span>
         )}
         {docstatus === 2 && (
-          <span className="mr-auto rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+          <span className="mr-auto inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-500/15 dark:text-red-400">
             Cancelled
           </span>
         )}

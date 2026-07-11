@@ -80,7 +80,7 @@ export default function OnboardingPage() {
               <button
                 onClick={() => setStep(i)}
                 className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active ? 'bg-primary text-primary-foreground' : done ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'
+                  active ? 'bg-primary text-primary-foreground' : done ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400' : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {done ? <Check className="h-3.5 w-3.5" /> : <s.icon className="h-3.5 w-3.5" />}

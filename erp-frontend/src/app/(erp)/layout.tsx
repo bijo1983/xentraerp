@@ -40,7 +40,7 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className={cn('transition-all duration-300', sidebarOpen ? 'ml-64' : 'ml-16')}>
         <Header />
-        <main className="p-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

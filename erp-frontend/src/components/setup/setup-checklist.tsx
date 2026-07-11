@@ -117,7 +117,7 @@ export function SetupChecklist({ ctx, onProgress, showHeaderAction = true }: Set
                   <div key={item.key} className="flex items-start justify-between gap-4 border-b pb-3 last:border-0 last:pb-0">
                     <div className="flex items-start gap-3">
                       {st === 'present' ? (
-                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
                       ) : st === 'checking' || st === 'fixing' ? (
                         <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-muted-foreground" />
                       ) : (
@@ -134,7 +134,7 @@ export function SetupChecklist({ ctx, onProgress, showHeaderAction = true }: Set
                     </div>
                     <div className="shrink-0">
                       {st === 'present' ? (
-                        <span className="text-xs font-medium text-green-600">Configured</span>
+                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Configured</span>
                       ) : st === 'missing' || st === 'error' ? (
                         <Button size="sm" variant="outline" onClick={() => fixOne(item)}>
                           Create
