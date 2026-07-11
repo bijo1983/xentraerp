@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle2, Database, Sparkles, UserPlus } from 'lucide-react';
+import { Loader2, CheckCircle2, Database, Sparkles, UserPlus, ShieldCheck } from 'lucide-react';
 import { frappe, frappeErrorMessage } from '@/lib/frappe';
 import { isControlPlaneReady, provisionControlPlane } from '@/lib/saas/control-plane';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,43 @@ export default function PlatformSettingsPage() {
   const [uBusy, setUBusy] = useState(false);
   const [uMsg, setUMsg] = useState<string | null>(null);
   const [uErr, setUErr] = useState<string | null>(null);
+
+  // Reset-user-permissions tool (run as Administrator).
+  const [pEmail, setPEmail] = useState('');
+  const [pBusy, setPBusy] = useState(false);
+  const [pMsg, setPMsg] = useState<string | null>(null);
+  const [pErr, setPErr] = useState<string | null>(null);
+
+  const resetUserPermissions = async () => {
+    setPMsg(null);
+    setPErr(null);
+    if (!pEmail.trim()) {
+      setPErr('Enter the user email.');
+      return;
+    }
+    setPBusy(true);
+    try {
+      const rows = (await frappe.getList('User Permission', {
+        fields: JSON.stringify(['name', 'allow', 'for_value']),
+        filters: JSON.stringify([['user', '=', pEmail.trim()]]),
+        limit_page_length: 500,
+      })) as { name: string; allow: string; for_value: string }[];
+      if (!rows.length) {
+        setPMsg(`No User Permissions found for ${pEmail.trim()} — already clear.`);
+        return;
+      }
+      let deleted = 0;
+      for (const r of rows) {
+        await frappe.deleteDoc('User Permission', r.name);
+        deleted++;
+      }
+      setPMsg(`Deleted ${deleted} User Permission${deleted === 1 ? '' : 's'} for ${pEmail.trim()}. Ask them to sign out and back in.`);
+    } catch (e) {
+      setPErr(frappeErrorMessage(e, 'Failed. You must be signed in as Administrator / System Manager.'));
+    } finally {
+      setPBusy(false);
+    }
+  };
 
   const createUser = async () => {
     setUMsg(null);
@@ -161,6 +198,39 @@ export default function PlatformSettingsPage() {
               <Sparkles className="mr-2 h-4 w-4" /> Seed Default Modules &amp; Plans
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Reset a user's record-level restrictions (run as Administrator) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="h-5 w-5 text-primary" /> Fix User Access (reset permissions)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Removes ALL <strong>User Permission</strong> record-level restrictions from a user. Use this when a
+            full admin is wrongly blocked from settings (e.g. &quot;does not have access to this document&quot;).
+            You must be signed in as <strong>Administrator</strong>. The user must sign out and back in afterward.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={pEmail}
+              onChange={(e) => setPEmail(e.target.value)}
+              placeholder="admin@jjcompany.com"
+              className="max-w-xs"
+            />
+            <Button variant="outline" onClick={resetUserPermissions} disabled={pBusy}>
+              {pBusy ? 'Working…' : 'Reset User Permissions'}
+            </Button>
+          </div>
+          {pMsg && (
+            <div className="rounded-md bg-green-100 p-3 text-sm text-green-700 dark:bg-green-500/15 dark:text-green-400">
+              {pMsg}
+            </div>
+          )}
+          {pErr && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{pErr}</div>}
         </CardContent>
       </Card>
 
