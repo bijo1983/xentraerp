@@ -51,8 +51,12 @@ export default function LoginPage() {
     e.preventDefault();
     try {
       await login(email, password);
-      // Customer → ERP workspace; Admin → SaaS Admin Platform.
-      router.push(loginAs === 'admin' ? '/admin' : '/dashboard');
+      // Admin → SaaS Admin Platform. Customer → their tenant workspace,
+      // entered via the tenant slug (/jjcompany) so the tenant context
+      // (xentra_tenant cookie → backend routing) is established at login.
+      // Slug is configurable per deployment; defaults to this tenant.
+      const slug = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG || 'jjcompany';
+      router.push(loginAs === 'admin' ? '/admin' : `/${slug}`);
     } catch {
       // error is set in store
     }

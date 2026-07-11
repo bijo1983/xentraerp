@@ -94,8 +94,34 @@ lifecycle metadata of, sites that the provisioning step creates.
 
 ## Migrating the existing company
 
-`JJ Consultancy and IT Services` currently lives on the shared
-`erp.badmintonbooking.com`. To give it its own site, either (a) provision a
-fresh site and re-enter/import its masters, or (b) `bench backup` the
-company data and restore into the new site. Until migrated, it can keep
-running as a `company`-model tenant.
+`JJ Consultancy and IT Services` currently shares `erp.badmintonbooking.com`
+with the SaaS control plane. Because Frappe backup/restore is **site-level**
+(not per-company), the clean split is a **clone-then-split**: keep the
+current site as the control-plane/admin site, and clone it into a new
+tenant site that carries all the ERP data.
+
+Run on the bench host (as the frappe user):
+
+```bash
+./scripts/migrate-company-to-site.sh \
+  --source erp.badmintonbooking.com \
+  --slug jjcompany \
+  --new-site jjcompany.badmintonbooking.com \
+  --company "JJ Consultancy and IT Services" \
+  --admin-password 'StrongPassphrase123!' \
+  --registry /home/xentraerp/erp-frontend/data/tenants.json
+```
+
+What it does:
+1. `bench backup --with-files` the source site.
+2. `bench new-site` the tenant site and `restore` the backup into it — an
+   exact copy of all ERP data.
+3. Set the tenant admin password on the new site.
+4. **Drop the `Xentra` control-plane doctypes** from the tenant copy (the
+   tenant must not see SaaS billing/admin data).
+5. Upsert the routing entry in `tenants.json`.
+
+The source site is left intact and keeps serving as the control plane.
+**Verify** `/jjcompany` loads the tenant's data and its admin can open
+Settings **before** removing the operational data from the source site.
+Add DNS/nginx for `jjcompany.badmintonbooking.com` and reload nginx.
