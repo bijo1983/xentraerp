@@ -84,19 +84,21 @@ export async function ensureCurrencyEnabled(code: string) {
 }
 
 // Country → standard VAT/GST rate + label. Drives auto tax-template setup.
+// Labels are used as ERPNext document names, so they must NOT contain
+// "%" (breaks resource URLs). The rate is stored separately.
 export const COUNTRY_TAX: Record<string, { label: string; rate: number }> = {
   // GCC
-  'United Arab Emirates': { label: 'UAE VAT 5%', rate: 5 },
-  'Saudi Arabia': { label: 'KSA VAT 15%', rate: 15 },
-  Qatar: { label: 'Qatar VAT 5%', rate: 5 },
-  Bahrain: { label: 'Bahrain VAT 10%', rate: 10 },
-  Oman: { label: 'Oman VAT 5%', rate: 5 },
-  Kuwait: { label: 'Kuwait VAT 0%', rate: 0 },
+  'United Arab Emirates': { label: 'UAE VAT 5', rate: 5 },
+  'Saudi Arabia': { label: 'KSA VAT 15', rate: 15 },
+  Qatar: { label: 'Qatar VAT 5', rate: 5 },
+  Bahrain: { label: 'Bahrain VAT 10', rate: 10 },
+  Oman: { label: 'Oman VAT 5', rate: 5 },
+  Kuwait: { label: 'Kuwait VAT 0', rate: 0 },
   // Others
-  India: { label: 'GST 18%', rate: 18 },
+  India: { label: 'GST 18', rate: 18 },
   'United States': { label: 'US Sales Tax', rate: 0 },
-  'United Kingdom': { label: 'UK VAT 20%', rate: 20 },
-  Australia: { label: 'GST 10%', rate: 10 },
+  'United Kingdom': { label: 'UK VAT 20', rate: 20 },
+  Australia: { label: 'GST 10', rate: 10 },
 };
 
 // Ensure country tax templates (best-effort; tolerant of CoA differences).

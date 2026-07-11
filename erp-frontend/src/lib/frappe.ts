@@ -74,7 +74,7 @@ class FrappeClient {
   }
 
   async getDoc(doctype: string, name: string) {
-    const res = await this.http.get(`/api/erp/resource/${doctype}/${name}`);
+    const res = await this.http.get(`/api/erp/resource/${doctype}/${encodeURIComponent(name)}`);
     return res.data.data;
   }
 
@@ -84,12 +84,12 @@ class FrappeClient {
   }
 
   async updateDoc(doctype: string, name: string, data: Record<string, unknown>) {
-    const res = await this.http.put(`/api/erp/resource/${doctype}/${name}`, data);
+    const res = await this.http.put(`/api/erp/resource/${doctype}/${encodeURIComponent(name)}`, data);
     return res.data.data;
   }
 
   async deleteDoc(doctype: string, name: string) {
-    const res = await this.http.delete(`/api/erp/resource/${doctype}/${name}`);
+    const res = await this.http.delete(`/api/erp/resource/${doctype}/${encodeURIComponent(name)}`);
     return res.data;
   }
 
