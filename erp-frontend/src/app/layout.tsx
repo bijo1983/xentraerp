@@ -1,8 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'XentraERP - Modular Enterprise Resource Planning',
@@ -12,10 +9,15 @@ export const metadata: Metadata = {
   },
 };
 
+// System font stack — avoids build-time network fetch of Google Fonts
+// (the server can't reach fonts.gstatic.com) while keeping a modern look.
+const fontStack =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body style={{ fontFamily: fontStack }}>{children}</body>
     </html>
   );
 }
