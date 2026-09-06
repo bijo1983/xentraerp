@@ -36,7 +36,7 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-muted/30">
       <Sidebar />
-      <div className={cn('transition-all duration-300', sidebarOpen ? 'ml-64' : 'ml-16')}>
+      <div className={cn('transition-all duration-300', sidebarOpen ? 'ml-56' : 'ml-14')}>
         <Header />
         <main className="p-6">{children}</main>
       </div>
