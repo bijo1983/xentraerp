@@ -11,8 +11,11 @@ interface Props {
   doctype: string;
   name?: string;          // undefined = new doc
   initialDoc?: Record<string, unknown>;
+  initial?: Record<string, unknown>;   // alias for initialDoc (used by quick-create)
   onSave?: (doc: Record<string, unknown>) => void;
+  onSaved?: (name: string) => void;    // alias called with doc name after save
   onCancel?: () => void;
+  onClose?: () => void;                // alias for onCancel
 }
 
 // Fields controlled by Frappe automatically — skip rendering
@@ -21,9 +24,9 @@ const AUTO_FIELDS = new Set([
   'docstatus', 'idx', 'parent', 'parentfield', 'parenttype',
 ]);
 
-export default function DynamicForm({ doctype, name, initialDoc, onSave, onCancel }: Props) {
+export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
-  const [doc, setDoc] = useState<Record<string, unknown>>(initialDoc || {});
+  const [doc, setDoc] = useState<Record<string, unknown>>(initialDoc || initial || {});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -96,6 +99,7 @@ export default function DynamicForm({ doctype, name, initialDoc, onSave, onCance
         throw new Error(msg);
       }
       onSave?.(data.data);
+      onSaved?.((data.data as Record<string, unknown>)?.name as string);
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -136,8 +140,8 @@ export default function DynamicForm({ doctype, name, initialDoc, onSave, onCance
         <Button onClick={handleSave} disabled={saving}>
           {saving ? 'Saving…' : name ? 'Update' : 'Save'}
         </Button>
-        {onCancel && (
-          <Button variant="outline" onClick={onCancel} disabled={saving}>
+        {(onCancel || onClose) && (
+          <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving}>
             Cancel
           </Button>
         )}
