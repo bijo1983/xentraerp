@@ -9,28 +9,61 @@ import { ChildTable } from './child-table';
 
 interface Props {
   doctype: string;
-  name?: string;          // undefined = new doc
+  name?: string;
   initialDoc?: Record<string, unknown>;
-  initial?: Record<string, unknown>;   // alias for initialDoc (used by quick-create)
+  initial?: Record<string, unknown>;
   onSave?: (doc: Record<string, unknown>) => void;
-  onSaved?: (name: string) => void;    // alias called with doc name after save
+  onSaved?: (name: string) => void;
   onCancel?: () => void;
-  onClose?: () => void;                // alias for onCancel
+  onClose?: () => void;
 }
 
-// Fields controlled by Frappe automatically — skip rendering
+interface Tab {
+  label: string;
+  sections: Section[];
+}
+
+interface Section {
+  label: string;
+  fields: CompiledField[];
+}
+
 const AUTO_FIELDS = new Set([
   'name', 'owner', 'creation', 'modified', 'modified_by',
   'docstatus', 'idx', 'parent', 'parentfield', 'parenttype',
 ]);
+
+function buildTabs(fields: CompiledField[]): Tab[] {
+  const tabs: Tab[] = [];
+  let currentTab: Tab = { label: 'Details', sections: [] };
+  let currentSection: Section = { label: '', fields: [] };
+
+  for (const f of fields) {
+    if (f.component === 'tab_break') {
+      if (currentSection.fields.length) currentTab.sections.push(currentSection);
+      if (currentTab.sections.length) tabs.push(currentTab);
+      currentTab = { label: f.label || 'Details', sections: [] };
+      currentSection = { label: '', fields: [] };
+    } else if (f.component === 'section_break') {
+      if (currentSection.fields.length) currentTab.sections.push(currentSection);
+      currentSection = { label: f.label || '', fields: [] };
+    } else if (!AUTO_FIELDS.has(f.fieldname) && f.component !== 'hidden' && !f.hidden) {
+      currentSection.fields.push(f);
+    }
+  }
+  if (currentSection.fields.length) currentTab.sections.push(currentSection);
+  if (currentTab.sections.length) tabs.push(currentTab);
+
+  return tabs.length ? tabs : [{ label: 'Details', sections: [{ label: '', fields: [] }] }];
+}
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
   const [doc, setDoc] = useState<Record<string, unknown>>(initialDoc || initial || {});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
 
-  // When schema loads, set defaults for unset fields
   useEffect(() => {
     if (!schema) return;
     setDoc((prev) => {
@@ -39,7 +72,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
         if (patched[f.fieldname] === undefined && f.default !== undefined) {
           const dv = f.default as string;
           if (f.component === 'link') {
-            // Skip link defaults — referenced records may not exist in this instance
+            // skip — referenced records may not exist
           } else if ((f.component === 'date' || f.component === 'datetime') && dv === 'Today') {
             patched[f.fieldname] = new Date().toISOString().slice(0, 10);
           } else {
@@ -54,13 +87,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const setField = (fieldname: string, value: unknown) => {
     setDoc((prev) => {
       const updated = { ...prev, [fieldname]: value };
-
-      // When a Dynamic Link type-selector changes, clear the linked value
-      // to avoid pointing to a doc in the wrong doctype
       if (schema) {
         for (const f of schema.fields) {
           if (f.fieldtype === 'Dynamic Link' && f.options === fieldname) {
-            // fieldname is the type-selector for this Dynamic Link
             updated[f.fieldname] = '';
           }
         }
@@ -74,32 +103,20 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     setSaveError(null);
     try {
       const payload: Record<string, unknown> = { ...doc, doctype };
-
-      // Replace __user placeholder (belt-and-suspenders; backend also handles it)
       for (const key of Object.keys(payload)) {
-        if (payload[key] === '__user') {
-          // will be replaced server-side; send blank to avoid validation error
-          payload[key] = '';
-        }
+        if (payload[key] === '__user') payload[key] = '';
       }
-
       const url = name
         ? `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`
         : `/api/resource/${encodeURIComponent(doctype)}`;
-      const method = name ? 'PUT' : 'POST';
-
       const res = await fetch(url, {
-        method,
+        method: name ? 'PUT' : 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
       });
-
       const data = await res.json();
-      if (!res.ok) {
-        const msg = data?.exception || data?.message || res.statusText;
-        throw new Error(msg);
-      }
+      if (!res.ok) throw new Error(data?.exception || data?.message || res.statusText);
       onSave?.(data.data);
       onSaved?.((data.data as Record<string, unknown>)?.name as string);
     } catch (e) {
@@ -113,40 +130,72 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   if (error) return <p className="text-destructive p-4">Error loading form: {error}</p>;
   if (!schema) return null;
 
-  const visibleFields = schema.fields.filter(
-    (f) => !AUTO_FIELDS.has(f.fieldname) && f.component !== 'hidden' && !f.hidden
-  );
+  const tabs = buildTabs(schema.fields);
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {visibleFields.map((f) => (
-          <div key={f.fieldname} className={f.component === 'table' || f.component === 'textarea' ? 'col-span-full' : f.component === 'check' ? '' : ''}>
-            <label className="block text-sm font-medium mb-1">
-              {f.label}
-              {f.reqd && <span className="text-destructive ml-1">*</span>}
-            </label>
-            {renderField(f, doc, setField)}
-            {f.description && <p className="text-xs text-muted-foreground mt-0.5">{f.description}</p>}
-          </div>
+    <div className="space-y-0">
+      {/* Tab bar */}
+      <div className="flex border-b border-border overflow-x-auto">
+        {tabs.map((tab, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveTab(i)}
+            className={`px-5 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === i
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            {tab.label}
+          </button>
         ))}
       </div>
 
-      {saveError && (
-        <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-          {saveError}
-        </p>
-      )}
+      {/* Active tab content */}
+      <div className="p-4 space-y-6">
+        {tabs[activeTab]?.sections.map((section, si) => (
+          <div key={si}>
+            {section.label && (
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 pb-1 border-b border-border">
+                {section.label}
+              </h3>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {section.fields.map((f) => (
+                <div
+                  key={f.fieldname}
+                  className={f.component === 'table' || f.component === 'textarea' ? 'col-span-full' : ''}
+                >
+                  <label className="block text-sm font-medium mb-1">
+                    {f.label}
+                    {f.reqd && <span className="text-destructive ml-1">*</span>}
+                  </label>
+                  {renderField(f, doc, setField)}
+                  {f.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{f.description}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
 
-      <div className="flex gap-2 pt-2">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : name ? 'Update' : 'Save'}
-        </Button>
-        {(onCancel || onClose) && (
-          <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving}>
-            Cancel
-          </Button>
+        {saveError && (
+          <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+            {saveError}
+          </p>
         )}
+
+        <div className="flex gap-2 pt-2">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : name ? 'Update' : 'Save'}
+          </Button>
+          {(onCancel || onClose) && (
+            <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving}>
+              Cancel
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -192,7 +241,6 @@ function renderField(
 
     case 'link': {
       if (f.fieldtype === 'Dynamic Link') {
-        // f.options is the fieldname whose value contains the actual target doctype
         const typeSelectorFieldname = f.options || '';
         const linkTarget = typeSelectorFieldname ? (doc[typeSelectorFieldname] as string) || '' : '';
         return (
@@ -225,7 +273,6 @@ function renderField(
       );
 
     case 'datetime': {
-      // ERPNext stores "YYYY-MM-DD HH:MM:SS"; browser needs "YYYY-MM-DDTHH:MM"
       const dtVal = ((value as string) || '').replace(' ', 'T').slice(0, 16);
       return (
         <Input

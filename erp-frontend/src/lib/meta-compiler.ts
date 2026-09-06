@@ -10,7 +10,9 @@ export type ComponentType =
   | 'table'
   | 'textarea'
   | 'readonly'
-  | 'hidden';
+  | 'hidden'
+  | 'tab_break'
+  | 'section_break';
 
 export interface CompiledField {
   fieldname: string;
@@ -51,9 +53,9 @@ const FIELDTYPE_MAP: Record<string, ComponentType> = {
   'Table MultiSelect': 'table',
   'Read Only': 'readonly',
   'HTML': 'hidden',
-  'Section Break': 'hidden',
+  'Section Break': 'section_break',
   'Column Break': 'hidden',
-  'Tab Break': 'hidden',
+  'Tab Break': 'tab_break',
   'Fold': 'hidden',
   'Heading': 'hidden',
   'Button': 'hidden',
@@ -72,7 +74,7 @@ const FIELDTYPE_MAP: Record<string, ComponentType> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function compileMeta(rawMeta: any): CompiledMeta {
   const fields: CompiledField[] = (rawMeta.fields || [])
-    .filter((f: any) => f.fieldname && f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break' && f.fieldtype !== 'Tab Break' && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Fold' && f.fieldtype !== 'Button')
+    .filter((f: any) => f.fieldname && f.fieldtype !== 'Column Break' && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Fold' && f.fieldtype !== 'Button')
     .map((f: any): CompiledField => ({
       fieldname: f.fieldname,
       label: f.label || f.fieldname,
