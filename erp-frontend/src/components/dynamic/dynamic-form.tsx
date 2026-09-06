@@ -38,7 +38,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       for (const f of schema.fields) {
         if (patched[f.fieldname] === undefined && f.default !== undefined) {
           const dv = f.default as string;
-          if ((f.component === 'date' || f.component === 'datetime') && dv === 'Today') {
+          if (f.component === 'link') {
+            // Skip link defaults — referenced records may not exist in this instance
+          } else if ((f.component === 'date' || f.component === 'datetime') && dv === 'Today') {
             patched[f.fieldname] = new Date().toISOString().slice(0, 10);
           } else {
             patched[f.fieldname] = dv;
