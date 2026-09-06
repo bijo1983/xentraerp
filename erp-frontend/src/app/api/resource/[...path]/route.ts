@@ -1,37 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
+import http from 'http';
+import { resolveTenant } from '@/lib/tenancy/registry';
 
-const BACKEND = process.env.ERP_BACKEND_URL || 'http://127.0.0.1:8001';
-const HOST = process.env.ERP_BACKEND_HOST || 'erp.badmintonbooking.com';
+function tenantSlug(req: NextRequest): string | undefined {
+  return req.headers.get('x-xentra-tenant') || req.cookies.get('xentra_tenant')?.value || undefined;
+}
 
-async function proxy(req: NextRequest, { params }: { params: { path: string[] } }) {
-  const path = params.path.join('/');
-  const search = req.nextUrl.search;
-  const url = `${BACKEND}/api/resource/${path}${search}`;
+async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const tenant = await resolveTenant(tenantSlug(req));
+  const { hostIp, port, host } = tenant.backend;
 
-  const headers = new Headers(req.headers);
-  headers.set('host', HOST);
-  for (const h of ['connection', 'keep-alive', 'transfer-encoding', 'te', 'trailers', 'upgrade', 'content-length']) {
-    headers.delete(h);
-  }
+  const resourcePath = params.path.join('/');
+  const search = req.nextUrl.search || '';
+  const path = `/api/resource/${resourcePath}${search}`;
 
-  const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.arrayBuffer() : undefined;
+  const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined;
+  const cookie = req.headers.get('cookie');
 
-  const res = await fetch(url, {
-    method: req.method,
-    headers,
-    body,
-    // @ts-expect-error Node fetch option
-    duplex: 'half',
-  });
+  const reqHeaders: Record<string, string | number> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    Host: host,
+    ...(cookie ? { Cookie: cookie } : {}),
+    ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
+  };
 
-  const resHeaders = new Headers(res.headers);
-  resHeaders.delete('content-encoding');
-  resHeaders.delete('content-length');
-
-  return new NextResponse(res.body, {
-    status: res.status,
-    headers: resHeaders,
+  return new Promise<NextResponse>((resolve) => {
+    const proxyReq = http.request({ hostname: hostIp, port, path, method: req.method, headers: reqHeaders }, (proxyRes) => {
+      const chunks: Buffer[] = [];
+      proxyRes.on('data', (chunk) => chunks.push(chunk));
+      proxyRes.on('end', () => {
+        const data = Buffer.concat(chunks).toString('utf-8');
+        const responseHeaders = new Headers();
+        responseHeaders.set('Content-Type', (proxyRes.headers['content-type'] as string) || 'application/json');
+        const setCookie = proxyRes.headers['set-cookie'];
+        if (setCookie) {
+          for (const c of setCookie) responseHeaders.append('Set-Cookie', c);
+        }
+        resolve(new NextResponse(data, { status: proxyRes.statusCode || 200, headers: responseHeaders }));
+      });
+    });
+    proxyReq.on('error', () => resolve(NextResponse.json({ error: 'Backend unavailable' }, { status: 502 })));
+    if (body) proxyReq.write(body);
+    proxyReq.end();
   });
 }
 
-export { proxy as GET, proxy as POST, proxy as PUT, proxy as DELETE, proxy as PATCH };
+export const GET = proxyRequest;
+export const POST = proxyRequest;
+export const PUT = proxyRequest;
+export const DELETE = proxyRequest;
+export const PATCH = proxyRequest;
