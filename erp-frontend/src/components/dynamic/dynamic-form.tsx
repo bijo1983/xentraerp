@@ -274,3 +274,5 @@ function renderField(
       );
   }
 }
+
+export { DynamicForm };
