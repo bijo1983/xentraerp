@@ -88,3 +88,28 @@ export function compileMeta(rawMeta: any): CompiledMeta {
 
   return { doctype: rawMeta.name, fields };
 }
+
+export interface PermissionSet {
+  read: boolean;
+  write: boolean;
+  create: boolean;
+  submit: boolean;
+  cancel: boolean;
+  amend: boolean;
+  delete: boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function resolvePermissions(permissions: any[]): PermissionSet {
+  const p: PermissionSet = { read: false, write: false, create: false, submit: false, cancel: false, amend: false, delete: false };
+  for (const perm of (permissions || [])) {
+    if (perm.read) p.read = true;
+    if (perm.write) p.write = true;
+    if (perm.create) p.create = true;
+    if (perm.submit) p.submit = true;
+    if (perm.cancel) p.cancel = true;
+    if (perm.amend) p.amend = true;
+    if (perm.delete) p.delete = true;
+  }
+  return p;
+}
