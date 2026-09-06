@@ -27,8 +27,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/50">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Custom ERP</CardTitle>
-          <p className="text-sm text-muted-foreground">Sign in with your ERPNext credentials</p>
+          <CardTitle className="text-2xl">Xentra</CardTitle>
+          <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -78,7 +78,7 @@ export function Sidebar() {
       )}
     >
       <div className="flex h-14 items-center justify-between border-b px-3 shrink-0">
-        {sidebarOpen && <span className="text-base font-bold tracking-tight">XentraERP</span>}
+        {sidebarOpen && <span className="text-base font-bold tracking-tight">Xentra</span>}
         <button onClick={toggleSidebar} className="rounded p-1 hover:bg-accent ml-auto">
           <ChevronLeft className={cn('h-4 w-4 transition-transform', !sidebarOpen && 'rotate-180')} />
         </button>
