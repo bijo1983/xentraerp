@@ -119,9 +119,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
 
   return (
     <div className="space-y-4 p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {visibleFields.map((f) => (
-          <div key={f.fieldname} className={f.component === 'table' || f.component === 'textarea' ? 'col-span-full' : ''}>
+          <div key={f.fieldname} className={f.component === 'table' || f.component === 'textarea' ? 'col-span-full' : f.component === 'check' ? '' : ''}>
             <label className="block text-sm font-medium mb-1">
               {f.label}
               {f.reqd && <span className="text-destructive ml-1">*</span>}

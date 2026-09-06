@@ -25,8 +25,9 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
   if (loading) return <p className="text-sm text-muted-foreground">Loading {childDoctype}…</p>;
   if (!schema) return null;
 
+  const CHILD_AUTO = new Set(['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx', 'parent', 'parentfield', 'parenttype', 'doctype']);
   const visibleFields = schema.fields.filter(
-    (f) => f.component !== 'hidden' && f.component !== 'readonly' && !f.hidden
+    (f) => f.component !== 'hidden' && !f.hidden && !CHILD_AUTO.has(f.fieldname)
   );
 
   const updateRow = (idx: number, fieldname: string, val: unknown) => {

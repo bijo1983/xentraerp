@@ -7,7 +7,7 @@ export default function NewDocPage() {
   const router = useRouter();
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 w-full max-w-7xl mx-auto">
       <h1 className="text-2xl font-semibold mb-6">New {decodeURIComponent(doctype)}</h1>
       <DynamicForm
         doctype={decodeURIComponent(doctype)}
