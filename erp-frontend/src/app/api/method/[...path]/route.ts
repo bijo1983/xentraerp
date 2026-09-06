@@ -17,8 +17,9 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
   const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined;
   const cookie = req.headers.get('cookie');
 
+  const contentType = req.headers.get('content-type') || 'application/json';
   const reqHeaders: Record<string, string | number> = {
-    'Content-Type': 'application/json',
+    'Content-Type': contentType,
     Accept: 'application/json',
     Host: host,
     ...(cookie ? { Cookie: cookie } : {}),

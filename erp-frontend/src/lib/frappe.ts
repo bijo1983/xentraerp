@@ -23,7 +23,11 @@ class FrappeClient {
 
   // ── Authentication ──────────────────────────────────────────────
   async login(usr: string, pwd: string) {
-    const res = await this.http.post('/api/method/login', { usr, pwd });
+    const res = await this.http.post(
+      '/api/method/login',
+      new URLSearchParams({ usr, pwd }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
     return res.data;
   }
 
