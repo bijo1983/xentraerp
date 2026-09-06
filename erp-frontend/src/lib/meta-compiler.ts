@@ -100,7 +100,7 @@ export interface PermissionSet {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function resolvePermissions(permissions: any[]): PermissionSet {
+export function resolvePermissions(permissions: any[], _roles?: string[]): PermissionSet {
   const p: PermissionSet = { read: false, write: false, create: false, submit: false, cancel: false, amend: false, delete: false };
   for (const perm of (permissions || [])) {
     if (perm.read) p.read = true;
