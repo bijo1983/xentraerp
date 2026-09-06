@@ -35,7 +35,10 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
         responseHeaders.set('Content-Type', (proxyRes.headers['content-type'] as string) || 'application/json');
         const setCookie = proxyRes.headers['set-cookie'];
         if (setCookie) {
-          for (const c of setCookie) responseHeaders.append('Set-Cookie', c);
+          for (const c of setCookie) {
+            const stripped = c.replace(/;\s*Domain=[^;]*/gi, '').replace(/;\s*SameSite=Strict/gi, '; SameSite=Lax');
+            responseHeaders.append('Set-Cookie', stripped);
+          }
         }
         resolve(new NextResponse(data, { status: proxyRes.statusCode || 200, headers: responseHeaders }));
       });
