@@ -10,7 +10,10 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
 
   const headers = new Headers(req.headers);
   headers.set('host', HOST);
-  headers.delete('content-length'); // let fetch recalculate
+  // Strip hop-by-hop headers that cannot be forwarded via fetch/undici
+  for (const h of ['connection', 'keep-alive', 'transfer-encoding', 'te', 'trailers', 'upgrade', 'content-length']) {
+    headers.delete(h);
+  }
 
   const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.arrayBuffer() : undefined;
 
