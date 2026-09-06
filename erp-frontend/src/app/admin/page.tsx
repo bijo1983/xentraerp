@@ -30,11 +30,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const data = await frappe.getList('XentraERP Tenant', {
-          fields: ['name', 'organization_name', 'status', 'plan', 'creation'],
-          limit_page_length: 50,
-          order_by: 'creation desc',
-        }).catch(() => []);
+        const data = await frappe.call('custom_erp.api.tenants.list_tenants', { limit: 50 }).catch(() => []);
         setTenants(Array.isArray(data) ? data : []);
       } finally {
         setLoading(false);
@@ -107,9 +103,9 @@ export default function AdminDashboard() {
             <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
           ) : tenants.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              No tenants yet. The XentraERP Tenant DocType needs to be created in Frappe.
+              No tenants yet.
               <br />
-              <a href="/admin/provisioning" className="text-primary hover:underline mt-2 inline-block">Set up provisioning →</a>
+              <a href="/admin/tenants" className="text-primary hover:underline mt-2 inline-block">Provision your first tenant →</a>
             </div>
           ) : (
             <table className="w-full text-sm">

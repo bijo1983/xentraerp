@@ -1,0 +1,239 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:subdomain",
+ "creation": "2026-09-06 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "organization_name",
+  "subdomain",
+  "status",
+  "column_break_org",
+  "plan",
+  "billing_cycle",
+  "provisioning_status",
+  "section_break_locale",
+  "country",
+  "base_currency",
+  "time_zone",
+  "column_break_locale",
+  "default_language",
+  "fiscal_year_start",
+  "section_break_admin",
+  "tenant_admin_name",
+  "tenant_admin_email",
+  "column_break_admin",
+  "trial_start_date",
+  "trial_end_date",
+  "section_break_limits",
+  "max_users",
+  "max_companies",
+  "column_break_limits",
+  "storage_limit_mb",
+  "enabled_modules",
+  "section_break_meta",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "organization_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Organization Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subdomain",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Subdomain",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Tenant URL: <subdomain>.xentraerp.com"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nTrial\nActive\nPayment Pending\nPast Due\nGrace Period\nSuspended\nCancelled\nExpired\nArchived",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_org",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "plan",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Plan",
+   "description": "Plan code (Free, Starter, Professional, Enterprise)"
+  },
+  {
+   "default": "Monthly",
+   "fieldname": "billing_cycle",
+   "fieldtype": "Select",
+   "label": "Billing Cycle",
+   "options": "Monthly\nAnnual"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "provisioning_status",
+   "fieldtype": "Select",
+   "label": "Provisioning Status",
+   "options": "Pending\nIn Progress\nCompleted\nFailed"
+  },
+  {
+   "fieldname": "section_break_locale",
+   "fieldtype": "Section Break",
+   "label": "Localization"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
+  {
+   "fieldname": "base_currency",
+   "fieldtype": "Link",
+   "label": "Base Currency",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "time_zone",
+   "fieldtype": "Data",
+   "label": "Time Zone"
+  },
+  {
+   "fieldname": "column_break_locale",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_language",
+   "fieldtype": "Link",
+   "label": "Default Language",
+   "options": "Language"
+  },
+  {
+   "fieldname": "fiscal_year_start",
+   "fieldtype": "Date",
+   "label": "Fiscal Year Start"
+  },
+  {
+   "fieldname": "section_break_admin",
+   "fieldtype": "Section Break",
+   "label": "Tenant Administrator"
+  },
+  {
+   "fieldname": "tenant_admin_name",
+   "fieldtype": "Data",
+   "label": "Administrator Name"
+  },
+  {
+   "fieldname": "tenant_admin_email",
+   "fieldtype": "Data",
+   "label": "Administrator Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_admin",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "trial_start_date",
+   "fieldtype": "Date",
+   "label": "Trial Start Date"
+  },
+  {
+   "fieldname": "trial_end_date",
+   "fieldtype": "Date",
+   "label": "Trial End Date"
+  },
+  {
+   "fieldname": "section_break_limits",
+   "fieldtype": "Section Break",
+   "label": "Limits"
+  },
+  {
+   "default": "5",
+   "fieldname": "max_users",
+   "fieldtype": "Int",
+   "label": "Max Users"
+  },
+  {
+   "default": "1",
+   "fieldname": "max_companies",
+   "fieldtype": "Int",
+   "label": "Max Companies"
+  },
+  {
+   "fieldname": "column_break_limits",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1024",
+   "fieldname": "storage_limit_mb",
+   "fieldtype": "Int",
+   "label": "Storage Limit (MB)"
+  },
+  {
+   "fieldname": "enabled_modules",
+   "fieldtype": "Small Text",
+   "label": "Enabled Modules",
+   "description": "Comma-separated module codes"
+  },
+  {
+   "fieldname": "section_break_meta",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text",
+   "label": "Internal Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP Tenant",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
