@@ -23,7 +23,8 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
   });
 
   const resHeaders = new Headers(res.headers);
-  resHeaders.delete('content-encoding'); // avoid double-decompression
+  resHeaders.delete('content-encoding'); // avoid double-decompression after Node auto-decompresses
+  resHeaders.delete('content-length');   // compressed length no longer matches decompressed body
 
   return new NextResponse(res.body, {
     status: res.status,

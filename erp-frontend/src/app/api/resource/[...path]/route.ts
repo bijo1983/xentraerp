@@ -24,6 +24,7 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
 
   const resHeaders = new Headers(res.headers);
   resHeaders.delete('content-encoding');
+  resHeaders.delete('content-length');
 
   return new NextResponse(res.body, {
     status: res.status,
