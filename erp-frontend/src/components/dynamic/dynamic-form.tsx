@@ -68,7 +68,7 @@ export default function DynamicForm({ doctype, name, initialDoc, onSave, onCance
     setSaving(true);
     setSaveError(null);
     try {
-      const payload = { ...doc, doctype };
+      const payload: Record<string, unknown> = { ...doc, doctype };
 
       // Replace __user placeholder (belt-and-suspenders; backend also handles it)
       for (const key of Object.keys(payload)) {
