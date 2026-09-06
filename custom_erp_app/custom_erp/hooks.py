@@ -15,3 +15,13 @@ guest_methods = ["custom_erp.api.auth.login"]
 
 # CORS settings — configure allowed origins in site_config.json:
 #   "allow_cors": ["http://localhost:3000", "https://your-frontend.com"]
+
+# Document event hooks
+doc_events = {
+    "*": {
+        # Replace __user placeholder before validation (belt-and-suspenders;
+        # Frappe's document.py _validate_links patch also handles this)
+        "validate": "custom_erp.api.utils.replace_user_placeholders",
+        "before_save": "custom_erp.api.utils.replace_user_placeholders",
+    }
+}
