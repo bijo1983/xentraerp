@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "organization_name",
+  "tenant_code",
   "subdomain",
   "status",
   "column_break_org",
@@ -23,7 +24,10 @@
   "section_break_admin",
   "tenant_admin_name",
   "tenant_admin_email",
+  "tenant_admin_mobile",
   "column_break_admin",
+  "email_verified",
+  "mobile_verified",
   "trial_start_date",
   "trial_end_date",
   "section_break_limits",
@@ -42,6 +46,15 @@
    "in_list_view": 1,
    "label": "Organization Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "tenant_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tenant Code",
+   "unique": 1,
+   "read_only": 1,
+   "description": "Short login code, e.g. 'jjc'. Auto-generated from organization name."
   },
   {
    "fieldname": "subdomain",
@@ -141,8 +154,27 @@
    "options": "Email"
   },
   {
+   "fieldname": "tenant_admin_mobile",
+   "fieldtype": "Data",
+   "label": "Administrator Mobile"
+  },
+  {
    "fieldname": "column_break_admin",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "email_verified",
+   "fieldtype": "Check",
+   "label": "Email Verified",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "mobile_verified",
+   "fieldtype": "Check",
+   "label": "Mobile Verified",
+   "read_only": 1
   },
   {
    "fieldname": "trial_start_date",
