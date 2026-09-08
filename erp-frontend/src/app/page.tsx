@@ -50,8 +50,8 @@ export default function LandingPage() {
         <header className="relative z-20">
           <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
             <span className="flex items-center gap-2 text-lg font-heading font-bold tracking-tight">
-              <Image src="/brand/mark.png" alt="Xentra" width={28} height={28} className="rounded-md" />
-              xentra
+              <Image src="/brand/mark.png" alt="XentraERP" width={28} height={28} className="rounded-md" />
+              Xentra<span className="text-primary">ERP</span>
             </span>
             <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
               <a href="#modules" className="hover:text-white transition-colors">Modules</a>
@@ -84,11 +84,11 @@ export default function LandingPage() {
           <div className="relative h-[420px] w-[420px]">
             <div
               className="absolute inset-0 rotate-45"
-              style={{ background: 'linear-gradient(135deg,#3B82F6 0%,#1D4ED8 100%)', clipPath: 'polygon(0% 42%, 42% 42%, 42% 0%, 58% 0%, 58% 42%, 100% 42%, 100% 58%, 58% 58%, 58% 100%, 42% 100%, 42% 58%, 0% 58%)' }}
+              style={{ background: 'linear-gradient(135deg,#1776FF 0%,#0066FF 100%)', clipPath: 'polygon(0% 42%, 42% 42%, 42% 0%, 58% 0%, 58% 42%, 100% 42%, 100% 58%, 58% 58%, 58% 100%, 42% 100%, 42% 58%, 0% 58%)' }}
             />
             <div
               className="absolute inset-0 -rotate-45"
-              style={{ background: 'linear-gradient(135deg,#60A5FA 0%,#3B82F6 100%)', opacity: 0.55, clipPath: 'polygon(0% 42%, 42% 42%, 42% 0%, 58% 0%, 58% 42%, 100% 42%, 100% 58%, 58% 58%, 58% 100%, 42% 100%, 42% 58%, 0% 58%)' }}
+              style={{ background: 'linear-gradient(135deg,#4D9FFF 0%,#1776FF 100%)', opacity: 0.55, clipPath: 'polygon(0% 42%, 42% 42%, 42% 0%, 58% 0%, 58% 42%, 100% 42%, 100% 58%, 58% 58%, 58% 100%, 42% 100%, 42% 58%, 0% 58%)' }}
             />
           </div>
         </div>
@@ -99,12 +99,12 @@ export default function LandingPage() {
             1-month free trial · all modules included
           </div>
           <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-balance max-w-2xl">
-            Enterprise.
+            Enterprise
             <br />
-            Simplified.
+            Beyond Boundaries
           </h1>
           <p className="mt-6 text-lg text-white/70 max-w-xl text-balance">
-            Xentra delivers a complete ERP — sales, purchase, inventory, accounting and HR — that empowers
+            XentraERP delivers a complete ERP — sales, purchase, inventory, accounting and HR — that empowers
             businesses to grow, scale and succeed.
           </p>
           <div className="mt-8 flex items-center gap-3 flex-wrap">
@@ -201,7 +201,7 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="border-t">
         <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-          <h2 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight">Ready to run your business on Xentra?</h2>
+          <h2 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight">Ready to run your business on XentraERP?</h2>
           <p className="mt-3 text-muted-foreground">Set up your organization in minutes. No credit card required.</p>
           <Link href="/signup" className="inline-block mt-6">
             <Button size="lg" className="gap-2">
@@ -214,7 +214,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t">
         <div className="mx-auto max-w-6xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <span>© {new Date().getFullYear()} Xentra. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} XentraERP. All rights reserved.</span>
           <div className="flex gap-6">
             <Link href="/login" className="hover:text-foreground transition-colors">Sign In</Link>
             <Link href="/signup" className="hover:text-foreground transition-colors">Sign Up</Link>

@@ -93,7 +93,8 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <Image src="/brand/mark.png" alt="Xentra" width={44} height={44} className="rounded-xl mx-auto mb-2" />
+          <Image src="/brand/mark.png" alt="XentraERP" width={40} height={40} className="rounded-xl mx-auto mb-3" />
+          <Image src="/brand/wordmark.png" alt="XentraERP" width={150} height={27} className="mx-auto mb-3" />
           <CardTitle className="text-2xl">Start your free trial</CardTitle>
           <p className="text-sm text-muted-foreground">1 month free · all modules included</p>
         </CardHeader>

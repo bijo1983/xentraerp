@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { frappe } from '@/lib/frappe';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -72,8 +72,8 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <Image src="/brand/mark.png" alt="Xentra" width={44} height={44} className="rounded-xl mx-auto mb-2" />
-        <CardTitle className="text-2xl">Xentra</CardTitle>
+        <Image src="/brand/mark.png" alt="XentraERP" width={44} height={44} className="rounded-xl mx-auto mb-3" />
+        <Image src="/brand/wordmark.png" alt="XentraERP" width={180} height={33} className="mx-auto mb-1" />
         <p className="text-sm text-muted-foreground">Sign in to your account</p>
       </CardHeader>
       <CardContent>
@@ -140,7 +140,7 @@ function LoginForm() {
         )}
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          New to Xentra? <Link href="/signup" className="text-primary hover:underline font-medium">Start a free trial</Link>
+          New to XentraERP? <Link href="/signup" className="text-primary hover:underline font-medium">Start a free trial</Link>
         </p>
       </CardContent>
     </Card>

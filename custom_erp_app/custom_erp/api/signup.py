@@ -62,9 +62,9 @@ def request_otp(identifier: str, channel: str, purpose: str = "signup"):
 		try:
 			frappe.sendmail(
 				recipients=[identifier],
-				subject="Your Xentra verification code",
+				subject="Your XentraERP verification code",
 				message=(
-					f"<p>Your Xentra verification code is <b>{otp}</b>.</p>"
+					f"<p>Your XentraERP verification code is <b>{otp}</b>.</p>"
 					f"<p>This code expires in {OTP_TTL_MINUTES} minutes.</p>"
 				),
 				now=True,
@@ -176,7 +176,7 @@ def complete_signup(
 	try:
 		frappe.sendmail(
 			recipients=[admin_email],
-			subject="Your Xentra signup is under review",
+			subject="Your XentraERP signup is under review",
 			message=(
 				f"<p>Thanks for signing up, {admin_name}.</p>"
 				f"<p>Your organization <b>{organization_name}</b> "

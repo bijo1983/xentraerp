@@ -2,47 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Exact brand tokens from Xentra_Detailed_Brand_Package/06_Developer_Resources */
+/* Exact brand tokens from XentraERP_Official_Brand_Package/07_Developer_Kit */
 @layer base {
   :root {
     --background: 210 20% 98%;       /* #F8FAFC */
-    --foreground: 222.2 47.4% 11.2%; /* #0F172A */
+    --foreground: 220.8 92.6% 15.9%; /* #031B4E navy */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 47.4% 11.2%;
-    --primary: 221.2 83.2% 53.3%;    /* #2563EB */
+    --card-foreground: 220.8 92.6% 15.9%;
+    --primary: 215.4 100% 54.5%;     /* #1776FF */
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary-foreground: 220.8 92.6% 15.9%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent-foreground: 220.8 92.6% 15.9%;
     --destructive: 0 84.2% 60.2%;    /* #EF4444 */
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 215.4 100% 54.5%;
     --radius: 0.75rem;               /* card: 12px, button (rounded-md): 10px */
   }
 
   .dark {
-    --background: 222.2 47.4% 11.2%; /* #0F172A navy */
+    --background: 220 49% 8.4%;      /* #0B1220 */
     --foreground: 210 40% 98%;
-    --card: 217.2 32.6% 17.5%;       /* #1E293B */
+    --card: 220.8 92.6% 15.9%;       /* #031B4E navy */
     --card-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;    /* #3B82F6 azure */
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
+    --primary: 215.4 100% 54.5%;     /* #1776FF */
+    --primary-foreground: 220 49% 8.4%;
+    --secondary: 220.8 92.6% 15.9%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 221 40% 18%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 220.8 92.6% 15.9%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 217.2 91.2% 59.8%;
+    --border: 221 35% 22%;
+    --input: 221 35% 22%;
+    --ring: 215.4 100% 54.5%;
   }
 }
 
@@ -58,7 +58,7 @@
   }
 }
 
-/* Brand hero gradient, matching Xentra_Web_Hero reference exactly */
+/* Brand hero gradient — navy to primary, matching xentraerp-theme.css .xe-hero */
 .xentra-hero {
-  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  background: linear-gradient(135deg, #031b4e 0%, #1776ff 100%);
 }

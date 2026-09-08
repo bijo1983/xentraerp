@@ -60,7 +60,7 @@ def approve_tenant(tenant_name: str):
 		login_url = f"{frappe.utils.get_url()}/login?tenant={tenant.tenant_code}"
 		frappe.sendmail(
 			recipients=[tenant.tenant_admin_email],
-			subject="Your Xentra account is now active",
+			subject="Your XentraERP account is now active",
 			message=(
 				f"<p>Good news — your organization <b>{tenant.organization_name}</b> "
 				f"has been approved.</p>"
@@ -94,7 +94,7 @@ def reject_tenant(tenant_name: str, reason: str | None = None):
 	try:
 		frappe.sendmail(
 			recipients=[tenant.tenant_admin_email],
-			subject="Update on your Xentra signup",
+			subject="Update on your XentraERP signup",
 			message=(
 				f"<p>We're unable to activate <b>{tenant.organization_name}</b> at this time.</p>"
 				+ (f"<p>{reason}</p>" if reason else "")

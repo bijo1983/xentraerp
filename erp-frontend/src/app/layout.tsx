@@ -6,8 +6,8 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-body' });
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-heading' });
 
 export const metadata: Metadata = {
-  title: 'Xentra',
-  description: 'Enterprise. Simplified.',
+  title: 'XentraERP',
+  description: 'Enterprise Beyond Boundaries',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
