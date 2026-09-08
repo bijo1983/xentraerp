@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 
-type Step = 'details' | 'verify-email' | 'verify-mobile' | 'done';
+type Step = 'details' | 'done';
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30);
@@ -28,9 +28,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
 
-  const [emailOtp, setEmailOtp] = useState('');
-  const [mobileOtp, setMobileOtp] = useState('');
-
   const [result, setResult] = useState<{ tenant_code: string; subdomain: string; status: string } | null>(null);
 
   useEffect(() => {
@@ -42,36 +39,6 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
     try {
-      await frappe.call('custom_erp.api.signup.request_otp', { identifier: email, channel: 'email', purpose: 'signup' });
-      setStep('verify-email');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to send verification code');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function verifyEmail(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      await frappe.call('custom_erp.api.signup.verify_otp', { identifier: email, channel: 'email', otp: emailOtp, purpose: 'signup' });
-      await frappe.call('custom_erp.api.signup.request_otp', { identifier: mobile, channel: 'mobile', purpose: 'signup' });
-      setStep('verify-mobile');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function verifyMobileAndFinish(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      await frappe.call('custom_erp.api.signup.verify_otp', { identifier: mobile, channel: 'mobile', otp: mobileOtp, purpose: 'signup' });
       const res = await frappe.call('custom_erp.api.signup.complete_signup', {
         organization_name: org,
         subdomain,
@@ -83,7 +50,7 @@ export default function SignupPage() {
       setResult(res as { tenant_code: string; subdomain: string; status: string });
       setStep('done');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      setError(err instanceof Error ? err.message : 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -111,7 +78,7 @@ export default function SignupPage() {
                 <label className="text-sm font-medium">Organization ID</label>
                 <Input required pattern="[a-z0-9\-]+" value={subdomain} onChange={(e) => setSubdomain(slugify(e.target.value))} placeholder="jj-consultancy" />
                 <p className="text-xs text-muted-foreground">
-                  Your ERP will be available at {host}/<span className="font-mono">&lt;your-code&gt;</span>/ — you&apos;ll get a short login code after signup
+                  Your ERP will be available at {host}/<span className="font-mono">&lt;your-code&gt;</span>/ — you&apos;ll get a short login code after approval
                 </p>
               </div>
               <div className="space-y-2">
@@ -127,28 +94,11 @@ export default function SignupPage() {
                 <Input required value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+91 98765 43210" />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Verification Code'}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit for Approval'}
               </Button>
-            </form>
-          )}
-
-          {step === 'verify-email' && (
-            <form onSubmit={verifyEmail} className="space-y-4">
-              <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to <strong>{email}</strong></p>
-              <Input required maxLength={6} value={emailOtp} onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000" className="text-center text-lg tracking-widest" />
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify Email'}
-              </Button>
-            </form>
-          )}
-
-          {step === 'verify-mobile' && (
-            <form onSubmit={verifyMobileAndFinish} className="space-y-4">
-              <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to <strong>{mobile}</strong></p>
-              <Input required maxLength={6} value={mobileOtp} onChange={(e) => setMobileOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000" className="text-center text-lg tracking-widest" />
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify & Create Account'}
-              </Button>
+              <p className="text-xs text-center text-muted-foreground">
+                An admin will review your request and activate your account shortly.
+              </p>
             </form>
           )}
 

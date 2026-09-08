@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X, Check, Ban } from 'lucide-react';
+import { Search, Plus, X, Check, Ban, Copy, CheckCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tenant {
@@ -49,6 +49,14 @@ export default function TenantsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actingOn, setActingOn] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  function copyCode(code: string) {
+    navigator.clipboard?.writeText(code).then(() => {
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1500);
+    });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -234,7 +242,22 @@ export default function TenantsPage() {
             ) : tenants.map((t) => (
               <tr key={t.name} className="border-b hover:bg-muted/30">
                 <td className="px-4 py-3 font-medium">{t.organization_name || t.name}</td>
-                <td className="px-4 py-3 font-mono text-xs">{t.tenant_code || '—'}</td>
+                <td className="px-4 py-3 font-mono text-xs">
+                  {t.tenant_code ? (
+                    <button
+                      className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
+                      onClick={() => copyCode(t.tenant_code!)}
+                      title="Copy tenant code"
+                    >
+                      {t.tenant_code}
+                      {copiedCode === t.tenant_code ? (
+                        <CheckCheck className="h-3 w-3 text-green-600" />
+                      ) : (
+                        <Copy className="h-3 w-3 opacity-50" />
+                      )}
+                    </button>
+                  ) : '—'}
+                </td>
                 <td className="px-4 py-3 text-muted-foreground text-xs">
                   <div>{t.tenant_admin_name || '—'}</div>
                   <div className="text-muted-foreground/70">{t.tenant_admin_email}</div>

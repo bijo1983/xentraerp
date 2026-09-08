@@ -147,14 +147,16 @@ def complete_signup(
 	admin_email = (admin_email or "").strip().lower()
 	admin_mobile = (admin_mobile or "").strip()
 
-	if not _is_verified(admin_email, "email"):
-		frappe.throw("Email is not verified. Please verify your email first.")
-	if not _is_verified(admin_mobile, "mobile"):
-		frappe.throw("Mobile number is not verified. Please verify your mobile number first.")
+	if not admin_email or not admin_mobile:
+		frappe.throw("Email and mobile number are required.")
 
 	if frappe.db.exists("XentraERP Tenant", {"subdomain": subdomain}):
 		frappe.throw("This subdomain is already taken. Please choose another.")
 
+	# OTP verification is skipped for now — admin approval (see
+	# custom_erp.api.tenants.approve_tenant) is the verification gate
+	# until email/SMS delivery is wired up. The XentraERP OTP endpoints
+	# above stay available for that later phase.
 	tenant = frappe.get_doc(
 		{
 			"doctype": "XentraERP Tenant",
@@ -166,8 +168,8 @@ def complete_signup(
 			"tenant_admin_name": admin_name,
 			"tenant_admin_email": admin_email,
 			"tenant_admin_mobile": admin_mobile,
-			"email_verified": 1,
-			"mobile_verified": 1,
+			"email_verified": 0,
+			"mobile_verified": 0,
 		}
 	)
 	tenant.insert(ignore_permissions=True)
