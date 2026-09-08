@@ -12,6 +12,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 type Mode = 'password' | 'tenant';
+type TenantStep = 'code' | 'login' | 'change-password';
 
 function LoginForm() {
   const router = useRouter();
@@ -23,11 +24,14 @@ function LoginForm() {
   const [password, setPassword] = useState('');
 
   const [tenantCode, setTenantCode] = useState(params.get('tenant') || '');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
+  const [tenantStep, setTenantStep] = useState<TenantStep>('code');
+  const [orgName, setOrgName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [tenantPassword, setTenantPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [tenantError, setTenantError] = useState<string | null>(null);
   const [tenantLoading, setTenantLoading] = useState(false);
-  const [verifiedNotice, setVerifiedNotice] = useState<string | null>(null);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,13 +43,18 @@ function LoginForm() {
     }
   };
 
-  const sendTenantOtp = async (e: React.FormEvent) => {
+  const lookupTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     setTenantError(null);
     setTenantLoading(true);
     try {
-      await frappe.call('custom_erp.api.signup.tenant_login_request_otp', { tenant_code: tenantCode });
-      setOtpSent(true);
+      const res = await frappe.call('custom_erp.api.signup.tenant_lookup', { tenant_code: tenantCode }) as {
+        organization_name: string;
+        admin_email: string;
+      };
+      setOrgName(res.organization_name);
+      setAdminEmail(res.admin_email);
+      setTenantStep('login');
     } catch (err: unknown) {
       setTenantError(err instanceof Error ? err.message : 'Could not find that tenant code');
     } finally {
@@ -53,17 +62,42 @@ function LoginForm() {
     }
   };
 
-  const verifyTenantOtp = async (e: React.FormEvent) => {
+  const tenantLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setTenantError(null);
     setTenantLoading(true);
     try {
-      await frappe.call('custom_erp.api.signup.tenant_login_verify', { tenant_code: tenantCode, otp });
-      setVerifiedNotice(
-        'Identity verified. Full tenant sign-in requires your account to be linked — an administrator will finish setting up your login shortly.'
-      );
+      await frappe.login(adminEmail, tenantPassword);
+      const status = await frappe.call('custom_erp.api.auth.get_login_status') as { force_password_change: boolean };
+      if (status.force_password_change) {
+        setTenantStep('change-password');
+      } else {
+        router.push(`/${tenantCode}/dashboard`);
+      }
     } catch (err: unknown) {
-      setTenantError(err instanceof Error ? err.message : 'Incorrect code');
+      setTenantError(err instanceof Error ? err.message : 'Incorrect password');
+    } finally {
+      setTenantLoading(false);
+    }
+  };
+
+  const submitNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTenantError(null);
+    if (newPassword.length < 8) {
+      setTenantError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setTenantError('Passwords do not match.');
+      return;
+    }
+    setTenantLoading(true);
+    try {
+      await frappe.call('custom_erp.api.auth.change_password', { new_password: newPassword });
+      router.push(`/${tenantCode}/dashboard`);
+    } catch (err: unknown) {
+      setTenantError(err instanceof Error ? err.message : 'Failed to set new password');
     } finally {
       setTenantLoading(false);
     }
@@ -114,25 +148,63 @@ function LoginForm() {
         {mode === 'tenant' && (
           <div className="space-y-4">
             {tenantError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{tenantError}</div>}
-            {verifiedNotice ? (
-              <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">{verifiedNotice}</div>
-            ) : !otpSent ? (
-              <form onSubmit={sendTenantOtp} className="space-y-4">
+
+            {tenantStep === 'code' && (
+              <form onSubmit={lookupTenant} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Tenant Code</label>
                   <Input value={tenantCode} onChange={(e) => setTenantCode(e.target.value.trim())} placeholder="jjc" required className="uppercase tracking-widest text-center" />
                   <p className="text-xs text-muted-foreground">The short code you received when you signed up</p>
                 </div>
                 <Button type="submit" className="w-full" disabled={tenantLoading}>
-                  {tenantLoading ? 'Sending…' : 'Send Verification Code'}
+                  {tenantLoading ? 'Checking…' : 'Continue'}
                 </Button>
               </form>
-            ) : (
-              <form onSubmit={verifyTenantOtp} className="space-y-4">
-                <p className="text-sm text-muted-foreground">Enter the code sent to your registered email</p>
-                <Input maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000" required className="text-center text-lg tracking-widest" />
+            )}
+
+            {tenantStep === 'login' && (
+              <form onSubmit={tenantLogin} className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Signing in to <strong>{orgName}</strong> as <strong>{adminEmail}</strong>
+                </p>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Password</label>
+                  <Input
+                    type="password"
+                    value={tenantPassword}
+                    onChange={(e) => setTenantPassword(e.target.value)}
+                    placeholder="First login? Use: admin"
+                    required
+                  />
+                </div>
                 <Button type="submit" className="w-full" disabled={tenantLoading}>
-                  {tenantLoading ? 'Verifying…' : 'Verify & Sign In'}
+                  {tenantLoading ? 'Signing in…' : 'Sign In'}
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
+                  onClick={() => { setTenantStep('code'); setTenantError(null); }}
+                >
+                  ← Use a different tenant code
+                </button>
+              </form>
+            )}
+
+            {tenantStep === 'change-password' && (
+              <form onSubmit={submitNewPassword} className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  This is your first login — set a new password to continue.
+                </p>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">New Password</label>
+                  <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Confirm Password</label>
+                  <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} />
+                </div>
+                <Button type="submit" className="w-full" disabled={tenantLoading}>
+                  {tenantLoading ? 'Saving…' : 'Set Password & Continue'}
                 </Button>
               </form>
             )}

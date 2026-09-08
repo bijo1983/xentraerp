@@ -1,10 +1,41 @@
 import frappe
 from frappe.utils import now_datetime
+from frappe.utils.password import update_password
+
+DEFAULT_ADMIN_PASSWORD = "admin"
 
 
 def _require_system_manager():
 	if "System Manager" not in frappe.get_roles():
 		frappe.throw("Not permitted", frappe.PermissionError)
+
+
+def _ensure_tenant_admin_user(tenant):
+	"""Create (or reset) the Frappe User the tenant administrator signs in as.
+
+	Single shared Frappe instance for now (no per-tenant site isolation yet),
+	so this grants System Manager so the admin can manage their own tenant's
+	Users under Settings. Password is always reset to the known default on
+	approval; admin_must_change_password forces a change on first login.
+	"""
+	email = tenant.tenant_admin_email
+	if not frappe.db.exists("User", email):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": tenant.tenant_admin_name or tenant.organization_name,
+				"send_welcome_email": 0,
+				"user_type": "System User",
+				"new_password": DEFAULT_ADMIN_PASSWORD,
+			}
+		)
+		user.append("roles", {"role": "System Manager"})
+		user.insert(ignore_permissions=True)
+	else:
+		update_password(email, DEFAULT_ADMIN_PASSWORD)
+
+	tenant.db_set("admin_must_change_password", 1)
 
 
 @frappe.whitelist()
@@ -56,6 +87,9 @@ def approve_tenant(tenant_name: str):
 	tenant.save(ignore_permissions=True)
 	frappe.db.commit()
 
+	_ensure_tenant_admin_user(tenant)
+	frappe.db.commit()
+
 	try:
 		login_url = f"{frappe.utils.get_url()}/login?tenant={tenant.tenant_code}"
 		frappe.sendmail(
@@ -65,7 +99,9 @@ def approve_tenant(tenant_name: str):
 				f"<p>Good news — your organization <b>{tenant.organization_name}</b> "
 				f"has been approved.</p>"
 				f"<p>Sign in with tenant code <b>{tenant.tenant_code}</b> at "
-				f"<a href='{login_url}'>the sign-in page</a>.</p>"
+				f"<a href='{login_url}'>the sign-in page</a>. "
+				f"Use password <b>{DEFAULT_ADMIN_PASSWORD}</b> for your first login — "
+				f"you'll be asked to set a new one.</p>"
 				f"<p>Your free trial runs until {tenant.trial_end_date}.</p>"
 			),
 			now=True,

@@ -39,6 +39,7 @@
   "section_break_meta",
   "approved_by",
   "approved_on",
+  "admin_must_change_password",
   "notes"
  ],
  "fields": [
@@ -238,6 +239,14 @@
    "fieldtype": "Datetime",
    "label": "Approved On",
    "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "admin_must_change_password",
+   "fieldtype": "Check",
+   "label": "Admin Must Change Password",
+   "read_only": 1,
+   "description": "Set when the default 'admin' password is issued on approval; cleared once the tenant admin sets their own password."
   },
   {
    "fieldname": "notes",

@@ -199,12 +199,17 @@ def complete_signup(
 
 
 @frappe.whitelist(allow_guest=True)
-def tenant_login_request_otp(tenant_code: str):
-	"""Send a login OTP to the tenant administrator's registered email."""
+def tenant_lookup(tenant_code: str):
+	"""Validate a tenant code and return the admin email to sign in with.
+
+	No OTP — the follow-up password check against the real Frappe User
+	(created on approval, see custom_erp.api.tenants.approve_tenant) is
+	the actual verification step.
+	"""
 	tenant = frappe.get_all(
 		"XentraERP Tenant",
 		filters={"tenant_code": tenant_code},
-		fields=["name", "tenant_admin_email", "status"],
+		fields=["name", "organization_name", "tenant_admin_email", "status"],
 		limit_page_length=1,
 	)
 	if not tenant:
@@ -216,23 +221,7 @@ def tenant_login_request_otp(tenant_code: str):
 	if t.status in ("Rejected", "Suspended", "Cancelled", "Expired"):
 		frappe.throw(f"This tenant account is {t.status.lower()}. Contact support.")
 
-	return request_otp(t.tenant_admin_email, "email", purpose="login")
-
-
-@frappe.whitelist(allow_guest=True)
-def tenant_login_verify(tenant_code: str, otp: str):
-	tenant = frappe.get_all(
-		"XentraERP Tenant",
-		filters={"tenant_code": tenant_code},
-		fields=["name", "tenant_admin_email", "subdomain"],
-		limit_page_length=1,
-	)
-	if not tenant:
-		frappe.throw("Tenant code not found.")
-
-	t = tenant[0]
-	result = verify_otp(t.tenant_admin_email, "email", otp, purpose="login")
-	if result.get("verified"):
-		result["subdomain"] = t.subdomain
-		result["redirect"] = f"/{tenant_code}/"
-	return result
+	return {
+		"organization_name": t.organization_name,
+		"admin_email": t.tenant_admin_email,
+	}
