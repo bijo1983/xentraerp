@@ -41,6 +41,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await frappe.logout();
+    if (typeof document !== 'undefined') {
+      // Clear the tenant-routing cookie so a later /login doesn't leak this session's tenant.
+      document.cookie = 'xentra_tenant=; path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
     set({ user: null });
   },
 

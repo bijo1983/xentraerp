@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X, Check, Ban, Copy, CheckCheck } from 'lucide-react';
+import { Search, Plus, X, Check, Ban, Copy, CheckCheck, Server, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tenant {
@@ -15,6 +15,8 @@ interface Tenant {
   plan?: string;
   status?: string;
   provisioning_status?: string;
+  site_name?: string;
+  provisioning_error?: string;
   max_users?: number;
   trial_end_date?: string;
   tenant_admin_name?: string;
@@ -127,6 +129,25 @@ export default function TenantsPage() {
     }
   }
 
+  async function provisionSite(t: Tenant) {
+    setActingOn(t.name);
+    try {
+      await frappe.call('custom_erp.api.provisioning.provision_tenant_site', { tenant_name: t.name });
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to start site provisioning');
+    } finally {
+      setActingOn(null);
+    }
+  }
+
+  // Poll while any tenant's site is being provisioned, so status updates without a manual refresh.
+  useEffect(() => {
+    if (!tenants.some((t) => t.provisioning_status === 'In Progress')) return;
+    const id = setInterval(() => load(), 5000);
+    return () => clearInterval(id);
+  }, [tenants, load]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -224,18 +245,19 @@ export default function TenantsPage() {
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Admin</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Plan</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Status</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Site</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Created</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="py-16 text-center text-muted-foreground">Loading…</td></tr>
+              <tr><td colSpan={8} className="py-16 text-center text-muted-foreground">Loading…</td></tr>
             ) : error ? (
-              <tr><td colSpan={7} className="py-16 text-center text-red-600 text-sm">{error}</td></tr>
+              <tr><td colSpan={8} className="py-16 text-center text-red-600 text-sm">{error}</td></tr>
             ) : tenants.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-16 text-center text-muted-foreground">
+                <td colSpan={8} className="py-16 text-center text-muted-foreground">
                   No tenants found for this filter.
                 </td>
               </tr>
@@ -267,6 +289,38 @@ export default function TenantsPage() {
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status || ''] || 'bg-gray-100 text-gray-700'}`}>
                     {t.status || 'Draft'}
                   </span>
+                </td>
+                <td className="px-4 py-3">
+                  {t.status === 'Pending Approval' ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  ) : t.provisioning_status === 'Completed' ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700">
+                      <Server className="h-3 w-3" /> {t.site_name}
+                    </span>
+                  ) : t.provisioning_status === 'In Progress' ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-blue-700">
+                      <RefreshCw className="h-3 w-3 animate-spin" /> Provisioning…
+                    </span>
+                  ) : t.provisioning_status === 'Failed' ? (
+                    <button
+                      className="inline-flex items-center gap-1 text-xs text-red-700 hover:underline"
+                      title={t.provisioning_error || 'Provisioning failed — click to retry'}
+                      onClick={() => provisionSite(t)}
+                      disabled={actingOn === t.name}
+                    >
+                      <AlertTriangle className="h-3 w-3" /> Failed — Retry
+                    </button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2"
+                      disabled={actingOn === t.name}
+                      onClick={() => provisionSite(t)}
+                    >
+                      <Server className="h-3.5 w-3.5 mr-1" /> Provision Site
+                    </Button>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground text-xs">{t.creation ? new Date(t.creation).toLocaleDateString() : '—'}</td>
                 <td className="px-4 py-3">

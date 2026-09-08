@@ -25,9 +25,17 @@ function parseBackend(): TenantBackend {
 
 const DEFAULT_BACKEND = parseBackend();
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function resolveTenant(_slug?: string): Promise<Tenant> {
-  // Single-tenant: ignore slug, always return the configured backend.
-  // Extend here for multi-tenant routing (e.g. look up slug in a DB).
-  return { slug: _slug || 'default', backend: DEFAULT_BACKEND };
+const TENANT_SITE_SUFFIX = process.env.TENANT_SITE_SUFFIX || 'xentraerp.local';
+
+// Per-tenant Frappe sites live on the same bench/gunicorn process as the
+// control-plane site — Frappe resolves which site's database to use purely
+// from the HTTP Host header string (no real DNS needed, since the request
+// never leaves 127.0.0.1). Site names are deterministic: "<code>.xentraerp.local",
+// created by custom_erp.api.provisioning.provision_tenant_site via `bench new-site`.
+export async function resolveTenant(slug?: string): Promise<Tenant> {
+  if (!slug) return { slug: 'default', backend: DEFAULT_BACKEND };
+  return {
+    slug,
+    backend: { ...DEFAULT_BACKEND, host: `${slug}.${TENANT_SITE_SUFFIX}` },
+  };
 }

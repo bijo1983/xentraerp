@@ -14,6 +14,18 @@ import Image from 'next/image';
 type Mode = 'password' | 'tenant';
 type TenantStep = 'code' | 'login' | 'change-password';
 
+/** The proxy routes read this cookie to pick which tenant's Frappe site to
+ * talk to (see erp-frontend/src/lib/tenancy/registry.ts). Clear it to target
+ * the control-plane/default site; set it to route to a tenant's own site. */
+function setTenantCookie(code: string | null) {
+  if (typeof document === 'undefined') return;
+  if (code) {
+    document.cookie = `xentra_tenant=${code}; path=/; SameSite=Lax`;
+  } else {
+    document.cookie = 'xentra_tenant=; path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  }
+}
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -35,6 +47,7 @@ function LoginForm() {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTenantCookie(null); // always the control-plane site for the Administrator login
     try {
       await login(email, password);
       router.push('/dashboard');
@@ -47,6 +60,7 @@ function LoginForm() {
     e.preventDefault();
     setTenantError(null);
     setTenantLoading(true);
+    setTenantCookie(null); // tenant_lookup itself runs against the control-plane site
     try {
       const res = await frappe.call('custom_erp.api.signup.tenant_lookup', { tenant_code: tenantCode }) as {
         organization_name: string;
@@ -66,6 +80,7 @@ function LoginForm() {
     e.preventDefault();
     setTenantError(null);
     setTenantLoading(true);
+    setTenantCookie(tenantCode); // route this login (and everything after) to the tenant's own site
     try {
       await frappe.login(adminEmail, tenantPassword);
       const status = await frappe.call('custom_erp.api.auth.get_login_status') as { force_password_change: boolean };
@@ -183,7 +198,7 @@ function LoginForm() {
                 <button
                   type="button"
                   className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
-                  onClick={() => { setTenantStep('code'); setTenantError(null); }}
+                  onClick={() => { setTenantStep('code'); setTenantError(null); setTenantCookie(null); }}
                 >
                   ← Use a different tenant code
                 </button>

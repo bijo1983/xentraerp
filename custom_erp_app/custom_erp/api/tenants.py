@@ -64,6 +64,8 @@ def list_tenants(search: str | None = None, status: str | None = None, limit: in
 			"plan",
 			"status",
 			"provisioning_status",
+			"site_name",
+			"provisioning_error",
 			"max_users",
 			"trial_end_date",
 			"tenant_admin_name",
@@ -85,7 +87,7 @@ def approve_tenant(tenant_name: str):
 		frappe.throw(f"Tenant is '{tenant.status}', not Pending Approval.")
 
 	tenant.status = "Trial"
-	tenant.provisioning_status = "Completed"
+	tenant.provisioning_status = "Pending"  # awaiting "Provision Site" from the admin panel
 	tenant.approved_by = frappe.session.user
 	tenant.approved_on = now_datetime()
 	tenant.save(ignore_permissions=True)
@@ -95,17 +97,15 @@ def approve_tenant(tenant_name: str):
 	frappe.db.commit()
 
 	try:
-		login_url = f"{frappe.utils.get_url()}/login?tenant={tenant.tenant_code}"
 		frappe.sendmail(
 			recipients=[tenant.tenant_admin_email],
-			subject="Your XentraERP account is now active",
+			subject="Your XentraERP account has been approved",
 			message=(
 				f"<p>Good news — your organization <b>{tenant.organization_name}</b> "
 				f"has been approved.</p>"
-				f"<p>Sign in with tenant code <b>{tenant.tenant_code}</b> at "
-				f"<a href='{login_url}'>the sign-in page</a>. "
-				f"Use password <b>{DEFAULT_ADMIN_PASSWORD}</b> for your first login — "
-				f"you'll be asked to set a new one.</p>"
+				f"<p>We're setting up your dedicated workspace now — you'll get another "
+				f"email with your sign-in link and tenant code <b>{tenant.tenant_code}</b> "
+				f"once it's ready (usually just a few minutes).</p>"
 				f"<p>Your free trial runs until {tenant.trial_end_date}.</p>"
 			),
 			now=True,

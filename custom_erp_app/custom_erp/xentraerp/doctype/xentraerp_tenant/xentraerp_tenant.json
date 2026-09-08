@@ -14,6 +14,9 @@
   "plan",
   "billing_cycle",
   "provisioning_status",
+  "site_name",
+  "site_provisioned_on",
+  "provisioning_error",
   "section_break_locale",
   "country",
   "base_currency",
@@ -102,6 +105,25 @@
    "fieldtype": "Select",
    "label": "Provisioning Status",
    "options": "Pending\nIn Progress\nCompleted\nFailed"
+  },
+  {
+   "fieldname": "site_name",
+   "fieldtype": "Data",
+   "label": "Dedicated Site",
+   "read_only": 1,
+   "description": "Frappe site hostname for this tenant's isolated database, e.g. jc.xentraerp.local"
+  },
+  {
+   "fieldname": "site_provisioned_on",
+   "fieldtype": "Datetime",
+   "label": "Site Provisioned On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provisioning_error",
+   "fieldtype": "Small Text",
+   "label": "Provisioning Error",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_locale",

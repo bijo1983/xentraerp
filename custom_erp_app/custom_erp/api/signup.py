@@ -209,7 +209,7 @@ def tenant_lookup(tenant_code: str):
 	tenant = frappe.get_all(
 		"XentraERP Tenant",
 		filters={"tenant_code": tenant_code},
-		fields=["name", "organization_name", "tenant_admin_email", "status"],
+		fields=["name", "organization_name", "tenant_admin_email", "status", "provisioning_status", "site_name"],
 		limit_page_length=1,
 	)
 	if not tenant:
@@ -220,6 +220,11 @@ def tenant_lookup(tenant_code: str):
 		frappe.throw("Your account is awaiting admin approval. You'll be notified by email once it's activated.")
 	if t.status in ("Rejected", "Suspended", "Cancelled", "Expired"):
 		frappe.throw(f"This tenant account is {t.status.lower()}. Contact support.")
+	if not t.site_name or t.provisioning_status != "Completed":
+		frappe.throw(
+			"Your workspace is still being set up. Please try again in a few minutes, "
+			"or contact support if this persists."
+		)
 
 	return {
 		"organization_name": t.organization_name,
