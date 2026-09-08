@@ -33,7 +33,10 @@ const TENANT_SITE_SUFFIX = process.env.TENANT_SITE_SUFFIX || 'xentraerp.local';
 // never leaves 127.0.0.1). Site names are deterministic: "<code>.xentraerp.local",
 // created by custom_erp.api.provisioning.provision_tenant_site via `bench new-site`.
 export async function resolveTenant(slug?: string): Promise<Tenant> {
-  if (!slug) return { slug: 'default', backend: DEFAULT_BACKEND };
+  // No tenant, or the reserved 'sandbox' alias: both point at the original
+  // shared/default site — the pre-per-tenant-sites data lives there, with no
+  // separate site of its own, so /sandbox/... is just a URL alias onto it.
+  if (!slug || slug === 'sandbox') return { slug: slug || 'default', backend: DEFAULT_BACKEND };
   return {
     slug,
     backend: { ...DEFAULT_BACKEND, host: `${slug}.${TENANT_SITE_SUFFIX}` },
