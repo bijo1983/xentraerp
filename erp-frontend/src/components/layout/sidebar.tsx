@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useERPStore } from '@/store/erp-store';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 const navGroups = [
   {
@@ -68,6 +69,7 @@ const navGroups = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const tenantCode = useTenantCode();
   const { sidebarOpen, toggleSidebar } = useERPStore();
 
   return (
@@ -94,11 +96,12 @@ export function Sidebar() {
             )}
             {!sidebarOpen && <div className="my-1 mx-2 border-t border-border" />}
             {group.items.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + '/');
+              const href = withTenant(item.href, tenantCode);
+              const active = pathname === href || pathname.startsWith(href + '/');
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={href}
                   title={!sidebarOpen ? item.label : undefined}
                   className={cn(
                     'flex items-center gap-2.5 mx-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors hover:bg-accent',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { frappe } from '@/lib/frappe';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ function slugify(s: string) {
 
 export default function SignupPage() {
   const router = useRouter();
+  const [host, setHost] = useState('your-domain.com');
   const [step, setStep] = useState<Step>('details');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,6 +31,10 @@ export default function SignupPage() {
   const [mobileOtp, setMobileOtp] = useState('');
 
   const [result, setResult] = useState<{ tenant_code: string; subdomain: string; status: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') setHost(window.location.host);
+  }, []);
 
   async function submitDetails(e: React.FormEvent) {
     e.preventDefault();
@@ -100,11 +105,11 @@ export default function SignupPage() {
                 <Input required value={org} onChange={(e) => { setOrg(e.target.value); if (!subdomain) setSubdomain(slugify(e.target.value)); }} placeholder="JJ Consultancy" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Subdomain</label>
-                <div className="flex items-center gap-2">
-                  <Input required pattern="[a-z0-9\-]+" value={subdomain} onChange={(e) => setSubdomain(slugify(e.target.value))} placeholder="jj-consultancy" />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">.xentraerp.com</span>
-                </div>
+                <label className="text-sm font-medium">Organization ID</label>
+                <Input required pattern="[a-z0-9\-]+" value={subdomain} onChange={(e) => setSubdomain(slugify(e.target.value))} placeholder="jj-consultancy" />
+                <p className="text-xs text-muted-foreground">
+                  Your ERP will be available at {host}/<span className="font-mono">&lt;your-code&gt;</span>/ — you&apos;ll get a short login code after signup
+                </p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Your Name</label>

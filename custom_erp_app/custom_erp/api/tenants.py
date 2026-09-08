@@ -57,6 +57,7 @@ def approve_tenant(tenant_name: str):
 	frappe.db.commit()
 
 	try:
+		login_url = f"{frappe.utils.get_url()}/login?tenant={tenant.tenant_code}"
 		frappe.sendmail(
 			recipients=[tenant.tenant_admin_email],
 			subject="Your Xentra account is now active",
@@ -64,8 +65,7 @@ def approve_tenant(tenant_name: str):
 				f"<p>Good news — your organization <b>{tenant.organization_name}</b> "
 				f"has been approved.</p>"
 				f"<p>Sign in with tenant code <b>{tenant.tenant_code}</b> at "
-				f"<a href='https://erp.badmintonbooking.com/login?tenant={tenant.tenant_code}'>"
-				f"the sign-in page</a>.</p>"
+				f"<a href='{login_url}'>the sign-in page</a>.</p>"
 				f"<p>Your free trial runs until {tenant.trial_end_date}.</p>"
 			),
 			now=True,

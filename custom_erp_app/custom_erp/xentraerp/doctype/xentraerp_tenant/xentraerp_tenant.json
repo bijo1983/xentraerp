@@ -65,7 +65,7 @@
    "label": "Subdomain",
    "reqd": 1,
    "unique": 1,
-   "description": "Tenant URL: <subdomain>.xentraerp.com"
+   "description": "Unique organization identifier used as the tenant code base, e.g. 'jj-consultancy'"
   },
   {
    "default": "Draft",
