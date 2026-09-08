@@ -77,9 +77,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-2 min-w-0">
             <Image src="/brand/mark.png" alt="XentraERP" width={22} height={22} className="rounded-md shrink-0" />
             {open && (
-              <div className="min-w-0">
-                <span className="text-sm font-bold">XentraERP</span>
-                <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">Admin</span>
+              <div className="min-w-0 flex items-center gap-1.5 whitespace-nowrap overflow-hidden">
+                <span className="text-sm font-bold truncate">XentraERP</span>
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">Admin</span>
               </div>
             )}
           </div>
