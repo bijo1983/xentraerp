@@ -29,7 +29,7 @@ export default function SignupPage() {
   const [emailOtp, setEmailOtp] = useState('');
   const [mobileOtp, setMobileOtp] = useState('');
 
-  const [result, setResult] = useState<{ tenant_code: string; subdomain: string; trial_end_date: string } | null>(null);
+  const [result, setResult] = useState<{ tenant_code: string; subdomain: string; status: string } | null>(null);
 
   async function submitDetails(e: React.FormEvent) {
     e.preventDefault();
@@ -74,7 +74,7 @@ export default function SignupPage() {
         admin_mobile: mobile,
         plan: 'Free Trial',
       });
-      setResult(res as { tenant_code: string; subdomain: string; trial_end_date: string });
+      setResult(res as { tenant_code: string; subdomain: string; status: string });
       setStep('done');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Verification failed');
@@ -146,18 +146,21 @@ export default function SignupPage() {
 
           {step === 'done' && result && (
             <div className="space-y-4 text-center">
-              <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
+              <CheckCircle2 className="h-12 w-12 text-amber-500 mx-auto" />
               <div>
-                <p className="font-semibold">You're all set!</p>
-                <p className="text-sm text-muted-foreground mt-1">Your trial runs until {new Date(result.trial_end_date).toLocaleDateString()}</p>
+                <p className="font-semibold">Signup received!</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your account is pending admin approval. We&apos;ll email you at the address you provided
+                  once it&apos;s activated — your 1-month free trial with all modules starts then.
+                </p>
               </div>
               <div className="rounded-md border bg-muted/40 p-4">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Your Tenant Code</p>
                 <p className="text-2xl font-bold tracking-widest">{result.tenant_code}</p>
-                <p className="text-xs text-muted-foreground mt-2">Use this code to sign in</p>
+                <p className="text-xs text-muted-foreground mt-2">Save this — you&apos;ll use it to sign in once approved</p>
               </div>
-              <Button className="w-full" onClick={() => router.push(`/login?tenant=${result.tenant_code}`)}>
-                Go to Sign In
+              <Button className="w-full" variant="outline" onClick={() => router.push('/')}>
+                Back to Home
               </Button>
             </div>
           )}

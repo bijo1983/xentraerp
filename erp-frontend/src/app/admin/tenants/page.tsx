@@ -4,23 +4,29 @@ import { useEffect, useState, useCallback } from 'react';
 import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X } from 'lucide-react';
+import { Search, Plus, X, Check, Ban } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Tenant {
   name: string;
   organization_name?: string;
   subdomain?: string;
+  tenant_code?: string;
   plan?: string;
   status?: string;
   provisioning_status?: string;
   max_users?: number;
   trial_end_date?: string;
+  tenant_admin_name?: string;
+  tenant_admin_email?: string;
   creation?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
   Active: 'bg-green-100 text-green-800',
   Trial: 'bg-amber-100 text-amber-800',
+  'Pending Approval': 'bg-blue-100 text-blue-800',
+  Rejected: 'bg-red-100 text-red-800',
   Suspended: 'bg-red-100 text-red-800',
   'Payment Pending': 'bg-orange-100 text-orange-800',
   'Past Due': 'bg-orange-100 text-orange-800',
@@ -28,23 +34,30 @@ const STATUS_COLORS: Record<string, string> = {
   Draft: 'bg-gray-100 text-gray-700',
 };
 
+const FILTERS = ['All', 'Pending Approval', 'Trial', 'Active', 'Suspended', 'Rejected'] as const;
+
 const emptyForm = { organization_name: '', subdomain: '', plan: 'Free', tenant_admin_email: '' };
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<(typeof FILTERS)[number]>('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [actingOn, setActingOn] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await frappe.call('custom_erp.api.tenants.list_tenants', { search: search || undefined });
+      const data = await frappe.call('custom_erp.api.tenants.list_tenants', {
+        search: search || undefined,
+        status: statusFilter === 'All' ? undefined : statusFilter,
+      });
       setTenants(Array.isArray(data) ? data : []);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Failed to load tenants';
@@ -53,7 +66,7 @@ export default function TenantsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -78,6 +91,31 @@ export default function TenantsPage() {
       setSaveError(message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function approve(t: Tenant) {
+    setActingOn(t.name);
+    try {
+      await frappe.call('custom_erp.api.tenants.approve_tenant', { tenant_name: t.name });
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to approve tenant');
+    } finally {
+      setActingOn(null);
+    }
+  }
+
+  async function reject(t: Tenant) {
+    const reason = window.prompt(`Reason for rejecting ${t.organization_name}? (optional)`) || undefined;
+    setActingOn(t.name);
+    try {
+      await frappe.call('custom_erp.api.tenants.reject_tenant', { tenant_name: t.name, reason });
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to reject tenant');
+    } finally {
+      setActingOn(null);
     }
   }
 
@@ -148,9 +186,25 @@ export default function TenantsPage() {
         </form>
       )}
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search organizations…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="relative max-w-sm flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search organizations…" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setStatusFilter(f)}
+              className={cn(
+                'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                statusFilter === f ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:bg-muted'
+              )}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-md border overflow-x-auto bg-background">
@@ -158,10 +212,10 @@ export default function TenantsPage() {
           <thead>
             <tr className="border-b bg-muted/40">
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Organization</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Subdomain</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Code</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Admin</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Plan</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Status</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Provisioning</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">Created</th>
               <th className="px-4 py-3" />
             </tr>
@@ -174,29 +228,54 @@ export default function TenantsPage() {
             ) : tenants.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-16 text-center text-muted-foreground">
-                  No tenants yet. Click &quot;Provision Tenant&quot; to create the first one.
+                  No tenants found for this filter.
                 </td>
               </tr>
             ) : tenants.map((t) => (
               <tr key={t.name} className="border-b hover:bg-muted/30">
                 <td className="px-4 py-3 font-medium">{t.organization_name || t.name}</td>
-                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{t.subdomain ? `${t.subdomain}.xentraerp.com` : '—'}</td>
+                <td className="px-4 py-3 font-mono text-xs">{t.tenant_code || '—'}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">
+                  <div>{t.tenant_admin_name || '—'}</div>
+                  <div className="text-muted-foreground/70">{t.tenant_admin_email}</div>
+                </td>
                 <td className="px-4 py-3">{t.plan || '—'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status || ''] || 'bg-gray-100 text-gray-700'}`}>
                     {t.status || 'Draft'}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">{t.provisioning_status || 'Pending'}</td>
                 <td className="px-4 py-3 text-muted-foreground text-xs">{t.creation ? new Date(t.creation).toLocaleDateString() : '—'}</td>
                 <td className="px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => window.location.assign(`/app/XentraERP%20Tenant/${encodeURIComponent(t.name)}`)}
-                  >
-                    Manage
-                  </Button>
+                  {t.status === 'Pending Approval' ? (
+                    <div className="flex gap-1 justify-end">
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 bg-green-600 hover:bg-green-700"
+                        disabled={actingOn === t.name}
+                        onClick={() => approve(t)}
+                      >
+                        <Check className="h-3.5 w-3.5 mr-1" /> Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-red-600 border-red-200 hover:bg-red-50"
+                        disabled={actingOn === t.name}
+                        onClick={() => reject(t)}
+                      >
+                        <Ban className="h-3.5 w-3.5 mr-1" /> Reject
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.location.assign(`/app/XentraERP%20Tenant/${encodeURIComponent(t.name)}`)}
+                    >
+                      Manage
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}

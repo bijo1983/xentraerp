@@ -37,6 +37,8 @@
   "storage_limit_mb",
   "enabled_modules",
   "section_break_meta",
+  "approved_by",
+  "approved_on",
   "notes"
  ],
  "fields": [
@@ -72,7 +74,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nTrial\nActive\nPayment Pending\nPast Due\nGrace Period\nSuspended\nCancelled\nExpired\nArchived",
+   "options": "Draft\nPending Approval\nRejected\nTrial\nActive\nPayment Pending\nPast Due\nGrace Period\nSuspended\nCancelled\nExpired\nArchived",
    "reqd": 1
   },
   {
@@ -223,6 +225,19 @@
    "fieldname": "section_break_meta",
    "fieldtype": "Section Break",
    "label": "Notes"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
   },
   {
    "fieldname": "notes",

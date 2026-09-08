@@ -160,7 +160,7 @@ def complete_signup(
 			"doctype": "XentraERP Tenant",
 			"organization_name": organization_name,
 			"subdomain": subdomain,
-			"status": "Trial",
+			"status": "Pending Approval",
 			"plan": plan,
 			"provisioning_status": "Pending",
 			"tenant_admin_name": admin_name,
@@ -173,11 +173,25 @@ def complete_signup(
 	tenant.insert(ignore_permissions=True)
 	frappe.db.commit()
 
+	try:
+		frappe.sendmail(
+			recipients=[admin_email],
+			subject="Your Xentra signup is under review",
+			message=(
+				f"<p>Thanks for signing up, {admin_name}.</p>"
+				f"<p>Your organization <b>{organization_name}</b> "
+				f"(tenant code <b>{tenant.tenant_code}</b>) is pending approval. "
+				f"You'll receive another email once it's activated.</p>"
+			),
+			now=True,
+		)
+	except Exception:
+		frappe.log_error(title="XentraERP signup pending-approval email failed")
+
 	return {
 		"tenant_code": tenant.tenant_code,
 		"subdomain": tenant.subdomain,
 		"status": tenant.status,
-		"trial_end_date": str(tenant.trial_end_date),
 		"login_url": f"/login?tenant={tenant.tenant_code}",
 	}
 
@@ -195,7 +209,9 @@ def tenant_login_request_otp(tenant_code: str):
 		frappe.throw("Tenant code not found.")
 
 	t = tenant[0]
-	if t.status in ("Suspended", "Cancelled", "Expired"):
+	if t.status == "Pending Approval":
+		frappe.throw("Your account is awaiting admin approval. You'll be notified by email once it's activated.")
+	if t.status in ("Rejected", "Suspended", "Cancelled", "Expired"):
 		frappe.throw(f"This tenant account is {t.status.lower()}. Contact support.")
 
 	return request_otp(t.tenant_admin_email, "email", purpose="login")
