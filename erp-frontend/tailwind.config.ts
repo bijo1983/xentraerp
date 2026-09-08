@@ -41,6 +41,10 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontFamily: {
+        heading: ['var(--font-heading)', 'var(--font-body)', 'sans-serif'],
+        body: ['var(--font-body)', 'sans-serif'],
+      },
     },
   },
   plugins: [],

@@ -2,13 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Exact brand tokens from Xentra_Detailed_Brand_Package/06_Developer_Resources */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 20% 98%;       /* #F8FAFC */
+    --foreground: 222.2 47.4% 11.2%; /* #0F172A */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 215 94% 50%;
+    --card-foreground: 222.2 47.4% 11.2%;
+    --primary: 221.2 83.2% 53.3%;    /* #2563EB */
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -16,32 +17,32 @@
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84.2% 60.2%;    /* #EF4444 */
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 215 94% 50%;
-    --radius: 0.5rem;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;               /* card: 12px, button (rounded-md): 10px */
   }
 
   .dark {
-    --background: 222 65% 7%;
+    --background: 222.2 47.4% 11.2%; /* #0F172A navy */
     --foreground: 210 40% 98%;
-    --card: 222 55% 10%;
+    --card: 217.2 32.6% 17.5%;       /* #1E293B */
     --card-foreground: 210 40% 98%;
-    --primary: 215 90% 58%;
+    --primary: 217.2 91.2% 59.8%;    /* #3B82F6 azure */
     --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 222 40% 16%;
+    --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 222 40% 16%;
+    --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 222 40% 16%;
+    --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 222 40% 18%;
-    --input: 222 40% 18%;
-    --ring: 215 90% 58%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -52,4 +53,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), var(--font-body), sans-serif;
+  }
+}
+
+/* Brand hero gradient, matching Xentra_Web_Hero reference exactly */
+.xentra-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
 }
