@@ -1,26 +1,204 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
+import { Button } from '@/components/ui/button';
+import {
+  ArrowRight, Check, ShoppingCart, Package, Users, BarChart3,
+  Building2, BookOpen, ShieldCheck, Zap, Clock, Menu, X,
+} from 'lucide-react';
 
-export default function Home() {
+const MODULES = [
+  { icon: ShoppingCart, label: 'Sales & CRM', desc: 'Leads, quotations, orders, invoices' },
+  { icon: Package, label: 'Purchase & Inventory', desc: 'Procurement, stock, warehouses' },
+  { icon: BookOpen, label: 'Accounting', desc: 'Journals, payments, chart of accounts' },
+  { icon: Users, label: 'HR & Payroll', desc: 'Employees, attendance, payroll runs' },
+  { icon: Building2, label: 'Manufacturing', desc: 'BOMs, work orders, production' },
+  { icon: BarChart3, label: 'Reports & Analytics', desc: 'Real-time dashboards & insights' },
+];
+
+const FEATURES = [
+  { icon: Zap, title: 'Fast to set up', desc: 'Self-service signup with instant tenant provisioning — no IT team required.' },
+  { icon: ShieldCheck, title: 'Enterprise-grade security', desc: 'Tenant isolation, role-based access, and full audit trails built in.' },
+  { icon: Clock, title: '1-month free trial', desc: 'Every plan includes a full month with all modules unlocked, no card required.' },
+];
+
+const PLANS = [
+  { name: 'Starter', price: '₹0', period: '/mo', desc: 'For small teams getting started', features: ['Up to 5 users', 'Core Sales & Purchase', 'Basic Reports', 'Email support'] },
+  { name: 'Professional', price: '₹4,999', period: '/mo', desc: 'For growing businesses', highlighted: true, features: ['Up to 25 users', 'All ERP modules', 'Manufacturing & Projects', 'Priority support'] },
+  { name: 'Enterprise', price: 'Custom', period: '', desc: 'For large organizations', features: ['Unlimited users', 'Custom modules', 'Dedicated support', 'SLA & onboarding'] },
+];
+
+export default function LandingPage() {
   const router = useRouter();
   const { user, loading, checkSession } = useAuthStore();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => { checkSession(); }, [checkSession]);
 
   useEffect(() => {
-    checkSession();
-  }, [checkSession]);
-
-  useEffect(() => {
-    if (!loading) {
-      router.replace(user ? '/dashboard' : '/login');
-    }
+    if (!loading && user) router.replace('/dashboard');
   }, [user, loading, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Nav */}
+      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
+          <span className="text-lg font-bold tracking-tight">
+            Xen<span className="text-primary">tra</span>
+          </span>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+            <a href="#modules" className="hover:text-foreground transition-colors">Modules</a>
+            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
+            <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
+          </nav>
+          <div className="hidden md:flex items-center gap-3">
+            <Link href="/login"><Button variant="ghost" size="sm">Sign In</Button></Link>
+            <Link href="/signup"><Button size="sm">Start Free Trial</Button></Link>
+          </div>
+          <button className="md:hidden" onClick={() => setMenuOpen((v) => !v)}>
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+        {menuOpen && (
+          <div className="md:hidden border-t px-6 py-4 space-y-3">
+            <a href="#modules" className="block text-sm font-medium" onClick={() => setMenuOpen(false)}>Modules</a>
+            <a href="#features" className="block text-sm font-medium" onClick={() => setMenuOpen(false)}>Features</a>
+            <a href="#pricing" className="block text-sm font-medium" onClick={() => setMenuOpen(false)}>Pricing</a>
+            <div className="flex gap-2 pt-2">
+              <Link href="/login" className="flex-1"><Button variant="outline" size="sm" className="w-full">Sign In</Button></Link>
+              <Link href="/signup" className="flex-1"><Button size="sm" className="w-full">Start Free Trial</Button></Link>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16 text-center">
+        <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground mb-6">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          1-month free trial · all modules included
+        </div>
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-balance max-w-3xl mx-auto">
+          One ERP for your entire business
+        </h1>
+        <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto text-balance">
+          Sales, purchase, inventory, accounting and HR — all in one modern, modular platform built on ERPNext.
+        </p>
+        <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
+          <Link href="/signup">
+            <Button size="lg" className="gap-2">
+              Start Free Trial <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Link href="/login">
+            <Button size="lg" variant="outline">Sign In</Button>
+          </Link>
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">No credit card required · Cancel anytime</p>
+      </section>
+
+      {/* Modules */}
+      <section id="modules" className="mx-auto max-w-6xl px-6 py-16 border-t">
+        <div className="text-center mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Every module your business needs</h2>
+          <p className="mt-2 text-muted-foreground">Pick what you need at signup — add more as you grow</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {MODULES.map((m) => (
+            <div key={m.label} className="rounded-lg border p-5 hover:border-primary/50 transition-colors">
+              <m.icon className="h-5 w-5 text-primary mb-3" />
+              <h3 className="font-semibold text-sm">{m.label}</h3>
+              <p className="text-sm text-muted-foreground mt-1">{m.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="bg-muted/30 border-y">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {FEATURES.map((f) => (
+              <div key={f.title}>
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                  <f.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-semibold">{f.title}</h3>
+                <p className="text-sm text-muted-foreground mt-2">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Simple, transparent pricing</h2>
+          <p className="mt-2 text-muted-foreground">Every plan starts with a 1-month free trial</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {PLANS.map((p) => (
+            <div
+              key={p.name}
+              className={`rounded-xl border p-6 flex flex-col ${p.highlighted ? 'border-primary shadow-lg shadow-primary/10 relative' : ''}`}
+            >
+              {p.highlighted && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary text-primary-foreground text-xs font-medium px-3 py-1">
+                  Most Popular
+                </span>
+              )}
+              <h3 className="font-semibold">{p.name}</h3>
+              <p className="text-sm text-muted-foreground mt-1">{p.desc}</p>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-3xl font-bold tabular-nums">{p.price}</span>
+                <span className="text-sm text-muted-foreground">{p.period}</span>
+              </div>
+              <ul className="mt-6 space-y-2.5 flex-1">
+                {p.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm">
+                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/signup" className="mt-6">
+                <Button className="w-full" variant={p.highlighted ? 'default' : 'outline'}>
+                  Get Started
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="border-t">
+        <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Ready to run your business on Xentra?</h2>
+          <p className="mt-3 text-muted-foreground">Set up your organization in minutes. No credit card required.</p>
+          <Link href="/signup" className="inline-block mt-6">
+            <Button size="lg" className="gap-2">
+              Start Free Trial <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t">
+        <div className="mx-auto max-w-6xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+          <span>© {new Date().getFullYear()} Xentra. All rights reserved.</span>
+          <div className="flex gap-6">
+            <Link href="/login" className="hover:text-foreground transition-colors">Sign In</Link>
+            <Link href="/signup" className="hover:text-foreground transition-colors">Sign Up</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
