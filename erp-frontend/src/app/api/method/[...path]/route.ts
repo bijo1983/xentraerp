@@ -10,7 +10,7 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
   const tenant = await resolveTenant(tenantSlug(req));
   const { hostIp, port, host } = tenant.backend;
 
-  const methodPath = params.path.join('/');
+  const methodPath = params.path.map((seg) => encodeURIComponent(seg)).join('/');
   const search = req.nextUrl.search || '';
   const path = `/api/method/${methodPath}${search}`;
 
