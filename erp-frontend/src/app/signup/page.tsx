@@ -102,7 +102,7 @@ export default function SignupPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Subdomain</label>
                 <div className="flex items-center gap-2">
-                  <Input required pattern="[a-z0-9-]+" value={subdomain} onChange={(e) => setSubdomain(slugify(e.target.value))} placeholder="jj-consultancy" />
+                  <Input required pattern="[a-z0-9\-]+" value={subdomain} onChange={(e) => setSubdomain(slugify(e.target.value))} placeholder="jj-consultancy" />
                   <span className="text-sm text-muted-foreground whitespace-nowrap">.xentraerp.com</span>
                 </div>
               </div>

@@ -149,7 +149,7 @@ export default function TenantsPage() {
               <label className="text-xs font-medium text-muted-foreground">Subdomain</label>
               <Input
                 required
-                pattern="[a-z0-9-]+"
+                pattern="[a-z0-9\-]+"
                 value={form.subdomain}
                 onChange={(e) => setForm((f) => ({ ...f, subdomain: e.target.value }))}
                 placeholder="acme-corp"
