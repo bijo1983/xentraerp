@@ -31,6 +31,10 @@ def _ensure_tenant_admin_user(tenant):
 			}
 		)
 		user.append("roles", {"role": "System Manager"})
+		# The default 'admin' password is intentionally simple for first login
+		# (admin_must_change_password forces it to be replaced immediately) —
+		# bypass Frappe's password-strength policy for this one insert only.
+		user.flags.ignore_password_policy = True
 		user.insert(ignore_permissions=True)
 	else:
 		update_password(email, DEFAULT_ADMIN_PASSWORD)
