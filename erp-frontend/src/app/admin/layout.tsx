@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Package, Settings, CreditCard,
@@ -73,12 +74,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         open ? 'w-56' : 'w-14'
       )}>
         <div className="flex h-14 items-center justify-between border-b px-3 shrink-0">
-          {open && (
-            <div>
-              <span className="text-sm font-bold">Xentra</span>
-              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">Admin</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            <Image src="/brand/mark.png" alt="Xentra" width={22} height={22} className="rounded-md shrink-0" />
+            {open && (
+              <div className="min-w-0">
+                <span className="text-sm font-bold">Xentra</span>
+                <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">Admin</span>
+              </div>
+            )}
+          </div>
           <button onClick={() => setOpen(!open)} className="rounded p-1 hover:bg-accent ml-auto">
             <ChevronLeft className={cn('h-4 w-4 transition-transform', !open && 'rotate-180')} />
           </button>

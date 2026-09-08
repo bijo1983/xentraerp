@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Package, ChevronLeft,
@@ -80,7 +81,10 @@ export function Sidebar() {
       )}
     >
       <div className="flex h-14 items-center justify-between border-b px-3 shrink-0">
-        {sidebarOpen && <span className="text-base font-bold tracking-tight">Xentra</span>}
+        <div className="flex items-center gap-2 min-w-0">
+          <Image src="/brand/mark.png" alt="Xentra" width={24} height={24} className="rounded-md shrink-0" />
+          {sidebarOpen && <span className="text-base font-bold tracking-tight truncate">Xentra</span>}
+        </div>
         <button onClick={toggleSidebar} className="rounded p-1 hover:bg-accent ml-auto">
           <ChevronLeft className={cn('h-4 w-4 transition-transform', !sidebarOpen && 'rotate-180')} />
         </button>

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import Image from 'next/image';
 
 type Mode = 'password' | 'tenant';
 
@@ -71,6 +72,7 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
+        <Image src="/brand/mark.png" alt="Xentra" width={44} height={44} className="rounded-xl mx-auto mb-2" />
         <CardTitle className="text-2xl">Xentra</CardTitle>
         <p className="text-sm text-muted-foreground">Sign in to your account</p>
       </CardHeader>

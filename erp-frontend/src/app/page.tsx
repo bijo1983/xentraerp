@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,8 @@ export default function LandingPage() {
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
-          <span className="text-lg font-bold tracking-tight">
+          <span className="flex items-center gap-2 text-lg font-bold tracking-tight">
+            <Image src="/brand/mark.png" alt="Xentra" width={28} height={28} className="rounded-md" />
             Xen<span className="text-primary">tra</span>
           </span>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">

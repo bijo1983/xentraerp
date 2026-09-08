@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { frappe } from '@/lib/frappe';
 import { Button } from '@/components/ui/button';
@@ -92,6 +93,7 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <Image src="/brand/mark.png" alt="Xentra" width={44} height={44} className="rounded-xl mx-auto mb-2" />
           <CardTitle className="text-2xl">Start your free trial</CardTitle>
           <p className="text-sm text-muted-foreground">1 month free · all modules included</p>
         </CardHeader>
