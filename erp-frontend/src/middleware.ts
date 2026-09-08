@@ -11,7 +11,7 @@ const RESERVED_SEGMENTS = new Set([
   'inventory', 'items', 'journal-entries', 'leads', 'material-requests',
   'opportunities', 'payments', 'purchase', 'purchase-invoices',
   'purchase-receipts', 'quotations', 'reports', 'sales', 'sales-invoices',
-  'settings', 'suppliers', 'favicon.ico', '_next',
+  'settings', 'suppliers', 'favicon.ico', '_next', 'brand',
 ]);
 
 const TENANT_CODE_RE = /^[a-z0-9]{2,10}$/;
@@ -23,7 +23,11 @@ export function middleware(req: NextRequest) {
   if (segments.length === 0) return NextResponse.next();
 
   const [first, ...rest] = segments;
-  if (RESERVED_SEGMENTS.has(first) || !TENANT_CODE_RE.test(first)) {
+  const last = segments[segments.length - 1];
+  // Any request whose last segment has a file extension is a static asset
+  // (image, font, manifest, etc.) — never a tenant-prefixed page route.
+  // This is the general safety net; RESERVED_SEGMENTS covers real routes.
+  if (RESERVED_SEGMENTS.has(first) || !TENANT_CODE_RE.test(first) || last.includes('.')) {
     return NextResponse.next();
   }
 
