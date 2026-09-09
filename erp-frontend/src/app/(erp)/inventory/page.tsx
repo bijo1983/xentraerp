@@ -5,22 +5,24 @@ import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '
 import { useFrappeList } from '@/hooks/use-frappe-list';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 interface Row { name: string; item_code: string; warehouse: string; actual_qty: number; }
 const col = createColumnHelper<Row>();
 
 export default function InventoryPage() {
   const router = useRouter();
+  const tenantCode = useTenantCode();
   const { data, loading, total, page, setPage, pageSize } = useFrappeList<Row>({
     doctype: 'Bin',
     fields: ['name', 'item_code', 'warehouse', 'actual_qty'],
   });
 
   const columns = useMemo(() => [
-    col.accessor('item_code', { header: 'Item', cell: (i) => <button className="text-primary hover:underline" onClick={() => router.push(`/app/Item/${encodeURIComponent(i.getValue())}`)}>{i.getValue()}</button> }),
+    col.accessor('item_code', { header: 'Item', cell: (i) => <button className="text-primary hover:underline" onClick={() => router.push(withTenant(`/app/Item/${encodeURIComponent(i.getValue())}`, tenantCode))}>{i.getValue()}</button> }),
     col.accessor('warehouse', { header: 'Warehouse' }),
     col.accessor('actual_qty', { header: 'Qty on Hand', cell: (i) => i.getValue()?.toLocaleString() ?? '0' }),
-  ], [router]);
+  ], [router, tenantCode]);
 
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
 
@@ -28,7 +30,7 @@ export default function InventoryPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Inventory</h2>
-        <Button onClick={() => router.push('/app/Stock%20Entry/new')}>New Stock Entry</Button>
+        <Button onClick={() => router.push(withTenant('/app/Stock%20Entry/new', tenantCode))}>New Stock Entry</Button>
       </div>
       <Card>
         <CardHeader><CardTitle className="text-base">{total} bin{total !== 1 ? 's' : ''}</CardTitle></CardHeader>

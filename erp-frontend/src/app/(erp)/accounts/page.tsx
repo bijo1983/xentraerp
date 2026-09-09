@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 const sections = [
   {
@@ -25,6 +26,7 @@ const sections = [
 
 export default function AccountsPage() {
   const router = useRouter();
+  const tenantCode = useTenantCode();
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Accounts</h2>
@@ -33,7 +35,7 @@ export default function AccountsPage() {
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">{s.title}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {s.items.map((item) => (
-              <Card key={item.href} className="cursor-pointer hover:border-primary transition-colors" onClick={() => router.push(item.href)}>
+              <Card key={item.href} className="cursor-pointer hover:border-primary transition-colors" onClick={() => router.push(withTenant(item.href, tenantCode))}>
                 <CardHeader className="pb-2"><CardTitle className="text-base">{item.label}</CardTitle></CardHeader>
                 <CardContent><p className="text-sm text-muted-foreground">{item.desc}</p></CardContent>
               </Card>
@@ -42,8 +44,8 @@ export default function AccountsPage() {
         </div>
       ))}
       <div className="flex gap-2 pt-2">
-        <Button onClick={() => router.push('/app/Journal%20Entry/new')}>New Journal Entry</Button>
-        <Button variant="outline" onClick={() => router.push('/app/Payment%20Entry/new')}>New Payment</Button>
+        <Button onClick={() => router.push(withTenant('/app/Journal%20Entry/new', tenantCode))}>New Journal Entry</Button>
+        <Button variant="outline" onClick={() => router.push(withTenant('/app/Payment%20Entry/new', tenantCode))}>New Payment</Button>
       </div>
     </div>
   );

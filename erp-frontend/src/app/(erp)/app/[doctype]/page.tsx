@@ -6,6 +6,7 @@ import { frappe } from '@/lib/frappe';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 interface Row { name: string; [key: string]: unknown }
 
@@ -18,6 +19,7 @@ function humanize(str: string) {
 export default function DoctypeListPage() {
   const { doctype } = useParams<{ doctype: string }>();
   const router = useRouter();
+  const tenantCode = useTenantCode();
   const decoded = decodeURIComponent(doctype);
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -70,7 +72,7 @@ export default function DoctypeListPage() {
           <h2 className="text-xl font-semibold">{humanize(decoded)}</h2>
           <p className="text-sm text-muted-foreground">{total} record{total !== 1 ? 's' : ''}</p>
         </div>
-        <Button onClick={() => router.push(`/app/${doctype}/new`)} size="sm">
+        <Button onClick={() => router.push(withTenant(`/app/${doctype}/new`, tenantCode))} size="sm">
           <Plus className="h-4 w-4 mr-1" /> New
         </Button>
       </div>
@@ -106,7 +108,7 @@ export default function DoctypeListPage() {
               <tr
                 key={row.name}
                 className="border-b hover:bg-muted/40 cursor-pointer"
-                onClick={() => router.push(`/app/${doctype}/${encodeURIComponent(row.name)}`)}
+                onClick={() => router.push(withTenant(`/app/${doctype}/${encodeURIComponent(row.name)}`, tenantCode))}
               >
                 <td className="px-4 py-3 font-medium text-primary">{row.name}</td>
                 {cols.map((c) => (

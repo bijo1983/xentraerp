@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 // href: null means Single doctype → form at /app/DocType/DocType
 // href: '/route' means list doctype with a dedicated list page
@@ -76,12 +77,13 @@ type SectionItem = {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const tenantCode = useTenantCode();
 
   function navigate(item: SectionItem) {
     if (item.single) {
-      router.push(`/app/${encodeURIComponent(item.single)}/${encodeURIComponent(item.single)}`);
+      router.push(withTenant(`/app/${encodeURIComponent(item.single)}/${encodeURIComponent(item.single)}`, tenantCode));
     } else if (item.list) {
-      router.push(`/app/${encodeURIComponent(item.list)}`);
+      router.push(withTenant(`/app/${encodeURIComponent(item.list)}`, tenantCode));
     }
   }
 

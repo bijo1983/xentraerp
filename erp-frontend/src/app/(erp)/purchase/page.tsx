@@ -6,24 +6,26 @@ import { useFrappeList } from '@/hooks/use-frappe-list';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 interface Row { name: string; supplier: string; transaction_date: string; grand_total: number; status: string; }
 const col = createColumnHelper<Row>();
 
 export default function PurchasePage() {
   const router = useRouter();
+  const tenantCode = useTenantCode();
   const { data, loading, total, page, setPage, pageSize } = useFrappeList<Row>({
     doctype: 'Purchase Order',
     fields: ['name', 'supplier', 'transaction_date', 'grand_total', 'status'],
   });
 
   const columns = useMemo(() => [
-    col.accessor('name', { header: 'Order ID', cell: (i) => <button className="text-primary hover:underline" onClick={() => router.push(`/app/Purchase%20Order/${encodeURIComponent(i.getValue())}`)}>{i.getValue()}</button> }),
+    col.accessor('name', { header: 'Order ID', cell: (i) => <button className="text-primary hover:underline" onClick={() => router.push(withTenant(`/app/Purchase%20Order/${encodeURIComponent(i.getValue())}`, tenantCode))}>{i.getValue()}</button> }),
     col.accessor('supplier', { header: 'Supplier' }),
     col.accessor('transaction_date', { header: 'Date', cell: (i) => formatDate(i.getValue()) }),
     col.accessor('grand_total', { header: 'Total', cell: (i) => formatCurrency(i.getValue()) }),
     col.accessor('status', { header: 'Status', cell: (i) => <span className="rounded-full px-2 py-1 text-xs font-medium bg-muted">{i.getValue()}</span> }),
-  ], [router]);
+  ], [router, tenantCode]);
 
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
 
@@ -31,7 +33,7 @@ export default function PurchasePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Purchase Orders</h2>
-        <Button onClick={() => router.push('/app/Purchase%20Order/new')}>New Purchase Order</Button>
+        <Button onClick={() => router.push(withTenant('/app/Purchase%20Order/new', tenantCode))}>New Purchase Order</Button>
       </div>
       <Card>
         <CardHeader><CardTitle className="text-base">{total} order{total !== 1 ? 's' : ''}</CardTitle></CardHeader>

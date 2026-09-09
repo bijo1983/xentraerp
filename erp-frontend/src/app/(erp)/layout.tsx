@@ -26,14 +26,20 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
-  // Bare unprefixed URLs (e.g. /dashboard, /leads — a manual visit or old
-  // bookmark) are never a valid landing spot: every ERP page must live
-  // under a tenant code. Redirect to the sandbox/default context's copy
-  // of the same page rather than silently rendering it unprefixed.
+  // Bare unprefixed URLs (e.g. /dashboard, /leads — a manual visit, an old
+  // bookmark, or a link elsewhere in the app that forgot to go through
+  // withTenant()) are never a valid landing spot: every ERP page must live
+  // under a tenant code. Redirect to the SAME tenant context the session is
+  // actually in (read from the routing cookie) — falling back to sandbox
+  // only if that cookie is genuinely absent. Defaulting to sandbox
+  // unconditionally would silently move a real tenant admin's session onto
+  // the shared site, which is exactly the isolation bug this whole
+  // tenant-routing system exists to prevent.
   useEffect(() => {
-    if (!loading && user && !tenantCode) {
-      router.replace(`/sandbox${pathname}`);
-    }
+    if (loading || !user || tenantCode) return;
+    const match = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )xentra_tenant=([^;]*)/) : null;
+    const currentTenant = match ? decodeURIComponent(match[1]) : '';
+    router.replace(`/${currentTenant || 'sandbox'}${pathname}`);
   }, [loading, user, tenantCode, pathname, router]);
 
   if (loading || (user && !tenantCode)) {

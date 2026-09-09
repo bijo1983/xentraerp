@@ -6,6 +6,7 @@ import { useFrappeList } from '@/hooks/use-frappe-list';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 export interface ColDef {
   key: string;
@@ -27,6 +28,7 @@ const col = createColumnHelper<any>();
 
 export function DoctypeList({ title, doctype, fields, cols, newLabel }: Props) {
   const router = useRouter();
+  const tenantCode = useTenantCode();
   const { data, loading, total, page, setPage, pageSize } = useFrappeList<Record<string, unknown>>({ doctype, fields });
 
   const columns = useMemo(() =>
@@ -42,13 +44,13 @@ export function DoctypeList({ title, doctype, fields, cols, newLabel }: Props) {
             return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{v}</span>;
           }
           if (c.type === 'link') {
-            return <button className="text-primary hover:underline text-left" onClick={() => router.push(`/app/${encodeURIComponent(doctype)}/${encodeURIComponent(v)}`)}>{v}</button>;
+            return <button className="text-primary hover:underline text-left" onClick={() => router.push(withTenant(`/app/${encodeURIComponent(doctype)}/${encodeURIComponent(v)}`, tenantCode))}>{v}</button>;
           }
           return v ?? '';
         },
       })
     ),
-  [cols, router, doctype]);
+  [cols, router, doctype, tenantCode]);
 
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
 
@@ -56,7 +58,7 @@ export function DoctypeList({ title, doctype, fields, cols, newLabel }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{title}</h2>
-        {newLabel && <Button onClick={() => router.push(`/app/${encodeURIComponent(doctype)}/new`)}>+ {newLabel}</Button>}
+        {newLabel && <Button onClick={() => router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new`, tenantCode))}>+ {newLabel}</Button>}
       </div>
       <Card>
         <CardHeader><CardTitle className="text-base">{total} record{total !== 1 ? 's' : ''}</CardTitle></CardHeader>
@@ -71,7 +73,7 @@ export function DoctypeList({ title, doctype, fields, cols, newLabel }: Props) {
                     </tr>
                   ))}</thead>
                   <tbody>{table.getRowModel().rows.map(row => (
-                    <tr key={row.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => { const n = row.original.name as string; router.push(`/app/${encodeURIComponent(doctype)}/${encodeURIComponent(n)}`); }}>
+                    <tr key={row.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => { const n = row.original.name as string; router.push(withTenant(`/app/${encodeURIComponent(doctype)}/${encodeURIComponent(n)}`, tenantCode)); }}>
                       {row.getVisibleCells().map(cell => <td key={cell.id} className="px-4 py-3" onClick={(e) => e.stopPropagation()}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}
                     </tr>
                   ))}</tbody>

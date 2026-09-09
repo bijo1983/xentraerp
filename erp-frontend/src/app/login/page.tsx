@@ -83,6 +83,7 @@ function LoginForm() {
     setTenantCookie(tenantCode); // route this login (and everything after) to the tenant's own site
     try {
       await frappe.login(adminEmail, tenantPassword);
+      await frappe.waitForSession(adminEmail); // ensure the new session cookie is actually usable before proceeding
       const status = await frappe.call('custom_erp.api.auth.get_login_status') as { force_password_change: boolean };
       if (status.force_password_change) {
         setTenantStep('change-password');

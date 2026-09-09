@@ -42,6 +42,30 @@ class FrappeClient {
     return res.data.message;
   }
 
+  /**
+   * The session cookie Set by /api/method/login isn't always guaranteed to
+   * be attached to the very next request fired immediately afterward (seen
+   * as a 403 on the first authenticated call post-login, which then
+   * succeeds on retry). Poll get_logged_user with backoff until it reports
+   * a real (non-Guest) user, so callers can be sure the session is truly
+   * usable before navigating anywhere that depends on it.
+   */
+  async waitForSession(expectedUser?: string, attempts = 6, delayMs = 200): Promise<string> {
+    let lastErr: unknown;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const username = await this.getLoggedUser();
+        if (username && username !== 'Guest' && (!expectedUser || username.toLowerCase() === expectedUser.toLowerCase())) {
+          return username;
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('Session not established');
+  }
+
   // ── Generic CRUD (Frappe REST) ──────────────────────────────────
   async getList(doctype: string, params?: Record<string, unknown>) {
     const res = await this.http.get(`/api/resource/${doctype}`, { params });
