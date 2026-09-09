@@ -50,7 +50,7 @@ function LoginForm() {
     setTenantCookie(null); // always the control-plane site for the Administrator login
     try {
       await login(email, password);
-      router.push('/dashboard');
+      router.push('/admin');
     } catch {
       // error is set in store
     }

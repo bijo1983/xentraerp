@@ -1,15 +1,18 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { useERPStore } from '@/store/erp-store';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { cn } from '@/lib/utils';
+import { useTenantCode } from '@/lib/tenant';
 
 export default function ERPLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const tenantCode = useTenantCode();
   const { user, loading, checkSession } = useAuthStore();
   const { sidebarOpen } = useERPStore();
 
@@ -23,7 +26,17 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
-  if (loading) {
+  // Bare unprefixed URLs (e.g. /dashboard, /leads — a manual visit or old
+  // bookmark) are never a valid landing spot: every ERP page must live
+  // under a tenant code. Redirect to the sandbox/default context's copy
+  // of the same page rather than silently rendering it unprefixed.
+  useEffect(() => {
+    if (!loading && user && !tenantCode) {
+      router.replace(`/sandbox${pathname}`);
+    }
+  }, [loading, user, tenantCode, pathname, router]);
+
+  if (loading || (user && !tenantCode)) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

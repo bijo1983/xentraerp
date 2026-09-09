@@ -40,7 +40,17 @@ export default function LandingPage() {
   useEffect(() => { checkSession(); }, [checkSession]);
 
   useEffect(() => {
-    if (!loading && user) router.replace('/dashboard');
+    if (loading || !user) return;
+    if (user.roles?.includes('System Manager')) {
+      router.replace('/admin');
+      return;
+    }
+    // Non-admin sessions always belong to a tenant — never land on bare
+    // /dashboard. Fall back to /sandbox/dashboard only if no tenant
+    // context cookie is present (shouldn't happen via the normal login flow).
+    const match = typeof document !== 'undefined' ? document.cookie.match(/(?:^|; )xentra_tenant=([^;]*)/) : null;
+    const tenant = match ? decodeURIComponent(match[1]) : 'sandbox';
+    router.replace(`/${tenant || 'sandbox'}/dashboard`);
   }, [user, loading, router]);
 
   return (
