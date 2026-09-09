@@ -9,6 +9,7 @@ frontend's tenancy registry constructs that same hostname from the
 tenant code in the URL — see erp-frontend/src/lib/tenancy/registry.ts.
 """
 
+import json
 import os
 import subprocess
 
@@ -65,38 +66,51 @@ def provision_tenant_site(tenant_name: str):
 	return {"site_name": site_name, "provisioning_status": "In Progress"}
 
 
-def _create_admin_user_on_site(site_name: str, email: str, first_name: str):
-	"""Switch Frappe's site context to the newly created site and create the
-	tenant administrator's User there — bench new-site only creates
-	'Administrator', not the tenant's own admin login. Restores the
-	original (control-plane) site context before returning."""
-	original_site = frappe.local.site
-	frappe.init(site=site_name)
-	frappe.connect()
-	try:
-		if not frappe.db.exists("User", email):
-			user = frappe.get_doc(
-				{
-					"doctype": "User",
-					"email": email,
-					"first_name": first_name,
-					"send_welcome_email": 0,
-					"user_type": "System User",
-					"new_password": SITE_ADMIN_PASSWORD,
-				}
-			)
-			user.append("roles", {"role": "System Manager"})
-			user.flags.ignore_password_policy = True
-			user.insert(ignore_permissions=True)
-		else:
-			from frappe.utils.password import update_password
+def create_tenant_admin_user(email: str, first_name: str):
+	"""Create (or reset) the tenant administrator's User on whichever site
+	this runs against. Only ever invoked via `bench --site <site> execute`
+	(see _create_admin_user_on_site) — in-process frappe.init()/connect()
+	site-switching inside a background worker proved unreliable (a prior
+	provisioning run reported success but the user ended up on the wrong
+	site's database), so this always runs as its own isolated OS process
+	with the correct site context guaranteed by bench itself."""
+	if not frappe.db.exists("User", email):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": first_name,
+				"send_welcome_email": 0,
+				"user_type": "System User",
+				"new_password": SITE_ADMIN_PASSWORD,
+			}
+		)
+		user.append("roles", {"role": "System Manager"})
+		user.flags.ignore_password_policy = True
+		user.insert(ignore_permissions=True)
+	else:
+		from frappe.utils.password import update_password
 
-			update_password(email, SITE_ADMIN_PASSWORD)
-		frappe.db.commit()
-	finally:
-		frappe.destroy()
-		frappe.init(site=original_site)
-		frappe.connect()
+		update_password(email, SITE_ADMIN_PASSWORD)
+	frappe.db.commit()
+
+
+def _create_admin_user_on_site(site_name: str, email: str, first_name: str):
+	"""Run create_tenant_admin_user on the target site as an isolated
+	`bench execute` subprocess, guaranteeing the correct site context."""
+	kwargs = json.dumps({"email": email, "first_name": first_name})
+	subprocess.run(
+		[
+			"bench", "--site", site_name, "execute",
+			"custom_erp.api.provisioning.create_tenant_admin_user",
+			"--kwargs", kwargs,
+		],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=120,
+	)
 
 
 def _run_site_creation(tenant_name: str, site_name: str):
