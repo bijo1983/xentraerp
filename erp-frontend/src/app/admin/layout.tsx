@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Package, Settings, CreditCard,
   BarChart3, Shield, Bell, Building2, ChevronLeft, LogOut,
-  Layers, FileText, Zap, Globe, Server, Activity
+  Layers, FileText, Zap, Globe, Server, Activity, FlaskConical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -120,12 +120,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <div className="border-t p-2 shrink-0">
           <Link
-            href="/"
-            title={!open ? 'ERP Portal' : undefined}
+            href="/sandbox/dashboard"
+            title={!open ? 'Sandbox' : undefined}
             className="flex items-center gap-2.5 mx-1 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent mb-1"
           >
-            <Building2 className="h-4 w-4 shrink-0" />
-            {open && <span>ERP Portal</span>}
+            <FlaskConical className="h-4 w-4 shrink-0" />
+            {open && <span>Sandbox</span>}
           </Link>
           <button
             onClick={handleLogout}

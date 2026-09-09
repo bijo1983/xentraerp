@@ -8,7 +8,7 @@ import {
   ShoppingCart, FileText, Truck, Receipt,
   ClipboardList, ShoppingBag, PackageCheck, FileMinus,
   BookOpen, CreditCard, BarChart2, Building2,
-  BarChart3, Settings,
+  BarChart3, Settings, Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useERPStore } from '@/store/erp-store';
@@ -120,6 +120,21 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Only the platform admin's own sandbox/default context can jump back
+          to platform administration — real tenants don't get this link. */}
+      {(!tenantCode || tenantCode === 'sandbox') && (
+        <div className="border-t p-2 shrink-0">
+          <Link
+            href="/admin"
+            title={!sidebarOpen ? 'Admin Portal' : undefined}
+            className="flex items-center gap-2.5 mx-1 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent"
+          >
+            <Shield className="h-4 w-4 shrink-0" />
+            {sidebarOpen && <span>Admin Portal</span>}
+          </Link>
+        </div>
+      )}
     </aside>
   );
 }
