@@ -20,12 +20,14 @@ export function useFrappeList<T>({
 }: UseFrappeListOptions) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
 
   const fetch = useCallback(async () => {
     if (!enabled) return;
     setLoading(true);
+    setError(null);
     try {
       const params = {
         fields: JSON.stringify(fields),
@@ -38,6 +40,10 @@ export function useFrappeList<T>({
       setData(result);
       const count = await frappe.getCount(doctype, filters);
       setTotal(count as number);
+    } catch (err: unknown) {
+      setData([]);
+      setTotal(0);
+      setError(err instanceof Error ? err.message : `Failed to load ${doctype}`);
     } finally {
       setLoading(false);
     }
@@ -47,5 +53,5 @@ export function useFrappeList<T>({
     fetch();
   }, [fetch]);
 
-  return { data, loading, total, page, setPage, pageSize, refetch: fetch };
+  return { data, loading, error, total, page, setPage, pageSize, refetch: fetch };
 }

@@ -29,7 +29,7 @@ const col = createColumnHelper<any>();
 export function DoctypeList({ title, doctype, fields, cols, newLabel }: Props) {
   const router = useRouter();
   const tenantCode = useTenantCode();
-  const { data, loading, total, page, setPage, pageSize } = useFrappeList<Record<string, unknown>>({ doctype, fields });
+  const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<Record<string, unknown>>({ doctype, fields });
 
   const columns = useMemo(() =>
     cols.map((c) =>
@@ -63,6 +63,9 @@ export function DoctypeList({ title, doctype, fields, cols, newLabel }: Props) {
       <Card>
         <CardHeader><CardTitle className="text-base">{total} record{total !== 1 ? 's' : ''}</CardTitle></CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
           {loading ? <div className="flex h-32 items-center justify-center">Loading…</div> : (
             <>
               <div className="overflow-x-auto">

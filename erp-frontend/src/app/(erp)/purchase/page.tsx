@@ -14,7 +14,7 @@ const col = createColumnHelper<Row>();
 export default function PurchasePage() {
   const router = useRouter();
   const tenantCode = useTenantCode();
-  const { data, loading, total, page, setPage, pageSize } = useFrappeList<Row>({
+  const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<Row>({
     doctype: 'Purchase Order',
     fields: ['name', 'supplier', 'transaction_date', 'grand_total', 'status'],
   });
@@ -38,6 +38,9 @@ export default function PurchasePage() {
       <Card>
         <CardHeader><CardTitle className="text-base">{total} order{total !== 1 ? 's' : ''}</CardTitle></CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
           {loading ? <div className="flex h-32 items-center justify-center">Loading…</div> : (
             <>
               <div className="overflow-x-auto">

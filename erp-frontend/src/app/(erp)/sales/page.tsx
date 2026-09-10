@@ -23,7 +23,7 @@ interface SalesOrderRow {
 const columnHelper = createColumnHelper<SalesOrderRow>();
 
 export default function SalesPage() {
-  const { data, loading, total, page, setPage, pageSize } = useFrappeList<SalesOrderRow>({
+  const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<SalesOrderRow>({
     doctype: 'Sales Order',
     fields: ['name', 'customer', 'transaction_date', 'grand_total', 'status'],
   });
@@ -76,6 +76,9 @@ export default function SalesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
           {loading ? (
             <div className="flex h-32 items-center justify-center">Loading...</div>
           ) : (

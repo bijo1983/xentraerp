@@ -21,7 +21,7 @@ interface CustomerRow {
 const columnHelper = createColumnHelper<CustomerRow>();
 
 export default function CustomersPage() {
-  const { data, loading, total, page, setPage, pageSize } = useFrappeList<CustomerRow>({
+  const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<CustomerRow>({
     doctype: 'Customer',
     fields: ['name', 'customer_name', 'customer_group', 'territory'],
   });
@@ -49,6 +49,9 @@ export default function CustomersPage() {
           <CardTitle className="text-base">{total} customer{total !== 1 ? 's' : ''}</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
           {loading ? (
             <div className="flex h-32 items-center justify-center">Loading...</div>
           ) : (

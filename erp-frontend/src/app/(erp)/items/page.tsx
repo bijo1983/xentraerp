@@ -23,7 +23,7 @@ interface ItemRow {
 const columnHelper = createColumnHelper<ItemRow>();
 
 export default function ItemsPage() {
-  const { data, loading, total, page, setPage, pageSize } = useFrappeList<ItemRow>({
+  const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<ItemRow>({
     doctype: 'Item',
     fields: ['name', 'item_name', 'item_group', 'stock_uom', 'standard_rate'],
   });
@@ -55,6 +55,9 @@ export default function ItemsPage() {
           <CardTitle className="text-base">{total} item{total !== 1 ? 's' : ''}</CardTitle>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+          )}
           {loading ? (
             <div className="flex h-32 items-center justify-center">Loading...</div>
           ) : (
