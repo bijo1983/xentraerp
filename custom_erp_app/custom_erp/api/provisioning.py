@@ -113,37 +113,148 @@ def _create_admin_user_on_site(site_name: str, email: str, first_name: str):
 	)
 
 
-def configure_site_locale(country: str | None, time_zone: str | None):
-	"""Apply the tenant's chosen locale to System Settings on whichever site
-	this runs against. Only ever invoked via `bench --site <site> execute`
-	(see _configure_locale_on_site) for the same reason as
-	create_tenant_admin_user — a guaranteed, isolated site context."""
-	values = {k: v for k, v in {"country": country, "time_zone": time_zone}.items() if v}
-	if not values:
-		return
-	settings = frappe.get_single("System Settings")
-	settings.db_set(values)
+def _company_abbr(company_name: str) -> str:
+	words = [w for w in company_name.replace("-", " ").replace("_", " ").split() if w]
+	abbr = "".join(w[0] for w in words[:4]).upper() or "CO"
+	return abbr[:5]
+
+
+def run_default_setup(company_name: str, country: str | None, time_zone: str | None):
+	"""Auto-configure a fresh site's locale and default masters, the same
+	things ERPNext's own Setup Wizard would create — a default Company
+	(whose insert already cascades into a default Chart of Accounts,
+	warehouses, and Cost Center via ERPNext's own Company controller),
+	System Settings locale, and Global Defaults. Country/currency/timezone
+	come from frappe.geo.country_info, the same reference data the Setup
+	Wizard itself uses to auto-fill those fields from a chosen country.
+
+	Idempotent — safe to re-run (e.g. from the admin "Manage" action) on a
+	tenant whose provisioning partially failed or is missing pieces; it
+	only creates what doesn't already exist. Only ever invoked via
+	`bench --site <site> execute` (see _run_default_setup_on_site) for a
+	guaranteed, isolated site context."""
+	from frappe.geo.country_info import get_country_info
+
+	info = dict(get_country_info(country)) if country else {}
+	currency = info.get("currency")
+	tz = time_zone or (info.get("timezones") or [None])[0]
+
+	settings_values = {
+		k: v
+		for k, v in {
+			"country": country,
+			"time_zone": tz,
+			"currency": currency,
+			"number_format": info.get("number_format"),
+			"date_format": info.get("date_format"),
+		}.items()
+		if v
+	}
+	if settings_values:
+		frappe.get_single("System Settings").db_set(settings_values)
+
+	if company_name and not frappe.db.exists("Company", company_name):
+		company = frappe.get_doc(
+			{
+				"doctype": "Company",
+				"company_name": company_name,
+				"abbr": _company_abbr(company_name),
+				"default_currency": currency or "USD",
+				"country": country or "United States",
+			}
+		)
+		company.insert(ignore_permissions=True)
+		frappe.db.set_default("company", company.name)
+		frappe.db.set_single_value("Global Defaults", "default_company", company.name)
+		if currency:
+			frappe.db.set_single_value("Global Defaults", "default_currency", currency)
+		if country:
+			frappe.db.set_single_value("Global Defaults", "country", country)
+
 	frappe.db.commit()
 
 
-def _configure_locale_on_site(site_name: str, country: str | None, time_zone: str | None):
-	"""Run configure_site_locale on the target site as an isolated
-	`bench execute` subprocess, guaranteeing the correct site context."""
-	if not country and not time_zone:
-		return
-	kwargs = json.dumps({"country": country, "time_zone": time_zone})
+def _run_default_setup_on_site(site_name: str, company_name: str, country: str | None, time_zone: str | None):
+	"""Run run_default_setup on the target site as an isolated `bench
+	execute` subprocess, guaranteeing the correct site context."""
+	kwargs = json.dumps({"company_name": company_name, "country": country, "time_zone": time_zone})
 	subprocess.run(
 		[
 			"bench", "--site", site_name, "execute",
-			"custom_erp.api.provisioning.configure_site_locale",
+			"custom_erp.api.provisioning.run_default_setup",
 			"--kwargs", kwargs,
 		],
 		cwd=BENCH_DIR,
 		check=True,
 		capture_output=True,
 		text=True,
-		timeout=120,
+		timeout=180,
 	)
+
+
+def get_default_setup_status():
+	"""Report which default masters exist on whichever site this runs
+	against, for the admin "Manage" panel. Only ever invoked via
+	`bench --site <site> execute`."""
+	return {
+		"company": frappe.db.count("Company") > 0,
+		"chart_of_accounts": frappe.db.count("Account") > 0,
+		"warehouse": frappe.db.count("Warehouse") > 0,
+		"cost_center": frappe.db.count("Cost Center") > 0,
+		"currency_set": bool(frappe.db.get_single_value("System Settings", "currency")),
+		"time_zone_set": bool(frappe.db.get_single_value("System Settings", "time_zone")),
+	}
+
+
+def _get_default_setup_status_on_site(site_name: str) -> dict:
+	result = subprocess.run(
+		["bench", "--site", site_name, "execute", "custom_erp.api.provisioning.get_default_setup_status"],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=60,
+	)
+	# `bench execute` prints the return value as a Python repr on stdout.
+	import ast
+
+	return ast.literal_eval(result.stdout.strip().splitlines()[-1])
+
+
+@frappe.whitelist()
+def reconfigure_tenant_defaults(tenant_name: str):
+	"""Re-run default-setup on an already-provisioned tenant's site — the
+	"Manage" action for a tenant where something didn't get created
+	properly the first time. Safe to call repeatedly."""
+	_require_system_manager()
+
+	tenant = frappe.get_doc("XentraERP Tenant", tenant_name)
+	if not tenant.site_name or tenant.provisioning_status != "Completed":
+		frappe.throw("This tenant's site isn't provisioned yet.")
+
+	try:
+		_run_default_setup_on_site(
+			tenant.site_name, tenant.organization_name, tenant.country, tenant.time_zone
+		)
+	except subprocess.CalledProcessError as e:
+		frappe.throw((e.stderr or e.stdout or str(e))[:2000])
+
+	return get_tenant_setup_status(tenant_name)
+
+
+@frappe.whitelist()
+def get_tenant_setup_status(tenant_name: str):
+	"""Status of default masters on a tenant's site, for the admin panel."""
+	_require_system_manager()
+
+	tenant = frappe.get_doc("XentraERP Tenant", tenant_name)
+	if not tenant.site_name or tenant.provisioning_status != "Completed":
+		frappe.throw("This tenant's site isn't provisioned yet.")
+
+	try:
+		return _get_default_setup_status_on_site(tenant.site_name)
+	except subprocess.CalledProcessError as e:
+		frappe.throw((e.stderr or e.stdout or str(e))[:2000])
 
 
 def _run_site_creation(tenant_name: str, site_name: str):
@@ -152,6 +263,7 @@ def _run_site_creation(tenant_name: str, site_name: str):
 
 	tenant_admin_email = frappe.db.get_value("XentraERP Tenant", tenant_name, "tenant_admin_email")
 	tenant_admin_name = frappe.db.get_value("XentraERP Tenant", tenant_name, "tenant_admin_name")
+	tenant_org_name = frappe.db.get_value("XentraERP Tenant", tenant_name, "organization_name")
 	tenant_country = frappe.db.get_value("XentraERP Tenant", tenant_name, "country")
 	tenant_time_zone = frappe.db.get_value("XentraERP Tenant", tenant_name, "time_zone")
 
@@ -178,7 +290,7 @@ def _run_site_creation(tenant_name: str, site_name: str):
 			timeout=300,
 		)
 
-		_configure_locale_on_site(site_name, tenant_country, tenant_time_zone)
+		_run_default_setup_on_site(site_name, tenant_org_name, tenant_country, tenant_time_zone)
 
 		_create_admin_user_on_site(
 			site_name, tenant_admin_email, tenant_admin_name or "Administrator"

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X, Check, Ban, Copy, CheckCheck, Server, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Search, Plus, X, Check, Ban, Copy, CheckCheck, Server, RefreshCw, AlertTriangle, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tenant {
@@ -136,6 +136,36 @@ export default function TenantsPage() {
       await load();
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to start site provisioning');
+    } finally {
+      setActingOn(null);
+    }
+  }
+
+  async function checkSetup(t: Tenant) {
+    setActingOn(t.name);
+    try {
+      const status = await frappe.call('custom_erp.api.provisioning.get_tenant_setup_status', { tenant_name: t.name }) as Record<string, boolean>;
+      const missing = Object.entries(status).filter(([, ok]) => !ok).map(([k]) => k.replace(/_/g, ' '));
+      if (missing.length === 0) {
+        alert('All default masters are set up: Company, Chart of Accounts, Warehouse, Cost Center, Currency, Time Zone.');
+      } else if (window.confirm(`Missing: ${missing.join(', ')}.\n\nRun default setup now to create them?`)) {
+        await reconfigureSetup(t);
+        return;
+      }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to check setup status');
+    } finally {
+      setActingOn(null);
+    }
+  }
+
+  async function reconfigureSetup(t: Tenant) {
+    setActingOn(t.name);
+    try {
+      await frappe.call('custom_erp.api.provisioning.reconfigure_tenant_defaults', { tenant_name: t.name });
+      alert('Default setup re-run complete.');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to run default setup');
     } finally {
       setActingOn(null);
     }
@@ -345,13 +375,26 @@ export default function TenantsPage() {
                       </Button>
                     </div>
                   ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => window.location.assign(`/app/XentraERP%20Tenant/${encodeURIComponent(t.name)}`)}
-                    >
-                      Manage
-                    </Button>
+                    <div className="flex gap-1 justify-end">
+                      {t.provisioning_status === 'Completed' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={actingOn === t.name}
+                          onClick={() => checkSetup(t)}
+                          title="Check / configure default masters (Company, Chart of Accounts, Warehouses, Cost Center)"
+                        >
+                          <Wrench className="h-3.5 w-3.5 mr-1" /> Setup
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.location.assign(`/app/XentraERP%20Tenant/${encodeURIComponent(t.name)}`)}
+                      >
+                        Manage
+                      </Button>
+                    </div>
                   )}
                 </td>
               </tr>
