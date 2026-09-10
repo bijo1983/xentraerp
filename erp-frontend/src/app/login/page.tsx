@@ -62,10 +62,20 @@ function LoginForm() {
     setTenantLoading(true);
     setTenantCookie(null); // tenant_lookup itself runs against the control-plane site
     try {
-      const res = await frappe.call('custom_erp.api.signup.tenant_lookup', { tenant_code: tenantCode }) as {
-        organization_name: string;
-        admin_email: string;
-      };
+      // A site that hasn't been hit recently can return an incomplete
+      // response on its very first request after being woken up (seen as
+      // a blank admin_email that then breaks login with "Incomplete login
+      // details") — retry once silently rather than surfacing that.
+      let res: { organization_name: string; admin_email: string } | undefined;
+      for (let attempt = 0; ; attempt++) {
+        res = await frappe.call('custom_erp.api.signup.tenant_lookup', { tenant_code: tenantCode }) as {
+          organization_name: string;
+          admin_email: string;
+        };
+        if (res.admin_email || attempt >= 1) break;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (!res.admin_email) throw new Error('Could not find that tenant code');
       setOrgName(res.organization_name);
       setAdminEmail(res.admin_email);
       setTenantStep('login');
@@ -82,8 +92,21 @@ function LoginForm() {
     setTenantLoading(true);
     setTenantCookie(tenantCode); // route this login (and everything after) to the tenant's own site
     try {
-      await frappe.login(adminEmail, tenantPassword);
-      await frappe.waitForSession(adminEmail); // ensure the new session cookie is actually usable before proceeding
+      // A tenant site that hasn't been hit recently can flake on its very
+      // first request after being woken up (seen as a transient login
+      // failure that always succeeds on immediate retry) — retry once
+      // silently before surfacing an error to the user.
+      let attempt = 0;
+      for (;;) {
+        try {
+          await frappe.login(adminEmail, tenantPassword);
+          await frappe.waitForSession(adminEmail); // ensure the new session cookie is actually usable before proceeding
+          break;
+        } catch (err) {
+          if (attempt++ >= 1) throw err;
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
       const status = await frappe.call('custom_erp.api.auth.get_login_status') as { force_password_change: boolean };
       if (status.force_password_change) {
         setTenantStep('change-password');
