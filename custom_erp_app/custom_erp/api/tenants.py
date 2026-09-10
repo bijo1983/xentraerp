@@ -4,6 +4,24 @@ from frappe.utils.password import update_password
 
 DEFAULT_ADMIN_PASSWORD = "admin"
 
+# Tenant admins manage their whole org's ERP, not just Users/Settings —
+# System Manager alone doesn't grant module doctype access (e.g. Customer,
+# Sales Invoice, Item), since ERPNext gates those behind module-specific
+# roles rather than System Manager. Grant the top-level "Master Manager"/
+# "Manager" role in each module so the tenant admin has full read/write
+# access everywhere out of the box.
+TENANT_ADMIN_ROLES = [
+	"System Manager",
+	"Sales Master Manager",
+	"Purchase Master Manager",
+	"Accounts Manager",
+	"Stock Manager",
+	"Manufacturing Manager",
+	"Projects Manager",
+	"HR Manager",
+	"Website Manager",
+]
+
 
 def _require_system_manager():
 	if "System Manager" not in frappe.get_roles():
@@ -30,7 +48,8 @@ def _ensure_tenant_admin_user(tenant):
 				"new_password": DEFAULT_ADMIN_PASSWORD,
 			}
 		)
-		user.append("roles", {"role": "System Manager"})
+		for role in TENANT_ADMIN_ROLES:
+			user.append("roles", {"role": role})
 		# The default 'admin' password is intentionally simple for first login
 		# (admin_must_change_password forces it to be replaced immediately) —
 		# bypass Frappe's password-strength policy for this one insert only.
@@ -38,6 +57,16 @@ def _ensure_tenant_admin_user(tenant):
 		user.insert(ignore_permissions=True)
 	else:
 		update_password(email, DEFAULT_ADMIN_PASSWORD)
+		# Backfill any roles missing from a user created before this role
+		# list existed (or reset on re-approval), instead of only fixing it
+		# for brand-new tenants going forward.
+		user = frappe.get_doc("User", email)
+		existing_roles = {r.role for r in user.roles}
+		missing = [role for role in TENANT_ADMIN_ROLES if role not in existing_roles]
+		if missing:
+			for role in missing:
+				user.append("roles", {"role": role})
+			user.save(ignore_permissions=True)
 
 	tenant.db_set("admin_must_change_password", 1)
 
