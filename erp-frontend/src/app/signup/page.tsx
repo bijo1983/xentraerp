@@ -45,9 +45,15 @@ export default function SignupPage() {
 
   function selectCountry(name: string) {
     setCountry(name);
-    // Pre-fill the dialing code so the user only has to type the local number.
+    // Swap out just the leading dialing code, keeping whatever local number
+    // is already typed — so switching country again updates the prefix
+    // instead of leaving the old one or refusing to touch a non-empty field.
     const isd = countries.find((c) => c.name === name)?.isd;
-    if (isd && !mobile.trim()) setMobile(`+${isd} `);
+    if (!isd) return;
+    setMobile((prev) => {
+      const rest = prev.replace(/^\+?\d*\s*/, '');
+      return `+${isd} ${rest}`;
+    });
   }
 
   async function submitDetails(e: React.FormEvent) {
