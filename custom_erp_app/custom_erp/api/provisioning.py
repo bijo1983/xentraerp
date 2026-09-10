@@ -289,6 +289,20 @@ def _run_site_creation(tenant_name: str, site_name: str):
 			text=True,
 			timeout=300,
 		)
+		# `bench new-site --install-app` runs each app's install hooks, but
+		# ERPNext's own fixture data (Warehouse Type, UOM, etc. — the master
+		# records its Company controller assumes already exist when it
+		# creates default warehouses/accounts) is only synced by `migrate`,
+		# not by the app install itself. Skipping this makes Company
+		# creation below fail with e.g. "Could not find Warehouse Type: Transit".
+		subprocess.run(
+			["bench", "--site", site_name, "migrate"],
+			cwd=BENCH_DIR,
+			check=True,
+			capture_output=True,
+			text=True,
+			timeout=600,
+		)
 
 		_run_default_setup_on_site(site_name, tenant_org_name, tenant_country, tenant_time_zone)
 
