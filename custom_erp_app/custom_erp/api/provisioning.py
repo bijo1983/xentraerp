@@ -153,6 +153,17 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 	if settings_values:
 		frappe.get_single("System Settings").db_set(settings_values)
 
+	# ERPNext's Company controller assumes certain master data already
+	# exists when it creates default warehouses/accounts (e.g. the
+	# "Transit" Warehouse Type) — normally seeded by the Setup Wizard, not
+	# by installing the app. Since we're skipping the wizard UI, call its
+	# fixture installer directly first. Idempotent — only inserts records
+	# that don't already exist, so safe to re-run.
+	if not frappe.db.exists("Warehouse Type", "Transit"):
+		from erpnext.setup.setup_wizard.operations.install_fixtures import install as install_erpnext_fixtures
+
+		install_erpnext_fixtures(country=country)
+
 	if company_name and not frappe.db.exists("Company", company_name):
 		company = frappe.get_doc(
 			{
