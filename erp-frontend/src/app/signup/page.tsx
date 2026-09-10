@@ -48,11 +48,12 @@ export default function SignupPage() {
     // Swap out just the leading dialing code, keeping whatever local number
     // is already typed — so switching country again updates the prefix
     // instead of leaving the old one or refusing to touch a non-empty field.
+    // isd already includes its own leading "+" (e.g. "+973") — don't add another.
     const isd = countries.find((c) => c.name === name)?.isd;
     if (!isd) return;
     setMobile((prev) => {
       const rest = prev.replace(/^\+?\d*\s*/, '');
-      return `+${isd} ${rest}`;
+      return `${isd} ${rest}`;
     });
   }
 
