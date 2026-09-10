@@ -14,24 +14,17 @@ ALL_MODULES = [
 ]
 
 
-def generate_tenant_code(organization_name: str) -> str:
-	"""Derive a short lowercase code from the organization name, e.g.
-	'JJ Consultancy' -> 'jjc'. Falls back to numeric suffixes on clash."""
-	words = re.findall(r"[A-Za-z0-9]+", organization_name or "")
-	if not words:
-		base = "tnt"
-	elif len(words) == 1:
-		base = words[0][:3].lower()
-	else:
-		base = "".join(w[0] for w in words)[:5].lower()
+def generate_tenant_code(organization_name: str = "") -> str:
+	"""A random unique 6-digit numeric login code — not derived from the
+	organization name, so it never collides with a previous tenant's name-based
+	code or leftover site artifacts from a failed/removed tenant of the same name."""
+	import secrets
 
-	base = base or "tnt"
-	code = base
-	suffix = 1
-	while frappe.db.exists("XentraERP Tenant", {"tenant_code": code}):
-		suffix += 1
-		code = f"{base}{suffix}"
-	return code
+	for _ in range(50):
+		code = f"{secrets.randbelow(1_000_000):06d}"
+		if not frappe.db.exists("XentraERP Tenant", {"tenant_code": code}):
+			return code
+	frappe.throw("Could not generate a unique tenant code. Please try again.")
 
 
 class XentraERPTenant(Document):
