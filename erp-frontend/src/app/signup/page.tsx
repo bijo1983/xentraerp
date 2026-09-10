@@ -27,11 +27,22 @@ export default function SignupPage() {
   const [adminName, setAdminName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
+  const [country, setCountry] = useState('');
+  const [countries, setCountries] = useState<string[]>([]);
+  const [timeZone, setTimeZone] = useState('');
 
   const [result, setResult] = useState<{ tenant_code: string; subdomain: string; status: string } | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') setHost(window.location.host);
+    try {
+      setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    } catch {
+      // best-effort — locale gets configured manually later if this fails
+    }
+    frappe.call('custom_erp.api.signup.list_countries')
+      .then((res) => setCountries((res as string[]) || []))
+      .catch(() => {});
   }, []);
 
   async function submitDetails(e: React.FormEvent) {
@@ -46,6 +57,8 @@ export default function SignupPage() {
         admin_email: email,
         admin_mobile: mobile,
         plan: 'Free Trial',
+        country: country || undefined,
+        time_zone: timeZone || undefined,
       });
       setResult(res as { tenant_code: string; subdomain: string; status: string });
       setStep('done');
@@ -92,6 +105,22 @@ export default function SignupPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Mobile Number</label>
                 <Input required value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+91 98765 43210" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Country</label>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                >
+                  <option value="">Select your country</option>
+                  {countries.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Sets your workspace&apos;s default country and time zone automatically
+                </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit for Approval'}

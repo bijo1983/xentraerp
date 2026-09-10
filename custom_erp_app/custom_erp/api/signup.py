@@ -136,6 +136,15 @@ def _is_verified(identifier: str, channel: str, purpose: str = "signup") -> bool
 
 
 @frappe.whitelist(allow_guest=True)
+def list_countries():
+	"""Country names for the signup form's Country dropdown (public reference data)."""
+	return [
+		c.country_name
+		for c in frappe.get_all("Country", fields=["country_name"], order_by="country_name asc")
+	]
+
+
+@frappe.whitelist(allow_guest=True)
 def complete_signup(
 	organization_name: str,
 	subdomain: str,
@@ -143,6 +152,8 @@ def complete_signup(
 	admin_email: str,
 	admin_mobile: str,
 	plan: str = "Free Trial",
+	country: str | None = None,
+	time_zone: str | None = None,
 ):
 	admin_email = (admin_email or "").strip().lower()
 	admin_mobile = (admin_mobile or "").strip()
@@ -170,6 +181,8 @@ def complete_signup(
 			"tenant_admin_mobile": admin_mobile,
 			"email_verified": 0,
 			"mobile_verified": 0,
+			"country": country or None,
+			"time_zone": time_zone or None,
 		}
 	)
 	tenant.insert(ignore_permissions=True)

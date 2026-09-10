@@ -113,12 +113,47 @@ def _create_admin_user_on_site(site_name: str, email: str, first_name: str):
 	)
 
 
+def configure_site_locale(country: str | None, time_zone: str | None):
+	"""Apply the tenant's chosen locale to System Settings on whichever site
+	this runs against. Only ever invoked via `bench --site <site> execute`
+	(see _configure_locale_on_site) for the same reason as
+	create_tenant_admin_user — a guaranteed, isolated site context."""
+	values = {k: v for k, v in {"country": country, "time_zone": time_zone}.items() if v}
+	if not values:
+		return
+	settings = frappe.get_single("System Settings")
+	settings.db_set(values)
+	frappe.db.commit()
+
+
+def _configure_locale_on_site(site_name: str, country: str | None, time_zone: str | None):
+	"""Run configure_site_locale on the target site as an isolated
+	`bench execute` subprocess, guaranteeing the correct site context."""
+	if not country and not time_zone:
+		return
+	kwargs = json.dumps({"country": country, "time_zone": time_zone})
+	subprocess.run(
+		[
+			"bench", "--site", site_name, "execute",
+			"custom_erp.api.provisioning.configure_site_locale",
+			"--kwargs", kwargs,
+		],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=120,
+	)
+
+
 def _run_site_creation(tenant_name: str, site_name: str):
 	"""Background job: actually shell out to bench to create + set up the site."""
 	root_pw = _mariadb_root_password()
 
 	tenant_admin_email = frappe.db.get_value("XentraERP Tenant", tenant_name, "tenant_admin_email")
 	tenant_admin_name = frappe.db.get_value("XentraERP Tenant", tenant_name, "tenant_admin_name")
+	tenant_country = frappe.db.get_value("XentraERP Tenant", tenant_name, "country")
+	tenant_time_zone = frappe.db.get_value("XentraERP Tenant", tenant_name, "time_zone")
 
 	try:
 		subprocess.run(
@@ -142,6 +177,8 @@ def _run_site_creation(tenant_name: str, site_name: str):
 			text=True,
 			timeout=300,
 		)
+
+		_configure_locale_on_site(site_name, tenant_country, tenant_time_zone)
 
 		_create_admin_user_on_site(
 			site_name, tenant_admin_email, tenant_admin_name or "Administrator"

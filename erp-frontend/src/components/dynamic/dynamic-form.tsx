@@ -60,9 +60,41 @@ function buildTabs(fields: CompiledField[]): Tab[] {
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
   const { schema, loading, error } = useDocTypeSchema(doctype);
   const [doc, setDoc] = useState<Record<string, unknown>>(initialDoc || initial || {});
+  const [docLoading, setDocLoading] = useState(!!name && !initialDoc && !initial);
+  const [docError, setDocError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+
+  // Editing an existing document: the caller only passes doctype/name (no
+  // initialDoc), so fetch the real saved record here — otherwise `doc`
+  // never holds anything but schema defaults, and every field without a
+  // default (e.g. Time Zone, Country) silently renders blank even though
+  // it's saved correctly server-side.
+  useEffect(() => {
+    if (!name || initialDoc || initial) return;
+    let cancelled = false;
+    setDocLoading(true);
+    setDocError(null);
+    fetch(`/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.exception || data?.message || res.statusText);
+        if (!cancelled) setDoc((prev) => ({ ...prev, ...data.data }));
+      })
+      .catch((e) => {
+        if (!cancelled) setDocError(String(e instanceof Error ? e.message : e));
+      })
+      .finally(() => {
+        if (!cancelled) setDocLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [doctype, name, initialDoc, initial]);
 
   useEffect(() => {
     if (!schema) return;
@@ -126,8 +158,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     }
   };
 
-  if (loading) return <p className="text-muted-foreground p-4">Loading form…</p>;
+  if (loading || docLoading) return <p className="text-muted-foreground p-4">Loading form…</p>;
   if (error) return <p className="text-destructive p-4">Error loading form: {error}</p>;
+  if (docError) return <p className="text-destructive p-4">Error loading document: {docError}</p>;
   if (!schema) return null;
 
   const tabs = buildTabs(schema.fields);
