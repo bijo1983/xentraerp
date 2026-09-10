@@ -137,23 +137,42 @@ def _is_verified(identifier: str, channel: str, purpose: str = "signup") -> bool
 
 @frappe.whitelist(allow_guest=True)
 def list_countries():
-	"""Country names for the signup form's Country dropdown (public reference data)."""
+	"""Country names + dialing codes for the signup form's Country dropdown
+	(public reference data) — ignore_permissions since Guest has no Country
+	read access by default, and this is non-sensitive reference data."""
+	from frappe.geo.country_info import get_all as get_all_country_info
+
+	info = get_all_country_info()
+	countries = frappe.get_all(
+		"Country", fields=["country_name"], order_by="country_name asc", ignore_permissions=True
+	)
 	return [
-		c.country_name
-		for c in frappe.get_all("Country", fields=["country_name"], order_by="country_name asc")
+		{"name": c.country_name, "isd": (info.get(c.country_name) or {}).get("isd") or ""}
+		for c in countries
 	]
+
+
+def _generate_subdomain() -> str:
+	"""Random 6-digit numeric subdomain — retried on the rare collision."""
+	import secrets
+
+	for _ in range(20):
+		candidate = f"{secrets.randbelow(1_000_000):06d}"
+		if not frappe.db.exists("XentraERP Tenant", {"subdomain": candidate}):
+			return candidate
+	frappe.throw("Could not generate a unique organization ID. Please try again.")
 
 
 @frappe.whitelist(allow_guest=True)
 def complete_signup(
 	organization_name: str,
-	subdomain: str,
 	admin_name: str,
 	admin_email: str,
 	admin_mobile: str,
 	plan: str = "Free Trial",
 	country: str | None = None,
 	time_zone: str | None = None,
+	subdomain: str | None = None,
 ):
 	admin_email = (admin_email or "").strip().lower()
 	admin_mobile = (admin_mobile or "").strip()
@@ -161,6 +180,7 @@ def complete_signup(
 	if not admin_email or not admin_mobile:
 		frappe.throw("Email and mobile number are required.")
 
+	subdomain = (subdomain or "").strip().lower() or _generate_subdomain()
 	if frappe.db.exists("XentraERP Tenant", {"subdomain": subdomain}):
 		frappe.throw("This subdomain is already taken. Please choose another.")
 

@@ -11,39 +11,44 @@ import { CheckCircle2, Loader2 } from 'lucide-react';
 
 type Step = 'details' | 'done';
 
-function slugify(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 30);
+interface CountryOption {
+  name: string;
+  isd: string;
 }
 
 export default function SignupPage() {
   const router = useRouter();
-  const [host, setHost] = useState('your-domain.com');
   const [step, setStep] = useState<Step>('details');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [org, setOrg] = useState('');
-  const [subdomain, setSubdomain] = useState('');
   const [adminName, setAdminName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
   const [country, setCountry] = useState('');
-  const [countries, setCountries] = useState<string[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [timeZone, setTimeZone] = useState('');
 
   const [result, setResult] = useState<{ tenant_code: string; subdomain: string; status: string } | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') setHost(window.location.host);
     try {
       setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
     } catch {
       // best-effort — locale gets configured manually later if this fails
     }
     frappe.call('custom_erp.api.signup.list_countries')
-      .then((res) => setCountries((res as string[]) || []))
+      .then((res) => setCountries((res as CountryOption[]) || []))
       .catch(() => {});
   }, []);
+
+  function selectCountry(name: string) {
+    setCountry(name);
+    // Pre-fill the dialing code so the user only has to type the local number.
+    const isd = countries.find((c) => c.name === name)?.isd;
+    if (isd && !mobile.trim()) setMobile(`+${isd} `);
+  }
 
   async function submitDetails(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +57,6 @@ export default function SignupPage() {
     try {
       const res = await frappe.call('custom_erp.api.signup.complete_signup', {
         organization_name: org,
-        subdomain,
         admin_name: adminName,
         admin_email: email,
         admin_mobile: mobile,
@@ -85,13 +89,9 @@ export default function SignupPage() {
             <form onSubmit={submitDetails} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Organization Name</label>
-                <Input required value={org} onChange={(e) => { setOrg(e.target.value); if (!subdomain) setSubdomain(slugify(e.target.value)); }} placeholder="JJ Consultancy" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Organization ID</label>
-                <Input required pattern="[a-z0-9\-]+" value={subdomain} onChange={(e) => setSubdomain(slugify(e.target.value))} placeholder="jj-consultancy" />
+                <Input required value={org} onChange={(e) => setOrg(e.target.value)} placeholder="JJ Consultancy" />
                 <p className="text-xs text-muted-foreground">
-                  Your ERP will be available at {host}/<span className="font-mono">&lt;your-code&gt;</span>/ — you&apos;ll get a short login code after approval
+                  You&apos;ll get a short login code after approval
                 </p>
               </div>
               <div className="space-y-2">
@@ -103,24 +103,25 @@ export default function SignupPage() {
                 <Input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@jjconsultancy.com" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Mobile Number</label>
-                <Input required value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+91 98765 43210" />
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-medium">Country</label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  required
                   value={country}
-                  onChange={(e) => setCountry(e.target.value)}
+                  onChange={(e) => selectCountry(e.target.value)}
                 >
                   <option value="">Select your country</option>
                   {countries.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c.name} value={c.name}>{c.name}</option>
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">
-                  Sets your workspace&apos;s default country and time zone automatically
+                  Sets your workspace&apos;s default currency, time zone and dialing code
                 </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mobile Number</label>
+                <Input required value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+973 3946 8552" />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit for Approval'}
