@@ -139,12 +139,13 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 	currency = info.get("currency")
 	tz = time_zone or (info.get("timezones") or [None])[0]
 
+	# Currency lives on Company/Global Defaults, not System Settings —
+	# only country/time_zone/number_format/date_format belong here.
 	settings_values = {
 		k: v
 		for k, v in {
 			"country": country,
 			"time_zone": tz,
-			"currency": currency,
 			"number_format": info.get("number_format"),
 			"date_format": info.get("date_format"),
 		}.items()
@@ -212,7 +213,7 @@ def get_default_setup_status():
 		"chart_of_accounts": frappe.db.count("Account") > 0,
 		"warehouse": frappe.db.count("Warehouse") > 0,
 		"cost_center": frappe.db.count("Cost Center") > 0,
-		"currency_set": bool(frappe.db.get_single_value("System Settings", "currency")),
+		"currency_set": bool(frappe.db.get_single_value("Global Defaults", "default_currency")),
 		"time_zone_set": bool(frappe.db.get_single_value("System Settings", "time_zone")),
 	}
 
