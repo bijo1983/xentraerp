@@ -29,11 +29,12 @@ function setTenantCookie(code: string | null) {
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const { login, loading, error } = useAuthStore();
+  const { login, error } = useAuthStore();
   const [mode, setMode] = useState<Mode>(params.get('tenant') ? 'tenant' : 'password');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const [tenantCode, setTenantCode] = useState(params.get('tenant') || '');
   const [tenantStep, setTenantStep] = useState<TenantStep>('code');
@@ -48,11 +49,14 @@ function LoginForm() {
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTenantCookie(null); // always the control-plane site for the Administrator login
+    setSubmitting(true);
     try {
       await login(email, password);
       router.push('/admin');
     } catch {
       // error is set in store
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -178,8 +182,8 @@ function LoginForm() {
               <label htmlFor="password" className="text-sm font-medium">Password</label>
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
         )}
