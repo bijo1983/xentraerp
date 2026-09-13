@@ -70,6 +70,26 @@ changes.
 - Frappe roles are NOT hierarchical — holding a "Master Manager" role does
   not imply the "Manager"/"User" roles below it for permission purposes.
 
+## Incident log
+
+- **2026-09-13, ~11:33 AM**: entire `innovegic-bench` supervisor group (Redis
+  cache/queue/socketio, `frappe-web` gunicorn, `node-socketio`, all workers)
+  went to `STOPPED` immediately after running `bench --site <x> migrate` on
+  all three sites followed by `bench build` (the exact deploy sequence
+  suggested during this session). Bench's own `bench.log` shows the last
+  action was gunicorn receiving `SIGTERM` at 11:33:47 with no subsequent
+  start — nothing in the log proves whether `bench build`/`migrate` itself
+  stopped supervisor or a manual `supervisorctl stop all` was run before the
+  build and never followed by `start all`. Symptom was 502 "Backend
+  unavailable" from the Next.js proxy (`api/resource/...`, `api/method/
+  login`) on every request, plus `curl -I http://127.0.0.1:8001` returning
+  `Connection refused`. **Fix**: `sudo supervisorctl start all`. **Lesson
+  for next deploy**: after `bench build`/`migrate` on this box, always
+  follow with `sudo supervisorctl status` (not just assume `bench restart`
+  or the build step brings services back) before considering a deploy done.
+  The erp-frontend `next-server` process on `:8083` was unaffected by this
+  incident and does not need restarting when this happens again.
+
 ## Outstanding / in-progress as of 2026-09-13
 
 - Need nginx config + `ps -ef` process tree + confirmation of which branch/
