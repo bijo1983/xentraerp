@@ -16,6 +16,8 @@ import subprocess
 import frappe
 from frappe.utils import now_datetime
 
+from custom_erp.api.tenants import TENANT_ADMIN_ROLES
+
 TENANT_SITE_SUFFIX = os.environ.get("TENANT_SITE_SUFFIX", "xentraerp.local")
 BENCH_DIR = os.environ.get("XENTRAERP_BENCH_DIR", os.path.expanduser("~/innovegic-bench"))
 SITE_ADMIN_PASSWORD = "admin"
@@ -73,7 +75,16 @@ def create_tenant_admin_user(email: str, first_name: str):
 	site-switching inside a background worker proved unreliable (a prior
 	provisioning run reported success but the user ended up on the wrong
 	site's database), so this always runs as its own isolated OS process
-	with the correct site context guaranteed by bench itself."""
+	with the correct site context guaranteed by bench itself.
+
+	Grants the full TENANT_ADMIN_ROLES stack (not just System Manager) —
+	this is the admin user on the tenant's *actual* ERPNext site, so it
+	needs the same per-module roles as custom_erp.api.tenants._ensure_
+	tenant_admin_user grants, which runs at approval time against the
+	control-plane site instead (the tenant's own site doesn't exist yet
+	at that point) and therefore never reaches this User record. Without
+	this, a tenant admin has System Manager only, which does not grant
+	access to module doctypes like Item/Sales Order/Sales Invoice."""
 	if not frappe.db.exists("User", email):
 		user = frappe.get_doc(
 			{
@@ -85,13 +96,24 @@ def create_tenant_admin_user(email: str, first_name: str):
 				"new_password": SITE_ADMIN_PASSWORD,
 			}
 		)
-		user.append("roles", {"role": "System Manager"})
+		for role in TENANT_ADMIN_ROLES:
+			user.append("roles", {"role": role})
 		user.flags.ignore_password_policy = True
 		user.insert(ignore_permissions=True)
 	else:
 		from frappe.utils.password import update_password
 
 		update_password(email, SITE_ADMIN_PASSWORD)
+		# Backfill any roles missing from a user created before this role
+		# list existed (or grew) — same rationale as the mirror-image
+		# backfill in tenants.py._ensure_tenant_admin_user.
+		user = frappe.get_doc("User", email)
+		existing_roles = {r.role for r in user.roles}
+		missing = [role for role in TENANT_ADMIN_ROLES if role not in existing_roles]
+		if missing:
+			for role in missing:
+				user.append("roles", {"role": role})
+			user.save(ignore_permissions=True)
 	frappe.db.commit()
 
 
