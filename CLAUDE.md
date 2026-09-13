@@ -92,15 +92,28 @@ changes.
 
 ## Outstanding / in-progress as of 2026-09-13
 
-- Need nginx config + `ps -ef` process tree + confirmation of which branch/
-  commit is actually deployed, to give exact deploy commands.
-- Multiple fixes committed to `claude/erpnext-erp-fixes` (child-table schema
-  fix, tenant admin role grants, error surfacing in list hooks, depends_on
-  support, grid sizing, infinite fetch-loop fix) are NOT yet deployed to
-  production — pending a safe merge of that branch into the server's
-  diverged `main` and a rebuild + process restart. Claude Code on the web
-  has no SSH access to the droplet in this environment, so this step needs
-  a human (or a session run directly on the box) to execute.
+- Need nginx config confirmation (mapping hostname → backend port) — still
+  not confirmed, low priority now that the actual outage is resolved.
+- **Deployed, as of 2026-09-13 ~12:02 PM**: `/home/xentraerp` on the server
+  is pulled to the tip of `origin/claude/erpnext-erp-fixes` (`git pull`
+  reported "Already up to date" from `/home/xentraerp`, meaning the
+  `bench --site <x> migrate` run on all three sites at 11:30 AM already
+  picked up the backend fixes — child-table schema fix, tenant admin role
+  grants, error surfacing, `depends_on` support, grid sizing, infinite
+  fetch-loop fix). `erp-frontend` was rebuilt (`npm run build`) and the
+  `next-server` process on `:8083` restarted (new PID) to pick up the
+  latest commit, which included a fix for the Password-login button
+  getting stuck on "Signing in..." on page load (see git log — the
+  `useAuthStore.loading` initial-state bug). **Confirmed working**: login
+  tested successfully after this deploy. `main` is still diverged from
+  `origin/main` as noted above — this deploy was done by checking out/
+  pulling the feature branch directly, not by touching `main`.
+- Process-restart procedure for `erp-frontend` going forward: `pkill -f
+  "next-server"` then `nohup npm run start -- -p 8083 > /var/log/
+  erp-frontend.log 2>&1 & disown` from `/home/xentraerp/erp-frontend`.
+  Still not under a real process manager (no pm2/systemd) — a crash or
+  reboot will take it down with nothing to bring it back automatically.
+  Worth fixing before this matters in a real incident.
 
 ## Product architecture & SaaS roadmap (added 2026-09-13)
 
