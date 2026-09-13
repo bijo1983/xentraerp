@@ -25,6 +25,8 @@ export interface CompiledField {
   hidden?: boolean;
   default?: string;
   description?: string;
+  depends_on?: string;
+  mandatory_depends_on?: string;
 }
 
 export interface CompiledMeta {
@@ -86,9 +88,117 @@ export function compileMeta(rawMeta: any): CompiledMeta {
       hidden: !!f.hidden,
       default: f.default,
       description: f.description,
+      depends_on: f.depends_on,
+      mandatory_depends_on: f.mandatory_depends_on,
     }));
 
   return { doctype: rawMeta.name, fields };
+}
+
+// ---------------------------------------------------------------------------
+// depends_on / mandatory_depends_on evaluation
+//
+// Frappe doctypes express these as either a bare fieldname (truthy check) or
+// a JS-ish expression prefixed with "eval:", e.g.
+//   eval:doc.status=="Lost"
+//   eval:doc.status!="Lost"
+//   eval:doc.some_field
+//   eval:!doc.some_field
+//   eval:doc.qty==1
+//   eval:doc.a=="X" && doc.b=="Y"
+//   eval:doc.a=="X" || doc.b=="Y"
+//
+// We deliberately do NOT use JS eval() on this string. Instead we parse the
+// small set of patterns Frappe doctypes actually use in practice. Anything
+// we don't recognize is treated as "condition met" (fail OPEN) so we never
+// hide a field/section that should be visible — the safer failure mode for
+// a data-entry form.
+// ---------------------------------------------------------------------------
+
+type DocLike = Record<string, unknown>;
+
+function coerceCmpValue(raw: string): string | number | boolean {
+  const trimmed = raw.trim();
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  // strip matching quotes
+  const m = trimmed.match(/^["'](.*)["']$/);
+  return m ? m[1] : trimmed;
+}
+
+function readDocField(doc: DocLike, field: string): unknown {
+  return doc[field];
+}
+
+function isTruthyDocValue(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  if (typeof v === 'string') return v.trim() !== '' && v !== '0';
+  if (typeof v === 'number') return v !== 0;
+  return !!v;
+}
+
+// Evaluate a single atomic condition like `doc.field=="X"`, `doc.field!="X"`,
+// `doc.field==1`, `doc.field`, `!doc.field`. Returns null if it doesn't
+// recognize the pattern (caller should fail open).
+function evalAtom(atom: string, doc: DocLike): boolean | null {
+  const s = atom.trim();
+
+  // !doc.field
+  let m = s.match(/^!\s*doc\.([a-zA-Z0-9_]+)$/);
+  if (m) return !isTruthyDocValue(readDocField(doc, m[1]));
+
+  // doc.field == "value"  or  doc.field != "value"  (also numeric/bool)
+  m = s.match(/^doc\.([a-zA-Z0-9_]+)\s*(==|!=)\s*(.+)$/);
+  if (m) {
+    const [, field, op, rawVal] = m;
+    const expected = coerceCmpValue(rawVal);
+    const actualRaw = readDocField(doc, field);
+    let actual: string | number | boolean;
+    if (typeof expected === 'number') actual = Number(actualRaw ?? 0);
+    else if (typeof expected === 'boolean') actual = isTruthyDocValue(actualRaw);
+    else actual = String(actualRaw ?? '');
+    const equal = actual === expected;
+    return op === '==' ? equal : !equal;
+  }
+
+  // bare doc.field truthy check
+  m = s.match(/^doc\.([a-zA-Z0-9_]+)$/);
+  if (m) return isTruthyDocValue(readDocField(doc, m[1]));
+
+  return null;
+}
+
+/**
+ * Evaluate a Frappe depends_on / mandatory_depends_on expression against a
+ * doc-like object. Returns true when the condition is met (field should be
+ * shown / is mandatory), and fails OPEN (returns true) for anything it
+ * cannot parse, rather than hiding real data-entry fields.
+ */
+export function evalDependsOn(expr: string | undefined | null, doc: DocLike): boolean {
+  if (!expr) return true;
+  const trimmed = expr.trim();
+  if (!trimmed) return true;
+
+  // Non-"eval:" values are treated as a bare fieldname truthy check
+  // (Frappe supports this shorthand for depends_on).
+  const body = trimmed.startsWith('eval:') ? trimmed.slice(5).trim() : `doc.${trimmed}`;
+  if (!body) return true;
+
+  // Split on top-level && / || (no parens support needed for our patterns —
+  // doctypes in this app don't nest them).
+  const orParts = body.split('||');
+  try {
+    return orParts.some((orPart) => {
+      const andParts = orPart.split('&&');
+      return andParts.every((atom) => {
+        const r = evalAtom(atom, doc);
+        return r === null ? true : r; // fail open per-atom too
+      });
+    });
+  } catch {
+    return true;
+  }
 }
 
 export interface PermissionSet {

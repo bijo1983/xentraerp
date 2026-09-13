@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
-import { CompiledField } from '@/lib/meta-compiler';
+import { CompiledField, evalDependsOn } from '@/lib/meta-compiler';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
@@ -16,9 +16,21 @@ interface Props {
   rows: Row[];
   readOnly?: boolean;
   onChange: (rows: Row[]) => void;
+  // The parent transaction's doc — used as a fallback context when
+  // evaluating a child field's depends_on for fields not present on the
+  // row itself (Frappe's own grid does the same: row context first, doc
+  // context second).
+  parentDoc?: Record<string, unknown>;
 }
 
-export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
+// Builds a doc-like object for depends_on evaluation: row fields take
+// precedence, falling back to the parent doc's fields for anything the row
+// doesn't define itself.
+function rowEvalContext(row: Row, parentDoc?: Record<string, unknown>): Record<string, unknown> {
+  return { ...(parentDoc || {}), ...row };
+}
+
+export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }: Props) {
   const { schema, loading } = useDocTypeSchema(childDoctype);
   const [localRows, setLocalRows] = useState<Row[]>(rows.length ? rows : []);
 
@@ -52,17 +64,27 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
 
   const renderCell = (f: CompiledField, row: Row, rowIdx: number) => {
     const val = row[f.fieldname];
+
+    // Per-row depends_on: Frappe evaluates a child field's depends_on
+    // against the row first, falling back to the parent doc for fields the
+    // row doesn't carry. Since rows in the same column can disagree, we
+    // keep the column but blank out cells whose condition isn't met rather
+    // than hiding the whole column.
+    if (!evalDependsOn(f.depends_on, rowEvalContext(row, parentDoc))) {
+      return <span className="text-sm text-muted-foreground">—</span>;
+    }
+
     if (readOnly) return <span className="text-sm">{String(val ?? '')}</span>;
 
     switch (f.component) {
       case 'number':
         return (
-          <Input type="number" className="h-7 text-sm" value={String(val ?? '')}
+          <Input type="number" className="h-8 text-sm" value={String(val ?? '')}
             onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value)} />
         );
       case 'date':
         return (
-          <Input type="date" className="h-7 text-sm" value={String(val ?? '')}
+          <Input type="date" className="h-8 text-sm" value={String(val ?? '')}
             onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value)} />
         );
       case 'check':
@@ -82,7 +104,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
       case 'select': {
         const opts = (f.options || '').split('\n').filter(Boolean);
         return (
-          <select className="h-7 w-full border rounded px-1 text-sm bg-background"
+          <select className="h-8 w-full border rounded px-1 text-sm bg-background"
             value={String(val ?? '')} onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value)}>
             <option value="">—</option>
             {opts.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -91,7 +113,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
       }
       default:
         return (
-          <Input className="h-7 text-sm" value={String(val ?? '')}
+          <Input className="h-8 text-sm" value={String(val ?? '')}
             onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value)} />
         );
     }
@@ -103,7 +125,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
         <thead>
           <tr className="bg-muted">
             {visibleFields.map((f) => (
-              <th key={f.fieldname} className="px-2 py-1 text-left border border-border font-medium whitespace-nowrap">
+              <th key={f.fieldname} className="px-2 py-1.5 text-left border border-border font-medium whitespace-nowrap min-w-[120px]">
                 {f.label}{f.reqd && <span className="text-destructive ml-0.5">*</span>}
               </th>
             ))}
@@ -114,7 +136,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange }: Props) {
           {localRows.map((row, rowIdx) => (
             <tr key={rowIdx} className="hover:bg-accent/30">
               {visibleFields.map((f) => (
-                <td key={f.fieldname} className="px-2 py-1 border border-border">
+                <td key={f.fieldname} className="px-2 py-1 border border-border min-w-[120px]">
                   {renderCell(f, row, rowIdx)}
                 </td>
               ))}

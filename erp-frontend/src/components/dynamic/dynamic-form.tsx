@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
-import { CompiledField } from '@/lib/meta-compiler';
+import { CompiledField, evalDependsOn } from '@/lib/meta-compiler';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
@@ -26,6 +26,7 @@ interface Tab {
 interface Section {
   label: string;
   fields: CompiledField[];
+  depends_on?: string;
 }
 
 const AUTO_FIELDS = new Set([
@@ -46,7 +47,7 @@ function buildTabs(fields: CompiledField[]): Tab[] {
       currentSection = { label: '', fields: [] };
     } else if (f.component === 'section_break') {
       if (currentSection.fields.length) currentTab.sections.push(currentSection);
-      currentSection = { label: f.label || '', fields: [] };
+      currentSection = { label: f.label || '', fields: [], depends_on: f.depends_on };
     } else if (!AUTO_FIELDS.has(f.fieldname) && f.component !== 'hidden' && !f.hidden) {
       currentSection.fields.push(f);
     }
@@ -186,32 +187,41 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
 
       {/* Active tab content */}
       <div className="p-4 space-y-6">
-        {tabs[activeTab]?.sections.map((section, si) => (
-          <div key={si}>
-            {section.label && (
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 pb-1 border-b border-border">
-                {section.label}
-              </h3>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {section.fields.map((f) => (
-                <div
-                  key={f.fieldname}
-                  className={f.component === 'table' || f.component === 'textarea' ? 'col-span-full' : ''}
-                >
-                  <label className="block text-sm font-medium mb-1">
-                    {f.label}
-                    {f.reqd && <span className="text-destructive ml-1">*</span>}
-                  </label>
-                  {renderField(f, doc, setField)}
-                  {f.description && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{f.description}</p>
-                  )}
+        {tabs[activeTab]?.sections
+          .filter((section) => evalDependsOn(section.depends_on, doc))
+          .map((section, si) => {
+            const visibleFields = section.fields.filter((f) => evalDependsOn(f.depends_on, doc));
+            if (!visibleFields.length) return null;
+            return (
+              <div key={si}>
+                {section.label && (
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 pb-1 border-b border-border">
+                    {section.label}
+                  </h3>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {visibleFields.map((f) => {
+                    const isMandatory = f.reqd || (f.mandatory_depends_on ? evalDependsOn(f.mandatory_depends_on, doc) : false);
+                    return (
+                      <div
+                        key={f.fieldname}
+                        className={f.component === 'table' || f.component === 'textarea' ? 'col-span-full' : ''}
+                      >
+                        <label className="block text-sm font-medium mb-1">
+                          {f.label}
+                          {isMandatory && <span className="text-destructive ml-1">*</span>}
+                        </label>
+                        {renderField(f, doc, setField)}
+                        {f.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{f.description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
+              </div>
+            );
+          })}
 
         {saveError && (
           <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
@@ -345,6 +355,7 @@ function renderField(
           childDoctype={childDoctype}
           rows={rows}
           readOnly={readOnly}
+          parentDoc={doc}
           onChange={(updated) => setField(f.fieldname, updated)}
         />
       );
