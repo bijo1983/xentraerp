@@ -7,17 +7,31 @@ DEFAULT_ADMIN_PASSWORD = "admin"
 # Tenant admins manage their whole org's ERP, not just Users/Settings —
 # System Manager alone doesn't grant module doctype access (e.g. Customer,
 # Sales Invoice, Item), since ERPNext gates those behind module-specific
-# roles rather than System Manager. Grant the top-level "Master Manager"/
-# "Manager" role in each module so the tenant admin has full read/write
+# roles rather than System Manager. Roles aren't hierarchical in Frappe —
+# holding "Sales Master Manager" does NOT imply "Sales Manager"/"Sales
+# User" for doctypes whose permission list only names the sub-roles (e.g.
+# Opportunity lists Sales User/Sales Manager but not Sales Master Manager,
+# unlike Customer which lists all three). So grant the full role stack per
+# module — User, Manager, and Master Manager where it exists — rather than
+# just the top of each hierarchy, so the tenant admin has full read/write
 # access everywhere out of the box.
 TENANT_ADMIN_ROLES = [
 	"System Manager",
+	"Sales User",
+	"Sales Manager",
 	"Sales Master Manager",
+	"Purchase User",
+	"Purchase Manager",
 	"Purchase Master Manager",
+	"Accounts User",
 	"Accounts Manager",
+	"Stock User",
 	"Stock Manager",
+	"Manufacturing User",
 	"Manufacturing Manager",
+	"Projects User",
 	"Projects Manager",
+	"HR User",
 	"HR Manager",
 	"Website Manager",
 ]
