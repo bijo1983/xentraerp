@@ -130,24 +130,30 @@ changes.
   was purely a *display* bug — the actual value stored in form state was
   always the correct raw string, so an untouched checkbox still submitted
   correctly; it just looked wrong on screen.
-- **Related but NOT fixed (out of scope for the generic form)**: reported
-  2026-09-14 as `frappe.exceptions.ValidationError: "Customer Provided
-  Item" cannot be Purchase Item also` when saving a new Item. Root cause:
-  ERPNext's real Desk UI runs a per-doctype client script (`item.js`)
-  that auto-unchecks "Allow Purchase" (`is_purchase_item`) the moment
-  "Is Customer Provided Item" (`is_customer_provided_item`) is checked.
-  `DynamicForm` is a generic, doctype-agnostic renderer — it has no
-  mechanism to load or run per-doctype client scripts, so it can't
-  replicate that interaction; the two checkboxes stay independent and the
-  *server-side* validation (correctly) rejects the conflicting combination
-  on save. This is expected behavior for the generic-form architecture,
-  not a bug to patch per-doctype. Workaround: manually uncheck "Allow
-  Purchase" before checking "Is Customer Provided Item" (or vice versa).
-  Since `is_customer_provided_item` defaults to unchecked, this shouldn't
-  come up unless a tenant admin deliberately marks an item
-  customer-provided — and the display bug above made it look checked by
-  default, which likely caused the confusion that led to this report; that
-  part is now fixed.
+- **CORRECTION, fixed 2026-09-14**: originally reported as
+  `frappe.exceptions.ValidationError: "Customer Provided Item" cannot be
+  Purchase Item also` when saving a *plain, untouched* new Item. This
+  entry previously diagnosed it as an inherent, unfixable limitation of
+  the generic form (no per-doctype `item.js` client script to auto-toggle
+  `is_purchase_item`) — **that diagnosis was wrong.** The real cause,
+  found by scripting an end-to-end test creation of a plain Item ("Blue
+  Pen") against the live API and bisecting the payload field by field:
+  `DynamicForm` sent every Check field's default straight from Frappe's
+  meta as the raw *string* `"0"`/`"1"`. Frappe's own Python validate()
+  hooks routinely do `if self.some_check_field:` — and Python treats the
+  non-empty string `"0"` as truthy, exactly like JS does. So
+  `is_customer_provided_item: "0"` (correctly unchecked, never touched by
+  the user) still made `if self.is_customer_provided_item:` evaluate
+  true server-side, entering the block that then throws on
+  `is_purchase_item` also being set. **Confirmed the same bug also
+  produced the two entries below** (`has_variants` → "Attribute table is
+  mandatory", `is_fixed_asset` → "Fixed Asset Item must be a non-stock
+  item") purely from checking the corresponding box true-to-Python
+  despite the field actually defaulting to unchecked — i.e. these looked
+  like three unrelated per-doctype validation quirks but were one root
+  cause. See the coercion fix below (in the same fields/commit as the
+  "Attribute table is mandatory" entry) — this is fully fixed now, not a
+  workaround-only limitation.
 - **Fixed 2026-09-14**: reported as `frappe.exceptions.ValidationError:
   Attribute table is mandatory` when saving an Item with "Has Variants"
   checked. Root cause was more fundamental than the checkbox display bug
@@ -170,6 +176,51 @@ changes.
   only permanently excluded when it's hidden *and* has no `depends_on` to
   possibly reveal it; existing per-field `evalDependsOn()` calls at render
   time (already present in both files) handle the actual show/hide.
+  **Addendum**: this fix alone was necessary but not sufficient — a
+  *plain* new Item, "Has Variants" never touched (default `"0"`), was
+  *still* hitting this exact error. That second half is the Check-field
+  string-truthiness bug described below/above (`has_variants: "0"` sent
+  as a string made Python's `if not (self.has_variants or ...)` guard
+  evaluate the *inverse* — treating the item as if it did have variants
+  — so `validate_attributes()` ran and demanded a table for an item that
+  was never marked as a template in the first place). Both fixes were
+  required together; verified by scripting an actual Item creation
+  ("Blue Pen") against the live API with the pre-fix payload (failed with
+  this exact error), then with the fix applied (succeeded), see below.
+- **Fixed 2026-09-14 (the real, systemic root cause behind the three
+  entries above)**: `DynamicForm`'s default-population effect and
+  `ChildTable`'s `addRow` copied a Check field's Frappe `default` — always
+  the *string* `"0"` or `"1"` — directly into form/row state verbatim.
+  On save that string went straight into the JSON payload posted to
+  `/api/resource/<doctype>`. ERPNext's own Python validate() hooks
+  overwhelmingly use bare `if self.some_check_field:` rather than
+  `if self.some_check_field == 1:` — and Python, like JS, treats the
+  non-empty string `"0"` as truthy. Result: **every Check field on a
+  brand-new, completely untouched record was seen as `True` by backend
+  validation, regardless of whether its real default was 0 or 1** —
+  reproduced live via `frappe.desk.form.load.getdoctype` → build the
+  exact payload `DynamicForm` would send → `POST /api/resource/Item`:
+  failed with "Attribute table is mandatory" (`has_variants: "0"`); after
+  coercing just that one field to a real `0`, failed on the *next* one,
+  "Fixed Asset Item must be a non-stock item" (`is_fixed_asset: "0"`);
+  coercing all Check fields to real integers, the create succeeded
+  cleanly. This is NOT Item-specific — it's inherent to any doctype whose
+  Python validate() reads a Check field with bare truthiness, which is
+  most of ERPNext. **Fix**: both call sites now convert a Check field's
+  string default to a real `0`/`1` integer before storing it
+  (`dv === '1' ? 1 : 0`) instead of passing the raw string through —
+  `dynamic-form.tsx`'s defaults effect and `child-table.tsx`'s `addRow`.
+  (The checkbox's `onChange` already sent real numbers; only the
+  *default*-population path had this bug. Values loaded from an existing
+  saved record are unaffected — Frappe's GET response already returns
+  Check fields as real integers, only `default` in meta is a string.)
+  Verified end-to-end: deleted the diagnostic "Blue Pen" Item, rebuilt
+  and redeployed, re-ran the same live-API simulation using the deployed
+  code's exact coercion logic — new "Blue Pen" Item created successfully
+  with `is_fixed_asset`, `has_variants`, `is_customer_provided_item` etc.
+  all correctly `0` and no validation errors. Also corrects the "Customer
+  Provided Item" entry above, which had wrongly been diagnosed as an
+  unfixable per-doctype client-script gap — it was this same bug.
   Verified against live `getdoctype` meta for `Item` that `attributes`
   carries both `hidden: 1` and the expected `depends_on` string. This is
   a general fix, not Item-specific — the same

@@ -51,7 +51,13 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
 
   const addRow = () => {
     const newRow: Row = { doctype: childDoctype, idx: localRows.length + 1 };
-    visibleFields.forEach((f) => { if (f.default) newRow[f.fieldname] = f.default; });
+    visibleFields.forEach((f) => {
+      if (!f.default) return;
+      // Same fix as DynamicForm's default-population effect: send real 0/1
+      // for Check fields instead of Frappe's raw "0"/"1" default string,
+      // which Python (like JS) treats as truthy even when it's "0".
+      newRow[f.fieldname] = f.component === 'check' ? (f.default === '1' ? 1 : 0) : f.default;
+    });
     const updated = [...localRows, newRow];
     setLocalRows(updated);
     onChange(updated);

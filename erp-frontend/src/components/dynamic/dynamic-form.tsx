@@ -123,6 +123,18 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
             // skip — referenced records may not exist
           } else if ((f.component === 'date' || f.component === 'datetime') && dv === 'Today') {
             patched[f.fieldname] = new Date().toISOString().slice(0, 10);
+          } else if (f.component === 'check') {
+            // Frappe's `default` is always a string ("0"/"1"), but the
+            // *backend's* own Python validate() hooks routinely do
+            // `if self.some_check_field:` — and the non-empty string "0" is
+            // truthy in Python too, not just JS. Sending the raw default
+            // string through on save made every untouched, correctly-
+            // unchecked Check field look checked to server-side validation
+            // (e.g. Item's is_fixed_asset/is_customer_provided_item/
+            // has_variants), causing spurious ValidationErrors on a plain
+            // save with no field ever visibly wrong in the UI. Store real
+            // 0/1 so it round-trips correctly no matter which side reads it.
+            patched[f.fieldname] = dv === '1' ? 1 : 0;
           } else {
             patched[f.fieldname] = dv;
           }
