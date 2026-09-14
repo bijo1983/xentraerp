@@ -44,10 +44,36 @@ changes.
   `pm2 list` checks under the default shell PATH came up empty. Use:
   `export PATH="/root/.nvm/versions/node/v18.20.8/bin:$PATH" && pm2 list`.
   The managed process is named **`xentraerp`** (fork mode, cwd
-  `/home/xentraerp/erp-frontend`, script `npm start -p 8083`). As of
-  2026-09-14 it had **9949 restarts** recorded — worth investigating
-  separately why it's restarted that many times; not diagnosed this
-  session.
+  `/home/xentraerp/erp-frontend`).
+- **Investigated 2026-09-14 (the ~9951-restart question above): root
+  cause found and fixed.** It was not app instability — grepping
+  `/root/.pm2/logs/xentraerp-error.log` (189k lines) showed **8,533 of
+  the crashes were `Error: listen EADDRINUSE: address already in use
+  :::8083`**, i.e. a self-inflicted crash loop: the process previously
+  had **no `restart_delay`/backoff/`max_restarts`** (all unset), so every
+  time someone followed the *old, wrong* manual-restart recipe that used
+  to be documented here (`pkill -f next-server` + `nohup npm run start`)
+  while pm2 was already supervising the same process, pm2's own
+  auto-restart raced the manual command for port 8083 — whichever lost
+  got `EADDRINUSE`, exited(1), and pm2 retried **instantly**, forever,
+  until the port happened to free up. `pm2.log` shows this running at
+  ~50 restarts/minute for hours on 2026-09-03 (7,498 restarts that single
+  day) and similarly on 2026-06-29 (3,418, likely initial setup). A
+  smaller contributor: 1,296 "Could not find a production build" errors
+  from a restart racing an in-progress `next build`. (The "Failed to
+  find Server Action" lines in that log, 4,249 of them, are unrelated —
+  per-request errors from stale clients after a rebuild, not restart
+  triggers.) **Fix applied**: `/home/xentraerp/erp-frontend/
+  ecosystem.config.js` now defines the `xentraerp` app explicitly with
+  `restart_delay: 3000`, `exp_backoff_restart_delay: 200`,
+  `max_restarts: 15`, `min_uptime: '10s'` — replaces the ad hoc `pm2
+  start` that had none of this. Applied via `pm2 delete xentraerp && pm2
+  start ecosystem.config.js && pm2 save` (restart counter reset to 0 in
+  the process, confirmed via `pm2 jlist`). Going forward, always restart
+  via `pm2 restart xentraerp` (reads this file) or `cd erp-frontend &&
+  pm2 start ecosystem.config.js` if the process was deleted — never the
+  manual pkill/nohup recipe, which is what caused this in the first
+  place.
 - **Correct restart procedure: `pm2 restart xentraerp`** (after the PATH
   export above), not the manual `pkill -f next-server` + `nohup npm run
   start` recipe previously documented here — that recipe actively fights
