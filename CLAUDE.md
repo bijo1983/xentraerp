@@ -227,6 +227,42 @@ changes.
   hidden-by-default-plus-depends_on pattern is common across ERPNext
   doctypes, so other "check a box to reveal a table/section" flows were
   likely broken the same way and should now work.
+- **Fixed 2026-09-14**: reported as "no option to edit/view/update saved
+  data in masters/transactions view, no filter available" — plus a
+  requested visual redesign. Two real bugs, one shared component:
+  `DoctypeList` (`erp-frontend/src/components/dynamic/doctype-list.tsx`),
+  which powers most masters/transactions list pages (Suppliers, Leads,
+  Opportunities, Quotations, Delivery Notes, Sales/Purchase Invoices,
+  Purchase Receipts, Material Requests, Journal Entries, Payments, Chart
+  of Accounts, Cost Centers, and — after this fix — Customers, Items,
+  Sales Orders, Purchase Orders) had a row `onClick` that correctly
+  navigated to `/app/<doctype>/<name>` (the already-working `DynamicForm`
+  edit view), but **every `<td>` also called `e.stopPropagation()`
+  unconditionally** — since a `<td>` covers the entire clickable cell
+  area, this made the row click completely unreachable in practice on
+  every page using it. Fixed by scoping `stopPropagation` to just the
+  link-column's own button. Filtering genuinely didn't exist anywhere
+  (`useFrappeList` already supported a `filters` param, nothing passed
+  one) — added a debounced free-text search box (`"like"` filter) plus
+  optional status/kind dropdown filters to `DoctypeList`, wired real
+  ERPNext status enums (pulled from the actual doctype JSON, not
+  guessed) into every transaction list. Also migrated Customers/Items/
+  Sales Orders/Purchase Orders off their old hand-rolled, click-dead,
+  filter-less react-table code onto `DoctypeList` (~450 duplicated lines
+  → a few lines of column config each). Separately did a visual pass
+  requested as "Microsoft Dynamics + Linear + Notion + Apple" —
+  refined `globals.css` tokens around the existing brand navy/blue
+  anchors (didn't replace brand color), added `--sidebar-*`/`--success`/
+  `--warning` tokens and a shadow-elevation scale, new theme-aware
+  `Badge`/`Select` UI primitives, restyled Sidebar (active-item
+  indicator bar)/Header (blur + pill user chip)/Card/Button. Verified:
+  `tsc --noEmit` clean, full build succeeds, and the exact filter query
+  `DoctypeList` sends was tested against the live API on tenant
+  197349 (a `"like"` search for "Blue" on `Item.item_name` correctly
+  returned "Blue Pen"). **Not verified visually** — no headless browser
+  available on this box; a real look in a browser is still recommended
+  before calling the redesign itself done, only the mechanics are
+  confirmed.
 - **Fixed 2026-09-14**: `TENANT_ADMIN_ROLES` in `custom_erp_app/custom_erp/
   api/tenants.py` was missing **"Item Manager"**. Found via `bench
   console` on `197349.xentraerp.local` — `admin@jjc.com` had
@@ -349,7 +385,7 @@ mock as if it were done:**
 | Signup (OTP infra, `complete_signup`, pending-approval email) | Real, working. OTP verification itself is currently bypassed — admin approval is the actual gate. |
 | Tenant approval, per-tenant site provisioning, admin user creation, default company/CoA/warehouse setup | Real, working, idempotent (`reconfigure_tenant_defaults` can be re-run safely). |
 | Tenant admin roles (`TENANT_ADMIN_ROLES` full per-module stack) | Real, working — see role-hierarchy gotcha further up this file. |
-| Dynamic doctype list/form/child-table rendering, `depends_on` support | Real, working (this session's fixes). |
+| Dynamic doctype list/form/child-table rendering, `depends_on` support, list-row click-through to edit, list filtering | Real, working (this session's fixes). |
 | Admin portal pages: Plans, Modules, Features, Reports, Subscriptions, Billing, Coupons | **UI-only mockups** — hardcoded arrays in the `.tsx` files, no backing DocTypes, no persistence. Each page literally says so in an on-page note. |
 | **Module/plan entitlement enforcement** | **Does not exist anywhere.** `XentraERP Tenant.enabled_modules` is a stored comma-separated field but nothing reads it to gate navigation, routes, or API calls. Every tenant admin user's actual access today is whatever their granted Frappe roles allow — full ERPNext access, independent of plan/subscription. This is the single biggest gap vs. the SaaS vision and the top priority for the next implementation phase. |
 | Billing/payment integration, usage metering, coupons, audit log, notification templates as data (vs. one-off `frappe.sendmail` calls) | Not started. |
