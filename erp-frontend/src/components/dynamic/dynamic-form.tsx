@@ -5,6 +5,7 @@ import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compi
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
+import { AttachField } from '@/components/fields/attach-field';
 import { ChildTable } from './child-table';
 
 interface Props {
@@ -410,6 +411,16 @@ function renderField(
           disabled={readOnly}
           value={String(value ?? '')}
           onChange={(e) => setField(f.fieldname, e.target.value)}
+        />
+      );
+
+    case 'attach':
+      return (
+        <AttachField
+          value={String(value ?? '')}
+          onChange={(v) => setField(f.fieldname, v)}
+          disabled={readOnly}
+          isImage={f.fieldtype === 'Attach Image'}
         />
       );
 

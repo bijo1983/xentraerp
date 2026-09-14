@@ -5,6 +5,7 @@ import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compi
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
+import { AttachField } from '@/components/fields/attach-field';
 
 interface Row {
   [key: string]: unknown;
@@ -111,6 +112,14 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
           </select>
         );
       }
+      case 'attach':
+        return (
+          <AttachField
+            value={String(val ?? '')}
+            onChange={(v) => updateRow(rowIdx, f.fieldname, v)}
+            isImage={f.fieldtype === 'Attach Image'}
+          />
+        );
       default:
         return (
           <Input className="h-8 text-sm" value={String(val ?? '')}

@@ -14,16 +14,18 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
   const search = req.nextUrl.search || '';
   const path = `/api/${apiPath}${search}`;
 
-  const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined;
+  // Raw bytes, not text — a text round-trip would corrupt binary bodies
+  // (file uploads, PDFs, images) even though it happens to work for JSON.
+  const body = req.method !== 'GET' && req.method !== 'HEAD' ? Buffer.from(await req.arrayBuffer()) : undefined;
 
   const cookie = req.headers.get('cookie');
 
   const reqHeaders: Record<string, string | number> = {
-    'Content-Type': 'application/json',
+    'Content-Type': req.headers.get('content-type') || 'application/json',
     Accept: 'application/json',
     Host: host,
     ...(cookie ? { Cookie: cookie } : {}),
-    ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
+    ...(body && body.length ? { 'Content-Length': body.length } : {}),
   };
   console.log('[erp-proxy] ->', req.method, `${hostIp}:${port}${path}`, JSON.stringify(reqHeaders));
 
@@ -41,10 +43,10 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
         const chunks: Buffer[] = [];
         proxyRes.on('data', (chunk) => chunks.push(chunk));
         proxyRes.on('end', () => {
-          const data = Buffer.concat(chunks).toString('utf-8');
+          const data = Buffer.concat(chunks);
 
           if ((proxyRes.statusCode || 0) >= 400) {
-            console.error('[erp-proxy] ERROR body', proxyRes.statusCode, path, data.slice(0, 1500));
+            console.error('[erp-proxy] ERROR body', proxyRes.statusCode, path, data.slice(0, 1500).toString('utf-8'));
           }
 
           const responseHeaders = new Headers();

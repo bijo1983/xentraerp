@@ -12,7 +12,8 @@ export type ComponentType =
   | 'readonly'
   | 'hidden'
   | 'tab_break'
-  | 'section_break';
+  | 'section_break'
+  | 'attach';
 
 export interface CompiledField {
   fieldname: string;
@@ -62,8 +63,8 @@ const FIELDTYPE_MAP: Record<string, ComponentType> = {
   'Fold': 'hidden',
   'Heading': 'hidden',
   'Button': 'hidden',
-  'Attach': 'text',
-  'Attach Image': 'text',
+  'Attach': 'attach',
+  'Attach Image': 'attach',
   'Barcode': 'text',
   'Color': 'text',
   'Rating': 'number',

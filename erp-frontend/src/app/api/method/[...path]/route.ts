@@ -14,7 +14,9 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
   const search = req.nextUrl.search || '';
   const path = `/api/method/${methodPath}${search}`;
 
-  const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined;
+  // Raw bytes, not text — a text round-trip would corrupt multipart file
+  // uploads (upload_file) and any binary response (PDFs, images).
+  const body = req.method !== 'GET' && req.method !== 'HEAD' ? Buffer.from(await req.arrayBuffer()) : undefined;
   const cookie = req.headers.get('cookie');
 
   const contentType = req.headers.get('content-type') || 'application/json';
@@ -23,7 +25,7 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
     Accept: 'application/json',
     Host: host,
     ...(cookie ? { Cookie: cookie } : {}),
-    ...(body ? { 'Content-Length': Buffer.byteLength(body) } : {}),
+    ...(body && body.length ? { 'Content-Length': body.length } : {}),
   };
 
   return new Promise<NextResponse>((resolve) => {
@@ -31,7 +33,7 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
       const chunks: Buffer[] = [];
       proxyRes.on('data', (chunk) => chunks.push(chunk));
       proxyRes.on('end', () => {
-        const data = Buffer.concat(chunks).toString('utf-8');
+        const data = Buffer.concat(chunks);
         const responseHeaders = new Headers();
         responseHeaders.set('Content-Type', (proxyRes.headers['content-type'] as string) || 'application/json');
         const setCookie = proxyRes.headers['set-cookie'];
@@ -46,7 +48,7 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
       });
     });
     proxyReq.on('error', () => resolve(NextResponse.json({ error: 'Backend unavailable' }, { status: 502 })));
-    if (body) proxyReq.write(body);
+    if (body && body.length) proxyReq.write(body);
     proxyReq.end();
   });
 }
