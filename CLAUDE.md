@@ -484,6 +484,49 @@ changes.
   v18 nvm bin dir on `PATH` — see "Frontend serving" section above for the
   full explanation and command. Don't use the manual pkill/nohup recipe;
   it fights pm2's own auto-restart.
+- **Found 2026-09-14: `npm run build` corrupts the live site if run while
+  someone is actively using it.** `next build` overwrites `.next/` *in
+  place*, but the currently-running `pm2` process (`xentraerp`) keeps
+  reading from that same directory the whole time the build is in
+  progress — there is no atomic swap. A user actively browsing during a
+  rebuild hit a real, reproducible failure: a `500` on
+  `/app/Sales%20Order/new`, then `net::ERR_CONNECTION_TIMED_OUT` on
+  every subsequent page (dashboard, purchase-receipts, sales,
+  favicon.ico, even direct `/api/resource/...` XHRs) — all from the
+  browser's own console. Server-side, `xentraerp-error.log` shows the
+  matching signature: `TypeError: Cannot read properties of undefined
+  (reading 'entryCSSFiles')` / `(reading 'clientModules')` — the running
+  process trying to read route-manifest data mid-overwrite. **This was
+  transient**: re-checked minutes later (same session, no further
+  changes) and every page the user listed returned a clean `200`, and
+  the error-log entries had stopped growing — this resolves on its own
+  once a build finishes and the following `pm2 restart` completes, it
+  just means anyone browsing during that window gets a real, visible
+  outage on this constrained 2 vCPU/4GB box (already showing memory
+  pressure most of this session — `free -h` has repeatedly shown
+  85-93% RAM used with 2+GB in swap even at idle, so a build's own
+  CPU/memory draw hits an already-tight machine hard).
+
+  **Safer rebuild procedure** (not yet adopted as the default — worth
+  switching to before the next deploy if a real user might be on the
+  site at the time): build to a fresh directory and swap it in with a
+  rename instead of overwriting `.next` live —
+  ```
+  cd /home/xentraerp/erp-frontend
+  mv .next .next-old-$(date +%s)   # old process keeps serving from the
+                                    # renamed dir via its already-open fds
+  npm run build                    # writes a completely fresh .next
+  export PATH="/root/.nvm/versions/node/v18.20.8/bin:$PATH"
+  pm2 restart xentraerp            # new process picks up the fresh .next
+  rm -rf .next-old-*               # clean up once confirmed healthy
+  ```
+  This avoids the read/write collision entirely — the live process's
+  already-open file descriptors keep working after the directory is
+  renamed out from under them (standard Unix semantics), so it keeps
+  serving correctly from the old build until the moment `pm2 restart`
+  swaps it for the new one. Until this is adopted as the default, avoid
+  rebuilding during hours the tenant admin might actually be testing, or
+  give a heads-up before doing so.
 
 ## Product architecture & SaaS roadmap (added 2026-09-13)
 
