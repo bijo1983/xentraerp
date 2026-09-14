@@ -36,19 +36,44 @@ changes.
 
 ## Frontend serving (erp-frontend)
 
-- No `pm2`, no matching `systemd` unit found for it (checked both).
-- A raw `next-server` process was found listening on port `:8083` — likely
-  started via a bare `next start` in a screen/tmux/nohup session, not a
-  managed process. Exact start command/session not yet confirmed.
-- Additional Docker containers were observed listening on `:3000`, `:3001`,
-  `:8081` (via `docker-proxy`) — purpose/relation to erp-frontend not yet
-  confirmed; could be old/unrelated deployments. Verify before assuming
-  these matter.
-- nginx listens on `:80`/`:443` and terminates TLS for
-  `erp.badmintonbooking.com` (and presumably the other site hostnames) —
-  the exact nginx site config mapping hostname → backend port was requested
-  from the user but not yet confirmed (pending `grep` of
-  `/etc/nginx/sites-enabled/`).
+- **CORRECTION (2026-09-14): it IS managed by pm2, under a non-default
+  Node version — the earlier "no pm2, no systemd" note was wrong.** pm2's
+  God Daemon runs as PID 1 (started ~Jun 29) but the `pm2` CLI binary is
+  only on `PATH` for `/root/.nvm/versions/node/v18.20.8/bin` (and v16) —
+  **not** the default `v22.23.1`, which is why earlier `which pm2` /
+  `pm2 list` checks under the default shell PATH came up empty. Use:
+  `export PATH="/root/.nvm/versions/node/v18.20.8/bin:$PATH" && pm2 list`.
+  The managed process is named **`xentraerp`** (fork mode, cwd
+  `/home/xentraerp/erp-frontend`, script `npm start -p 8083`). As of
+  2026-09-14 it had **9949 restarts** recorded — worth investigating
+  separately why it's restarted that many times; not diagnosed this
+  session.
+- **Correct restart procedure: `pm2 restart xentraerp`** (after the PATH
+  export above), not the manual `pkill -f next-server` + `nohup npm run
+  start` recipe previously documented here — that recipe actively fights
+  pm2 (pm2 auto-restarts the killed process, racing the manual nohup start
+  for the port and throwing `EADDRINUSE`). Superseded/removed from
+  "Outstanding" below.
+- nginx listens on `:80`/`:443` and terminates TLS — mapping confirmed
+  2026-09-14 by grepping `/etc/nginx/sites-available/` (the actual
+  config files; `/etc/nginx/sites-enabled/*` are symlinks to these):
+  - `erp.badmintonbooking.com` (`sites-available/erp`) → `proxy_pass
+    http://localhost:8083` — this is the erp-frontend pm2 process. Single
+    `location /` block; the Next.js app itself proxies `/api/*` through to
+    the Frappe backend on `:8001` internally (see gunicorn note above),
+    nginx doesn't split that out.
+  - `badmintonbooking.com` / `www.badmintonbooking.com`
+    (`sites-available/badmintonbooking.com`) — **unrelated app**, not
+    erp-frontend: `location /api/` and `/health` → `:3001`
+    (badmintonbooking API), `location /` (everything else) → `:8081`
+    (badmintonbooking frontend). This resolves the earlier "Docker
+    containers on :3001/:8081, purpose not confirmed" note — they belong
+    to this separate site, not erp-frontend.
+  - `gamematrix360.innovegicit.com` (`sites-available/gamematrix360.
+    innovegicit.com`) → `:8360` — also unrelated to erp-frontend/XentraERP.
+  - Port `:3000` (from the old Docker-container observation) is not
+    referenced by any current nginx site config — still unexplained, low
+    priority.
 
 ## Known application facts
 
@@ -69,6 +94,32 @@ changes.
   `custom_erp_app/custom_erp/api/tenants.py` `TENANT_ADMIN_ROLES`.
 - Frappe roles are NOT hierarchical — holding a "Master Manager" role does
   not imply the "Manager"/"User" roles below it for permission purposes.
+- **Fixed 2026-09-14**: `TENANT_ADMIN_ROLES` in `custom_erp_app/custom_erp/
+  api/tenants.py` was missing **"Item Manager"**. Found via `bench
+  console` on `197349.xentraerp.local` — `admin@jjc.com` had
+  `frappe.has_permission("Item", "create") == False` despite holding Stock
+  Manager/User, Manufacturing Manager/User, etc.; none of those grant
+  create on `Item` (its DocType permissions give `create=1` only to
+  "Item Manager" specifically — same "doctype gates on one specific role"
+  gotcha as the Opportunity/Sales Master Manager case above). Practical
+  effect before the fix: the "New Item" button (wired up in commit
+  `3952d9a`) navigated to a working form fine, but clicking Save would
+  fail with a permission error for every tenant admin. Customer/Sales
+  Order/Sales Invoice create were unaffected (verified `has_permission`
+  True on those). Added to `TENANT_ADMIN_ROLES` and granted directly to
+  `admin@jjc.com` on `197349.xentraerp.local` (verified `has_permission
+  == True` after). At the time of this fix there was only one fully
+  provisioned tenant (`XentraERP Tenant` name `128014`, code `197349`) —
+  no other existing tenant admins needed backfilling. Note for future
+  provisioning: `create_tenant_admin_user` in `provisioning.py` *does*
+  auto-backfill any `TENANT_ADMIN_ROLES` additions like this one for an
+  existing user, but it also unconditionally resets that user's password
+  to the `admin` default on every re-run (`update_password(...)` in the
+  `else` branch) — that's why this fix granted the role directly instead
+  of re-invoking that function, to avoid clobbering the tenant admin's
+  password. Worth a follow-up: split password-reset out of the role-
+  backfill path so re-running it for a role fix doesn't also silently
+  reset credentials.
 
 ## Incident log
 
@@ -92,8 +143,8 @@ changes.
 
 ## Outstanding / in-progress as of 2026-09-13
 
-- Need nginx config confirmation (mapping hostname → backend port) — still
-  not confirmed, low priority now that the actual outage is resolved.
+- ~~Need nginx config confirmation (mapping hostname → backend port)~~ —
+  **confirmed 2026-09-14**, see "Frontend serving" section above.
 - **Deployed, as of 2026-09-13 ~12:02 PM**: `/home/xentraerp` on the server
   is pulled to the tip of `origin/claude/erpnext-erp-fixes` (`git pull`
   reported "Already up to date" from `/home/xentraerp`, meaning the
@@ -108,12 +159,13 @@ changes.
   tested successfully after this deploy. `main` is still diverged from
   `origin/main` as noted above — this deploy was done by checking out/
   pulling the feature branch directly, not by touching `main`.
-- Process-restart procedure for `erp-frontend` going forward: `pkill -f
-  "next-server"` then `nohup npm run start -- -p 8083 > /var/log/
-  erp-frontend.log 2>&1 & disown` from `/home/xentraerp/erp-frontend`.
-  Still not under a real process manager (no pm2/systemd) — a crash or
-  reboot will take it down with nothing to bring it back automatically.
-  Worth fixing before this matters in a real incident.
+- ~~Process-restart procedure for `erp-frontend` going forward: `pkill -f
+  "next-server"` then `nohup npm run start -- -p 8083 ...`~~ —
+  **superseded 2026-09-14**: it actually runs under pm2 (process name
+  `xentraerp`). Restart with `pm2 restart xentraerp` after putting the
+  v18 nvm bin dir on `PATH` — see "Frontend serving" section above for the
+  full explanation and command. Don't use the manual pkill/nohup recipe;
+  it fights pm2's own auto-restart.
 
 ## Product architecture & SaaS roadmap (added 2026-09-13)
 
