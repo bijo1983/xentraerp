@@ -4,9 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table';
 import {
   Search, X, Inbox, ChevronRight, ChevronLeft, ChevronsUpDown, ChevronUp, ChevronDown,
-  Trash2, Download, Upload, LayoutGrid, List as ListIcon, Rows3, Loader2,
+  Trash2, Download, Upload, LayoutGrid, List as ListIcon, Rows3, Loader2, Columns3,
 } from 'lucide-react';
 import { useFrappeList } from '@/hooks/use-frappe-list';
+import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
 import { toCsv, downloadTextFile } from '@/lib/csv';
 import { frappe } from '@/lib/frappe';
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useTenantCode, withTenant } from '@/lib/tenant';
 import { KanbanBoard } from './kanban-board';
 import { ImportDialog } from './import-dialog';
@@ -86,7 +88,6 @@ export function DoctypeList({
   const [search, setSearch] = useState('');
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
-  const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -94,12 +95,65 @@ export function DoctypeList({
   const [exporting, setExporting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<string>('');
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [extraColKeys, setExtraColKeys] = useState<string[]>([]);
 
   // Debounce free-text search so we're not firing a request per keystroke.
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // User-added columns, on top of whatever the page itself curated — lets
+  // anyone show a field the developer-defined column set left out, without
+  // needing a code change. Persisted per browser/doctype (there's no
+  // backend concept of a saved list-view column set here), loaded once on
+  // mount and written back on every change.
+  const storageKey = `xentra:list-columns:${doctype}`;
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      setExtraColKeys(raw ? JSON.parse(raw) : []);
+    } catch {
+      setExtraColKeys([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctype]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(extraColKeys));
+    } catch {
+      /* private browsing / storage disabled — column choice just won't persist */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraColKeys, doctype]);
+
+  const { schema: fullSchema } = useDocTypeSchema(doctype);
+  const baseColKeys = useMemo(() => new Set(cols.map((c) => c.key)), [cols]);
+  const NON_COLUMNABLE = new Set(['table', 'hidden', 'tab_break', 'section_break', 'attach', 'readonly']);
+  const AUTO_HIDE = new Set(['owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx']);
+  const pickableFields = useMemo(
+    () =>
+      (fullSchema?.fields || []).filter(
+        (f) => !baseColKeys.has(f.fieldname) && !AUTO_HIDE.has(f.fieldname) && !NON_COLUMNABLE.has(f.component)
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fullSchema, baseColKeys]
+  );
+  const extraCols: ColDef[] = useMemo(
+    () =>
+      extraColKeys
+        .map((key) => pickableFields.find((f) => f.fieldname === key))
+        .filter((f): f is NonNullable<typeof f> => !!f)
+        .map((f) => ({
+          key: f.fieldname,
+          header: f.label,
+          type: f.fieldtype === 'Currency' ? ('currency' as const) : f.component === 'date' || f.component === 'datetime' ? ('date' as const) : undefined,
+        })),
+    [extraColKeys, pickableFields]
+  );
+  const allCols = useMemo(() => [...cols, ...extraCols], [cols, extraCols]);
+  const effectiveFields = useMemo(() => Array.from(new Set([...fields, ...extraColKeys])), [fields, extraColKeys]);
 
   const effectiveSearchField = searchField || cols[0]?.key || 'name';
 
@@ -115,7 +169,7 @@ export function DoctypeList({
     for (const [key, value] of Object.entries(filterValues)) {
       if (value) f.push([key, '=', value]);
     }
-    for (const c of cols) {
+    for (const c of allCols) {
       const kind = colFilterKind(c);
       const v = columnFilters[c.key];
       if (!v || !kind) continue;
@@ -123,13 +177,13 @@ export function DoctypeList({
     }
     return f.length ? f : undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filterValues, columnFilters, cols, effectiveSearchField]);
+  }, [search, filterValues, columnFilters, allCols, effectiveSearchField]);
 
   const orderBy = sortField && sortDir ? `${sortField} ${sortDir}` : undefined;
 
   const { data, loading, error, total, page, setPage, pageSize, refetch } = useFrappeList<Record<string, unknown>>({
     doctype,
-    fields,
+    fields: effectiveFields,
     filters: activeFrappeFilters,
     orderBy,
   });
@@ -155,7 +209,7 @@ export function DoctypeList({
     setGroupLoading(true);
     frappe
       .getList(doctype, {
-        fields: JSON.stringify(fields),
+        fields: JSON.stringify(effectiveFields),
         filters: activeFrappeFilters ? JSON.stringify(activeFrappeFilters) : undefined,
         limit_page_length: REPORT_GROUP_CAP,
         order_by: orderBy || 'modified desc',
@@ -171,7 +225,7 @@ export function DoctypeList({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, groupBy, doctype, fields.join(','), filterKey, orderBy]);
+  }, [view, groupBy, doctype, effectiveFields.join(','), filterKey, orderBy]);
 
   const hasActiveFilters = Boolean(search || Object.values(filterValues).some(Boolean) || Object.values(columnFilters).some(Boolean));
   const clearFilters = () => {
@@ -227,14 +281,14 @@ export function DoctypeList({
 
   const columns = useMemo(
     () =>
-      cols.map((c) =>
+      allCols.map((c) =>
         col.accessor(c.key, {
           header: c.header,
           cell: (info) => renderCellValue(info.getValue(), c, goToRecord),
         })
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cols, doctype, tenantCode]
+    [allCols, doctype, tenantCode]
   );
 
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
@@ -287,15 +341,15 @@ export function DoctypeList({
     setExporting(true);
     try {
       const rows = await frappe.getList(doctype, {
-        fields: JSON.stringify(fields),
+        fields: JSON.stringify(effectiveFields),
         filters: activeFrappeFilters ? JSON.stringify(activeFrappeFilters) : undefined,
         limit_page_length: 0,
         order_by: orderBy || 'modified desc',
       });
       const arr = (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
-      const headers = cols.map((c) => c.header);
+      const headers = allCols.map((c) => c.header);
       const body = arr.map((r) =>
-        cols.map((c) => {
+        allCols.map((c) => {
           const v = r[c.key];
           if (v === null || v === undefined) return '';
           if (c.type === 'date') return formatDate(v as string);
@@ -320,7 +374,7 @@ export function DoctypeList({
 
   // ── Report grouping ─────────────────────────────────────────────
   const groupableCols = cols.filter((c) => c.type === 'badge');
-  const numericCols = cols.filter((c) => c.type === 'currency');
+  const numericCols = allCols.filter((c) => c.type === 'currency');
   const groups = useMemo(() => {
     if (!groupBy) return null;
     const map = new Map<string, Record<string, unknown>[]>();
@@ -364,26 +418,34 @@ export function DoctypeList({
       </div>
 
       {/* View mode toggle */}
-      <div className="flex items-center gap-1 rounded-md border bg-muted/30 p-1 w-fit">
-        <button
-          onClick={() => setView('list')}
-          className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-smooth transition-colors', view === 'list' ? 'bg-card shadow-elevation-xs' : 'text-muted-foreground hover:text-foreground')}
-        >
-          <ListIcon className="h-3.5 w-3.5" /> List
-        </button>
-        <button
-          onClick={() => setView('report')}
-          className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-smooth transition-colors', view === 'report' ? 'bg-card shadow-elevation-xs' : 'text-muted-foreground hover:text-foreground')}
-        >
-          <Rows3 className="h-3.5 w-3.5" /> Report
-        </button>
-        {kanbanField && kanbanColumns.length > 0 && (
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 rounded-md border bg-muted/30 p-1 w-fit">
           <button
-            onClick={() => setView('kanban')}
-            className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-smooth transition-colors', view === 'kanban' ? 'bg-card shadow-elevation-xs' : 'text-muted-foreground hover:text-foreground')}
+            onClick={() => setView('list')}
+            className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-smooth transition-colors', view === 'list' ? 'bg-card shadow-elevation-xs' : 'text-muted-foreground hover:text-foreground')}
           >
-            <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+            <ListIcon className="h-3.5 w-3.5" /> List
           </button>
+          <button
+            onClick={() => setView('report')}
+            className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-smooth transition-colors', view === 'report' ? 'bg-card shadow-elevation-xs' : 'text-muted-foreground hover:text-foreground')}
+          >
+            <Rows3 className="h-3.5 w-3.5" /> Report
+          </button>
+          {kanbanField && kanbanColumns.length > 0 && (
+            <button
+              onClick={() => setView('kanban')}
+              className={cn('flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-smooth transition-colors', view === 'kanban' ? 'bg-card shadow-elevation-xs' : 'text-muted-foreground hover:text-foreground')}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+            </button>
+          )}
+        </div>
+        {view !== 'kanban' && (
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setColumnsOpen(true)}>
+            <Columns3 className="h-3.5 w-3.5" />
+            Columns{extraColKeys.length > 0 ? ` (+${extraColKeys.length})` : ''}
+          </Button>
         )}
       </div>
 
@@ -418,16 +480,6 @@ export function DoctypeList({
               </SelectContent>
             </Select>
           ))}
-          {view !== 'kanban' && cols.some((c) => colFilterKind(c)) && (
-            <Button
-              variant={showColumnFilters ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-9"
-              onClick={() => setShowColumnFilters((v) => !v)}
-            >
-              Column filters
-            </Button>
-          )}
           {view === 'report' && groupableCols.length > 0 && (
             <Select value={groupBy || '__none__'} onValueChange={(v) => setGroupBy(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-9 w-auto min-w-[9rem] shadow-none">
@@ -451,10 +503,13 @@ export function DoctypeList({
           )}
         </div>
 
-        {/* Per-column filter row */}
-        {showColumnFilters && view !== 'kanban' && (
+        {/* Per-column filter row — always visible (not tucked behind a
+            toggle) whenever at least one column supports it, so it's
+            actually discoverable. */}
+        {view !== 'kanban' && allCols.some((c) => colFilterKind(c)) && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-background px-4 py-2.5">
-            {cols.map((c) => {
+            <span className="text-xs font-medium text-muted-foreground">Filter by:</span>
+            {allCols.map((c) => {
               const kind = colFilterKind(c);
               if (!kind) return null;
               if (kind === 'select') {
@@ -574,7 +629,7 @@ export function DoctypeList({
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/20">
-                          {cols.map((c) => (
+                          {allCols.map((c) => (
                             <th key={c.key} className="whitespace-nowrap px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               {c.header}
                             </th>
@@ -585,7 +640,7 @@ export function DoctypeList({
                         {groups?.map(([groupValue, rows]) => (
                           <Fragment key={groupValue}>
                             <tr className="border-b bg-muted/40">
-                              <td colSpan={cols.length} className="px-4 py-2 text-xs font-semibold">
+                              <td colSpan={allCols.length} className="px-4 py-2 text-xs font-semibold">
                                 {groupValue} <span className="font-normal text-muted-foreground">— {rows.length} record{rows.length !== 1 ? 's' : ''}</span>
                                 {numericCols.map((nc) => {
                                   const sum = rows.reduce((s, r) => s + (Number(r[nc.key]) || 0), 0);
@@ -603,7 +658,7 @@ export function DoctypeList({
                                 onClick={() => goToRecord(row.name as string)}
                                 className="cursor-pointer border-b border-border/70 transition-smooth transition-colors hover:bg-accent/60"
                               >
-                                {cols.map((c) => (
+                                {allCols.map((c) => (
                                   <td key={c.key} className="px-4 py-1.5">
                                     {renderCellValue(row[c.key], c, goToRecord)}
                                   </td>
@@ -723,6 +778,50 @@ export function DoctypeList({
         onOpenChange={setImportOpen}
         onImported={refetch}
       />
+
+      <Dialog open={columnsOpen} onOpenChange={setColumnsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Columns</DialogTitle>
+            <DialogDescription>
+              Add any field from {doctype} to this list and Report view. Saved on this browser only.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{cols.length} default, {extraColKeys.length} added</span>
+            {extraColKeys.length > 0 && (
+              <button className="font-medium text-primary hover:underline" onClick={() => setExtraColKeys([])}>
+                Reset to default
+              </button>
+            )}
+          </div>
+          <div className="max-h-80 space-y-0.5 overflow-y-auto">
+            {pickableFields.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No other fields available to add.</p>
+            ) : (
+              pickableFields.map((f) => (
+                <label
+                  key={f.fieldname}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-smooth hover:bg-accent/50"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border-input"
+                    checked={extraColKeys.includes(f.fieldname)}
+                    onChange={(e) =>
+                      setExtraColKeys((prev) =>
+                        e.target.checked ? [...prev, f.fieldname] : prev.filter((k) => k !== f.fieldname)
+                      )
+                    }
+                  />
+                  <span>{f.label}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{f.fieldtype}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
