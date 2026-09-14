@@ -33,6 +33,9 @@ export default function LeadsPage() {
         { key: 'lead_owner', header: 'Owner' },
       ]}
       filters={[{ key: 'status', label: 'Status', options: STATUSES }]}
+      kanbanField="status"
+      kanbanTitleField="lead_name"
+      kanbanSubtitleField="company_name"
     />
   );
 }

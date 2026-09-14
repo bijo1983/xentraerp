@@ -30,6 +30,9 @@ export default function OpportunitiesPage() {
         { key: 'opportunity_amount', header: 'Amount', type: 'currency', align: 'right' },
       ]}
       filters={[{ key: 'status', label: 'Status', options: STATUSES }]}
+      kanbanField="status"
+      kanbanTitleField="party_name"
+      kanbanAmountField="opportunity_amount"
     />
   );
 }

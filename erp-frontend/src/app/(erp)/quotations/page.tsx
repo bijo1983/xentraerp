@@ -32,6 +32,9 @@ export default function QuotationsPage() {
         { key: 'status', header: 'Status', type: 'badge', badgeColors: COLORS },
       ]}
       filters={[{ key: 'status', label: 'Status', options: STATUSES }]}
+      kanbanField="status"
+      kanbanTitleField="party_name"
+      kanbanAmountField="grand_total"
     />
   );
 }

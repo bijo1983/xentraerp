@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
 import { AttachField } from '@/components/fields/attach-field';
 import { ChildTable } from './child-table';
+import { PrintPanel } from './print-panel';
+import { Printer } from 'lucide-react';
 
 interface Props {
   doctype: string;
@@ -81,6 +83,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [activeTab, setActiveTab] = useState(0);
   const [transitioning, setTransitioning] = useState<'submit' | 'cancel' | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
 
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
@@ -312,6 +315,12 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
               {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
             </Button>
           )}
+          {name && (
+            <Button variant="outline" className="gap-1.5" onClick={() => setPrintOpen(true)}>
+              <Printer className="h-3.5 w-3.5" />
+              Print
+            </Button>
+          )}
           {(onCancel || onClose) && (
             <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving || !!transitioning}>
               Close
@@ -319,6 +328,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           )}
         </div>
       </div>
+      {name && <PrintPanel doctype={doctype} name={name} open={printOpen} onOpenChange={setPrintOpen} />}
     </div>
   );
 }

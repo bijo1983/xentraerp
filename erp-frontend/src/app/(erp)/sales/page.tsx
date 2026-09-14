@@ -35,6 +35,9 @@ export default function SalesPage() {
           options: ['Draft', 'On Hold', 'To Deliver and Bill', 'To Bill', 'To Deliver', 'Completed', 'Cancelled', 'Closed'],
         },
       ]}
+      kanbanField="status"
+      kanbanTitleField="customer"
+      kanbanAmountField="grand_total"
     />
   );
 }

@@ -36,6 +36,9 @@ export default function PurchasePage() {
           options: ['Draft', 'On Hold', 'To Receive and Bill', 'To Bill', 'To Receive', 'Completed', 'Cancelled', 'Closed', 'Delivered'],
         },
       ]}
+      kanbanField="status"
+      kanbanTitleField="supplier"
+      kanbanAmountField="grand_total"
     />
   );
 }

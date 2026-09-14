@@ -36,6 +36,8 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
         const data = Buffer.concat(chunks);
         const responseHeaders = new Headers();
         responseHeaders.set('Content-Type', (proxyRes.headers['content-type'] as string) || 'application/json');
+        const disposition = proxyRes.headers['content-disposition'];
+        if (disposition) responseHeaders.set('Content-Disposition', disposition as string);
         const setCookie = proxyRes.headers['set-cookie'];
         if (setCookie) {
           for (const c of setCookie) {

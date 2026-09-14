@@ -109,6 +109,42 @@ class FrappeClient {
   async getCount(doctype: string, filters?: Record<string, unknown>) {
     return this.call('frappe.client.get_count', { doctype, filters });
   }
+
+  // ── Bulk actions ────────────────────────────────────────────────
+  /** Updates a batch of documents in one request via Frappe's own bulk_update. Returns any per-doc failures. */
+  async bulkUpdate(doctype: string, names: string[], changes: Record<string, unknown>) {
+    const docs = names.map((docname) => ({ doctype, docname, ...changes }));
+    const result = await this.call('frappe.client.bulk_update', { docs: JSON.stringify(docs) });
+    return (result?.failed_docs || []) as Array<{ doc: Record<string, unknown>; exc: string }>;
+  }
+
+  /** Deletes a batch of documents via Frappe's own bulk-delete (the same endpoint Desk's list view uses). */
+  async bulkDelete(doctype: string, names: string[]) {
+    return this.call('frappe.desk.reportview.delete_items', {
+      doctype,
+      items: JSON.stringify(names),
+    });
+  }
+
+  // ── Print ───────────────────────────────────────────────────────
+  async getPrintFormats(doctype: string) {
+    const rows = await this.getList('Print Format', {
+      fields: JSON.stringify(['name']),
+      filters: JSON.stringify([
+        ['doc_type', '=', doctype],
+        ['disabled', '=', 0],
+      ]),
+      limit_page_length: 0,
+    });
+    return (rows as Array<{ name: string }>).map((r) => r.name);
+  }
+
+  printPdfUrl(doctype: string, name: string, format?: string, noLetterhead?: boolean) {
+    const params = new URLSearchParams({ doctype, name });
+    if (format) params.set('format', format);
+    if (noLetterhead) params.set('no_letterhead', '1');
+    return `/api/method/frappe.utils.print_format.download_pdf?${params.toString()}`;
+  }
 }
 
 export const frappe = new FrappeClient();
