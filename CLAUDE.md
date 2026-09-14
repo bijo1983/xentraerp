@@ -408,6 +408,36 @@ changes.
   concept of a saved list-view column set exists here, so this is
   browser-local, not synced across devices/users — worth a real
   backend-backed "saved views" feature later if that matters).
+- **Added 2026-09-14**: three requested `DynamicForm` improvements.
+  (1) **Quick-create**: `QuickCreateDialog` + `LinkField`'s new
+  `allowCreate` (default true) — every Link field's dropdown now
+  offers "+ Create new `<target>` '`<query>`'", asking only for the
+  target doctype's own mandatory fields, generic across the whole app
+  (Customer/Supplier/Item/any master), not hardcoded per doctype.
+  (2) **Tabs**: `buildTabs` now promotes any *labeled* Section Break
+  to its own tab (not just real Tab Break fields) — real ERPNext
+  doctypes put almost everything into one giant first tab using named
+  sections instead of real tabs; this generically splits Accounting
+  Dimensions/Taxes/Currency and Price List/etc. into their own tabs
+  for any doctype. This surfaced (and fixed) a real bug in
+  `meta-compiler.ts`: `compileMeta`'s label fallback
+  (`f.label || f.fieldname`) gave unlabeled Section Breaks a
+  fieldname-junk "label" (e.g. `section_break_31`), which the new
+  promotion logic then turned into junk-named tabs — fixed by only
+  falling back to fieldname for fields that are actually rendered as
+  labeled controls. Tabs with an unfilled required field now show a
+  small destructive-colored dot. Verified against live Sales Order
+  meta: 22 cleanly-labeled tabs, no fieldname junk. (3) **Right
+  drawer**: `RecordDrawer` — Comments (real `Comment` doctype CRUD),
+  Activity (`Version` doctype, best-effort diff summary), Connections.
+  Connections deliberately does **not** use the doctype's own `links`
+  meta array (sparse — Customer only lists "Party Specific Item") but
+  `__dashboard` instead (server-built from each doctype's own
+  `<doctype>_dashboard.py get_data()` — the actual source Frappe
+  Desk's Connections tab uses, with grouped categories and correct
+  per-doctype link fieldnames, e.g. Quotation uses `party_name` not
+  `customer`) — verified live against Customer's dashboard data and a
+  real linked-record count.
 
 ## Incident log
 
