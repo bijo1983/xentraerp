@@ -28,6 +28,8 @@ export interface CompiledField {
   description?: string;
   depends_on?: string;
   mandatory_depends_on?: string;
+  /** Frappe's own flag for "show this field as a grid column" — used to keep ChildTable's compact columns limited to what ERPNext itself shows, instead of every field on the child doctype. */
+  in_list_view?: boolean;
 }
 
 export interface CompiledMeta {
@@ -92,6 +94,7 @@ export function compileMeta(rawMeta: any): CompiledMeta {
       description: f.description,
       depends_on: f.depends_on,
       mandatory_depends_on: f.mandatory_depends_on,
+      in_list_view: !!f.in_list_view,
     }));
 
   return { doctype: rawMeta.name, fields, is_submittable: !!rawMeta.is_submittable };

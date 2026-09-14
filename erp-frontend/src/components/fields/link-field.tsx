@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { createPortal } from 'react-dom';
 
@@ -8,6 +9,8 @@ interface Props {
   value: string;
   disabled?: boolean;
   onChange: (v: string) => void;
+  /** Renders a search-icon button inside the field and fires on Enter — opens a richer picker (e.g. ItemPickerDialog) for callers that have one. */
+  onOpenPicker?: () => void;
 }
 
 interface Suggestion {
@@ -15,7 +18,7 @@ interface Suggestion {
   label: string;
 }
 
-export function LinkField({ target, value, disabled, onChange }: Props) {
+export function LinkField({ target, value, disabled, onChange, onOpenPicker }: Props) {
   const [query, setQuery] = useState(value);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -91,10 +94,33 @@ export function LinkField({ target, value, disabled, onChange }: Props) {
         value={query}
         disabled={disabled || !target}
         placeholder={target ? `Search ${target}…` : 'Select type first'}
+        className={onOpenPicker ? 'pr-8' : undefined}
         onChange={(e) => { setQuery(e.target.value); search(e.target.value); }}
         onFocus={() => { if (suggestions.length) openDropdown(); }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          // Enter with no dropdown open (nothing to pick inline, or the
+          // user wants a fuller search than the quick autocomplete) opens
+          // the richer picker dialog, mirroring ERPNext's own item-grid
+          // Enter-to-search-dialog behavior.
+          if (e.key === 'Enter' && onOpenPicker && !open) {
+            e.preventDefault();
+            onOpenPicker();
+          }
+        }}
       />
+      {onOpenPicker && (
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onOpenPicker}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-smooth hover:bg-accent hover:text-foreground"
+          title="Advanced search"
+        >
+          <Search className="h-3.5 w-3.5" />
+        </button>
+      )}
       {open && typeof document !== 'undefined' && createPortal(
         <ul style={dropdownStyle} className="bg-card border border-border rounded shadow max-h-52 overflow-y-auto text-sm">
           {suggestions.map((s) => (
