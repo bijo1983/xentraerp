@@ -39,7 +39,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
 
   const CHILD_AUTO = new Set(['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx', 'parent', 'parentfield', 'parenttype', 'doctype']);
   const visibleFields = schema.fields.filter(
-    (f) => f.component !== 'hidden' && !f.hidden && !CHILD_AUTO.has(f.fieldname)
+    (f) => f.component !== 'hidden' && (!f.hidden || f.depends_on) && !CHILD_AUTO.has(f.fieldname)
   );
 
   const updateRow = (idx: number, fieldname: string, val: unknown) => {

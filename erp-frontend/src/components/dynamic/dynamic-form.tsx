@@ -48,7 +48,19 @@ function buildTabs(fields: CompiledField[]): Tab[] {
     } else if (f.component === 'section_break') {
       if (currentSection.fields.length) currentTab.sections.push(currentSection);
       currentSection = { label: f.label || '', fields: [], depends_on: f.depends_on };
-    } else if (!AUTO_FIELDS.has(f.fieldname) && f.component !== 'hidden' && !f.hidden) {
+    } else if (
+      !AUTO_FIELDS.has(f.fieldname) &&
+      f.component !== 'hidden' &&
+      // A field with `hidden: 1` in its DocType meta is usually not
+      // permanently hidden — Frappe doctypes commonly author fields as
+      // hidden-by-default-but-revealed-by-depends_on (e.g. Item's
+      // "attributes" table, shown only once "Has Variants" is checked —
+      // ERPNext's own item.js toggles it with the exact same condition
+      // as its depends_on). Excluding it here unconditionally meant the
+      // field could never appear no matter what the user did. Only treat
+      // `hidden` as a hard veto when there's no depends_on to override it.
+      (!f.hidden || f.depends_on)
+    ) {
       currentSection.fields.push(f);
     }
   }

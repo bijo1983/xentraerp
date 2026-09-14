@@ -148,6 +148,34 @@ changes.
   customer-provided — and the display bug above made it look checked by
   default, which likely caused the confusion that led to this report; that
   part is now fixed.
+- **Fixed 2026-09-14**: reported as `frappe.exceptions.ValidationError:
+  Attribute table is mandatory` when saving an Item with "Has Variants"
+  checked. Root cause was more fundamental than the checkbox display bug
+  above: `DynamicForm`'s/`ChildTable`'s field-inclusion filter excluded
+  any field with `hidden: 1` in its DocType meta **unconditionally**,
+  before `depends_on` ever got a chance to evaluate. But `hidden: 1` +
+  `depends_on` is a standard Frappe authoring idiom for "hidden by
+  default, conditionally revealed" — Item's `attributes` table (child
+  doctype `Item Variant Attribute`) is exactly that: `hidden: 1` in meta,
+  `depends_on: eval:(doc.has_variants || doc.variant_of) &&
+  doc.variant_based_on==='Item Attribute'`, and ERPNext's own `item.js`
+  (`erpnext.item.toggle_attributes`) reveals it with that identical
+  condition. Because the field was excluded at compile time, there was
+  **no way for a user to ever see or fill in the Attributes table**
+  through our UI, even after checking "Has Variants" — so saving would
+  always hit the server's `validate_attributes()` mandatory check with no
+  way to satisfy it. Fixed by changing the exclusion condition from
+  `!f.hidden` to `(!f.hidden || f.depends_on)` in both `dynamic-form.tsx`
+  (`buildTabs`) and `child-table.tsx` (`visibleFields`) — a field is now
+  only permanently excluded when it's hidden *and* has no `depends_on` to
+  possibly reveal it; existing per-field `evalDependsOn()` calls at render
+  time (already present in both files) handle the actual show/hide.
+  Verified against live `getdoctype` meta for `Item` that `attributes`
+  carries both `hidden: 1` and the expected `depends_on` string. This is
+  a general fix, not Item-specific — the same
+  hidden-by-default-plus-depends_on pattern is common across ERPNext
+  doctypes, so other "check a box to reveal a table/section" flows were
+  likely broken the same way and should now work.
 - **Fixed 2026-09-14**: `TENANT_ADMIN_ROLES` in `custom_erp_app/custom_erp/
   api/tenants.py` was missing **"Item Manager"**. Found via `bench
   console` on `197349.xentraerp.local` — `admin@jjc.com` had
