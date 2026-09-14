@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
-import { CompiledField, evalDependsOn } from '@/lib/meta-compiler';
+import { CompiledField, evalDependsOn, isChecked } from '@/lib/meta-compiler';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
+import { AttachField } from '@/components/fields/attach-field';
 import { ChildTable } from './child-table';
 
 interface Props {
@@ -314,7 +315,7 @@ function renderField(
       return (
         <input
           type="checkbox"
-          checked={!!value}
+          checked={isChecked(value)}
           disabled={readOnly}
           className="h-4 w-4"
           onChange={(e) => setField(f.fieldname, e.target.checked ? 1 : 0)}
@@ -398,6 +399,16 @@ function renderField(
           disabled={readOnly}
           value={String(value ?? '')}
           onChange={(e) => setField(f.fieldname, e.target.value)}
+        />
+      );
+
+    case 'attach':
+      return (
+        <AttachField
+          value={String(value ?? '')}
+          onChange={(v) => setField(f.fieldname, v)}
+          disabled={readOnly}
+          isImage={f.fieldtype === 'Attach Image'}
         />
       );
 

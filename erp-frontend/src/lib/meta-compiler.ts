@@ -12,7 +12,8 @@ export type ComponentType =
   | 'readonly'
   | 'hidden'
   | 'tab_break'
-  | 'section_break';
+  | 'section_break'
+  | 'attach';
 
 export interface CompiledField {
   fieldname: string;
@@ -27,6 +28,17 @@ export interface CompiledField {
   description?: string;
   depends_on?: string;
   mandatory_depends_on?: string;
+}
+
+// Frappe represents Check field values as 0/1, often as the *string* "0"/"1"
+// (every field default from getdoctype meta is a string, and saved doc
+// values can come back as strings too depending on the endpoint) — a plain
+// `!!value` treats the string "0" as truthy, since any non-empty string is
+// truthy in JS. That rendered every checkbox whose default is explicitly
+// "0" (e.g. Disabled) as pre-checked. Compare against the real 0/1 values
+// instead of relying on JS truthiness.
+export function isChecked(value: unknown): boolean {
+  return value === 1 || value === '1' || value === true;
 }
 
 export interface CompiledMeta {
@@ -62,8 +74,8 @@ const FIELDTYPE_MAP: Record<string, ComponentType> = {
   'Fold': 'hidden',
   'Heading': 'hidden',
   'Button': 'hidden',
-  'Attach': 'text',
-  'Attach Image': 'text',
+  'Attach': 'attach',
+  'Attach Image': 'attach',
   'Barcode': 'text',
   'Color': 'text',
   'Rating': 'number',
