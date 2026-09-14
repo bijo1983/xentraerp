@@ -10,7 +10,6 @@ import { useTenantCode, withTenant } from '@/lib/tenant';
 interface Props {
   doctype: string;
   name: string;
-  open: boolean;
   onClose: () => void;
 }
 
@@ -63,7 +62,7 @@ function parseVersionSummary(raw: string): string[] {
   }
 }
 
-export function RecordDrawer({ doctype, name, open, onClose }: Props) {
+export function RecordDrawer({ doctype, name, onClose }: Props) {
   const router = useRouter();
   const tenantCode = useTenantCode();
   const [tab, setTab] = useState<DrawerTab>('comments');
@@ -165,12 +164,11 @@ export function RecordDrawer({ doctype, name, open, onClose }: Props) {
   };
 
   useEffect(() => {
-    if (!open) return;
     if (tab === 'comments' && comments.length === 0) loadComments();
     if (tab === 'activity' && versions.length === 0) loadVersions();
     if (tab === 'connections' && links.length === 0) loadLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, tab, doctype, name]);
+  }, [tab, doctype, name]);
 
   const postComment = async () => {
     if (!newComment.trim()) return;
@@ -206,10 +204,8 @@ export function RecordDrawer({ doctype, name, open, onClose }: Props) {
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed right-0 top-14 z-40 flex h-[calc(100vh-3.5rem)] w-80 flex-col border-l bg-card shadow-elevation-md">
+    <div className="sticky top-4 flex h-[calc(100vh-6rem)] w-80 shrink-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
       <div className="flex items-center justify-between border-b px-3 py-2.5">
         <div className="flex gap-1">
           {(

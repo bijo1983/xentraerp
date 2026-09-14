@@ -1,8 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
 import { cn } from '@/lib/utils';
+import { useTenantCode, withTenant } from '@/lib/tenant';
+import { DOCUMENT_MAPPERS } from '@/lib/document-mappers';
+import { stashMappedDoc } from '@/lib/mapped-doc';
+import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
@@ -10,7 +15,8 @@ import { AttachField } from '@/components/fields/attach-field';
 import { ChildTable } from './child-table';
 import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
-import { Printer, PanelRight } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Printer, PanelRight, Plus, ChevronDown, Loader2 } from 'lucide-react';
 
 interface Props {
   doctype: string;
@@ -93,6 +99,8 @@ function buildTabs(fields: CompiledField[]): Tab[] {
 }
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
+  const router = useRouter();
+  const tenantCode = useTenantCode();
   const { schema, loading, error } = useDocTypeSchema(doctype);
   const [doc, setDoc] = useState<Record<string, unknown>>(initialDoc || initial || {});
   const [docLoading, setDocLoading] = useState(!!name && !initialDoc && !initial);
@@ -103,7 +111,13 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [transitioning, setTransitioning] = useState<'submit' | 'cancel' | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Open by default (not a click-to-reveal panel) whenever there's an
+  // existing record to show comments/activity/connections for — matches
+  // Frappe Desk's own always-visible sidebar. Still collapsible for anyone
+  // who wants the extra width back.
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
@@ -299,6 +313,26 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     }
   };
 
+  // "Create >" chained-document actions (e.g. Sales Order -> Delivery
+  // Note) — calls ERPNext's own mapper method, which returns a fully
+  // populated but unsaved target document, then opens a New form
+  // pre-filled with it for the user to review before saving. Not a save
+  // itself — nothing is created server-side until that New form is saved.
+  const createLinkedDocument = async (mapper: { targetDoctype: string; method: string }) => {
+    if (!name) return;
+    setCreatingFrom(mapper.method);
+    setCreateError(null);
+    try {
+      const mapped = await frappe.call(mapper.method, { source_name: name });
+      const key = stashMappedDoc(mapped as Record<string, unknown>);
+      router.push(withTenant(`/app/${encodeURIComponent(mapper.targetDoctype)}/new?from=${key}`, tenantCode));
+    } catch (e) {
+      setCreateError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setCreatingFrom(null);
+    }
+  };
+
   if (loading || docLoading) return <p className="text-muted-foreground p-4">Loading form…</p>;
   if (error) return <p className="text-destructive p-4">Error loading form: {error}</p>;
   if (docError) return <p className="text-destructive p-4">Error loading document: {docError}</p>;
@@ -327,7 +361,8 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   );
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
+    <div className="flex items-start gap-4">
+    <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
       {/* Tab bar */}
       <div className="flex gap-1 overflow-x-auto border-b bg-muted/30 px-2 pt-2">
         {tabs.map((tab, i) => (
@@ -403,6 +438,11 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
             {transitionError}
           </p>
         )}
+        {createError && (
+          <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+            {createError}
+          </p>
+        )}
 
         <div className="flex gap-2 pt-2">
           {docstatus === 0 && (
@@ -425,16 +465,34 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
               {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
             </Button>
           )}
+          {name && DOCUMENT_MAPPERS[doctype]?.length > 0 && (!schema.is_submittable || docstatus === 1) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-1.5" disabled={!!creatingFrom}>
+                  {creatingFrom ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  Create
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {DOCUMENT_MAPPERS[doctype].map((m) => (
+                  <DropdownMenuItem key={m.method} onSelect={() => createLinkedDocument(m)}>
+                    {m.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {name && (
             <Button variant="outline" className="gap-1.5" onClick={() => setPrintOpen(true)}>
               <Printer className="h-3.5 w-3.5" />
               Print
             </Button>
           )}
-          {name && (
-            <Button variant="outline" className="gap-1.5" onClick={() => setDrawerOpen((v) => !v)}>
+          {name && !drawerOpen && (
+            <Button variant="outline" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
               <PanelRight className="h-3.5 w-3.5" />
-              {drawerOpen ? 'Hide' : ''} Comments &amp; Activity
+              Show Comments &amp; Activity
             </Button>
           )}
           {(onCancel || onClose) && (
@@ -445,7 +503,8 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
         </div>
       </div>
       {name && <PrintPanel doctype={doctype} name={name} open={printOpen} onOpenChange={setPrintOpen} />}
-      {name && <RecordDrawer doctype={doctype} name={name} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
+    </div>
+    {name && drawerOpen && <RecordDrawer doctype={doctype} name={name} onClose={() => setDrawerOpen(false)} />}
     </div>
   );
 }
