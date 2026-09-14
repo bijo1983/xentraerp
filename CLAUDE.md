@@ -373,6 +373,41 @@ changes.
   — these were blank on every new transaction because they're not in
   the doctype's own field `default` metadata (Frappe Desk fills them
   via a client script this generic form doesn't run).
+- **Fixed 2026-09-14**: reported as Rate not editable on a Sales Order
+  line, and amounts showing "Rs" (INR) throughout despite BHD set as
+  the company's default currency. (1) Sales Order Item's `rate` field
+  is gated on `depends_on: eval: doc.type != ""` — `type` is never
+  actually present on the row. Real JS: `undefined != ""` is `true`
+  (undefined is never loosely equal to any string, even `""`), so real
+  Frappe Desk always shows the field; `meta-compiler.ts`'s `evalAtom`
+  coerced the absent field to `""` before comparing
+  (`String(actualRaw ?? '')`), making `"" != ""` evaluate `false` —
+  the opposite result, rendering Rate as a plain "—" instead of an
+  editable input. Fixed to match real JS semantics (undefined/null
+  never loosely-equals a concrete literal) — a general correctness
+  fix, likely affecting other fields elsewhere gated the same way, not
+  just this one. (2) `formatCurrency()` in `lib/utils.ts` hardcoded
+  `currency = 'INR'` as its default, and **every** call site across
+  the app relied on that default — none ever passed the tenant's real
+  currency. Added `primeCurrency()` (fetches `Global Defaults` once,
+  cached at module scope since `formatCurrency` is called from many
+  non-hook contexts like react-table cell renderers), kicked off from
+  the `(erp)/layout.tsx` mount effect; `formatCurrency`'s default now
+  reads that cache. Also switched the hardcoded `'en-IN'` Intl locale
+  (Indian lakh/crore grouping — wrong for a non-Indian tenant) to
+  `'en-US'` for currency and date formatting.
+- **Added 2026-09-14**: two `DoctypeList` UX fixes reported directly —
+  (1) per-column filters existed (added earlier the same day) but were
+  hidden behind a "Column filters" toggle button that wasn't
+  discoverable; made the filter row always visible whenever any column
+  supports it. (2) added a real "Columns" picker (button next to the
+  List/Report/Kanban toggle) listing every field on the doctype not
+  already in the page's curated set — checking one adds it as an extra
+  column across List **and** Report view, CSV export, and Report-mode
+  grouping sums, persisted per-doctype in `localStorage` (no backend
+  concept of a saved list-view column set exists here, so this is
+  browser-local, not synced across devices/users — worth a real
+  backend-backed "saved views" feature later if that matters).
 
 ## Incident log
 
