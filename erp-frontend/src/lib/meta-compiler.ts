@@ -132,7 +132,7 @@ function readDocField(doc: DocLike, field: string): unknown {
   return doc[field];
 }
 
-function isTruthyDocValue(v: unknown): boolean {
+export function isTruthyDocValue(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   if (typeof v === 'string') return v.trim() !== '' && v !== '0';
   if (typeof v === 'number') return v !== 0;

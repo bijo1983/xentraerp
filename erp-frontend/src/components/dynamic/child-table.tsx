@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
-import { CompiledField, evalDependsOn } from '@/lib/meta-compiler';
+import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
@@ -89,7 +89,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
         );
       case 'check':
         return (
-          <input type="checkbox" checked={!!val}
+          <input type="checkbox" checked={isTruthyDocValue(val)}
             onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.checked ? 1 : 0)} />
         );
       case 'link': {

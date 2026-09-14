@@ -120,6 +120,34 @@ changes.
   `custom_erp_app/custom_erp/api/tenants.py` `TENANT_ADMIN_ROLES`.
 - Frappe roles are NOT hierarchical — holding a "Master Manager" role does
   not imply the "Manager"/"User" roles below it for permission purposes.
+- **Fixed 2026-09-14**: `DynamicForm`/`ChildTable`'s Check-field checkboxes
+  used `checked={!!value}`. Frappe's `default` on a Check field is a
+  *string* (`"0"`/`"1"`), and `"0"` is truthy in JS — so every Check field
+  with a default (checked or not) rendered as checked until the user
+  touched it. Fixed by using the existing `isTruthyDocValue` helper in
+  `meta-compiler.ts` (already correct, already used for `depends_on`
+  evaluation — just not exported/reused for the checkbox itself). This
+  was purely a *display* bug — the actual value stored in form state was
+  always the correct raw string, so an untouched checkbox still submitted
+  correctly; it just looked wrong on screen.
+- **Related but NOT fixed (out of scope for the generic form)**: reported
+  2026-09-14 as `frappe.exceptions.ValidationError: "Customer Provided
+  Item" cannot be Purchase Item also` when saving a new Item. Root cause:
+  ERPNext's real Desk UI runs a per-doctype client script (`item.js`)
+  that auto-unchecks "Allow Purchase" (`is_purchase_item`) the moment
+  "Is Customer Provided Item" (`is_customer_provided_item`) is checked.
+  `DynamicForm` is a generic, doctype-agnostic renderer — it has no
+  mechanism to load or run per-doctype client scripts, so it can't
+  replicate that interaction; the two checkboxes stay independent and the
+  *server-side* validation (correctly) rejects the conflicting combination
+  on save. This is expected behavior for the generic-form architecture,
+  not a bug to patch per-doctype. Workaround: manually uncheck "Allow
+  Purchase" before checking "Is Customer Provided Item" (or vice versa).
+  Since `is_customer_provided_item` defaults to unchecked, this shouldn't
+  come up unless a tenant admin deliberately marks an item
+  customer-provided — and the display bug above made it look checked by
+  default, which likely caused the confusion that led to this report; that
+  part is now fixed.
 - **Fixed 2026-09-14**: `TENANT_ADMIN_ROLES` in `custom_erp_app/custom_erp/
   api/tenants.py` was missing **"Item Manager"**. Found via `bench
   console` on `197349.xentraerp.local` — `admin@jjc.com` had
