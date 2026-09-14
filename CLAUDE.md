@@ -438,6 +438,27 @@ changes.
   per-doctype link fieldnames, e.g. Quotation uses `party_name` not
   `customer`) — verified live against Customer's dashboard data and a
   real linked-record count.
+- **Added 2026-09-14**: (1) `RecordDrawer` is now always-visible for an
+  existing record (a normal sticky flex column next to the form) rather
+  than a click-to-open overlay — reported directly ("not on clicking").
+  Still collapsible. (2) `DOCUMENT_MAPPERS`
+  (`erp-frontend/src/lib/document-mappers.ts`) — ERPNext's "Create >"
+  chaining actions (Quotation → Sales Order, Sales Order → Delivery
+  Note/Sales Invoice, Purchase Order → Purchase Receipt/Purchase
+  Invoice, Lead → Opportunity/Customer, etc.), surfaced as a "Create"
+  dropdown in `DynamicForm`'s toolbar once the source doc is submitted.
+  **This table is hand-maintained, not doctype-meta-driven** — real
+  Frappe Desk determines available chaining actions from each doctype's
+  own client script (`.js`), which isn't exposed over the REST API at
+  all, so there's no generic way to discover this; each entry here was
+  checked to exist/be whitelisted against this bench's ERPNext source,
+  and `make_delivery_note` verified live end-to-end. A mapped (but
+  unsaved) target doc from the backend gets handed to the target's New
+  page via `lib/mapped-doc.ts` (sessionStorage, since a URL can't carry
+  a full document payload and there's no backend "staged document"
+  concept) — nothing is created until that New form is actually saved.
+  If a future doctype needs this and isn't in the table, it needs a
+  manually-added entry, not just a data change.
 
 ## Incident log
 
