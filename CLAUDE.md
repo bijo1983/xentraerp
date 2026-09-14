@@ -289,6 +289,68 @@ changes.
   password. Worth a follow-up: split password-reset out of the role-
   backfill path so re-running it for a role fix doesn't also silently
   reset credentials.
+- **Added 2026-09-14**: standard ERPNext list-view features that were
+  entirely missing — requested as "kanban view, report view, per-column
+  filters, bulk actions, import/export, print". All built into
+  `DoctypeList` (`erp-frontend/src/components/dynamic/`) so they apply
+  to every masters/transactions page at once: row selection + bulk
+  delete/bulk-field-update toolbar (via Frappe's own
+  `frappe.desk.reportview.delete_items` / `frappe.client.bulk_update`),
+  per-column filters, CSV export/import (`lib/csv.ts`, `import-
+  dialog.tsx` — import is flat-fields-only, no child tables), a List/
+  Report/Kanban view toggle (`kanban-board.tsx`, opt-in via a
+  `kanbanField` prop, wired into Leads/Opportunities/Sales Orders/
+  Purchase Orders/Quotations), and Print (`print-panel.tsx` — an in-app
+  preview around Frappe's own `frappe.utils.print_format.download_pdf`,
+  deliberately **not** a from-scratch print-format reimplementation,
+  since Frappe's print formats already encode the letterhead/tax-
+  layout rules real accounting documents need). New `Dialog` UI
+  primitive. Verified: clean `tsc`/build, and `bulk_update`/
+  `delete_items` tested directly against the live API.
+- **Fixed 2026-09-14**: reported as "item created is not visible in
+  sales order" + "showing all columns of an item, enforce only
+  required columns... in transactions screens". Two related
+  `ChildTable` gaps: (1) it rendered every non-hidden field of the
+  child doctype as a grid column — Sales Order Item has ~30 fields,
+  real Frappe Desk's grid shows only the 6 marked `in_list_view`
+  (item_code, delivery_date, qty, rate, amount, warehouse). Added
+  `in_list_view` to `CompiledField`/`compileMeta` and restrict the
+  compact grid to `in_list_view`-or-`reqd` fields (fallback to all if a
+  doctype flags none), with a new per-row "More fields" detail dialog
+  so nothing is actually inaccessible. (2) Picking an Item only set
+  `item_code` — sibling fields (item_name/description/uom/rate/amount)
+  stayed blank, which is almost certainly what read as "not visible."
+  `ChildTable` now fetches the Item master on selection and populates
+  matching row fields, recomputing amount as qty×rate — deliberately
+  the Item master's own defaults, **not** ERPNext's full price-list/
+  tax pricing engine (documented as a known simplification). Added
+  `ItemPickerDialog` (Enter-key or search-icon triggered) for
+  code/name/description + Item Group + Brand + variant-attribute
+  search (a two-step lookup through `Item Variant Attribute`, since
+  attribute values live in that child table, not on `Item` itself).
+  `LinkField` gained a generic `onOpenPicker` hook (button + Enter) for
+  this. **Verified end-to-end** by creating a real Sales Order
+  (`SAL-ORD-2026-00001`) against tenant 197349 with a Blue Pen line
+  using the exact field mapping `ChildTable` now produces — item_name/
+  uom/rate/amount all correctly populated. That verification also
+  surfaced the Price List provisioning gap fixed immediately below.
+- **Fixed 2026-09-14**: `provisioning.py`'s `run_default_setup` created
+  Company/Chart of Accounts/Warehouse/Cost Center but never a Price
+  List, and never set Selling/Buying Settings' default price list
+  (normally the Setup Wizard's job, skipped here). Every transaction
+  doctype's `validate()` needs a price list to resolve a rate
+  (`get_item_details` → `get_price_list_rate` →
+  `validate_conversion_rate`), so **saving any Sales/Purchase Order,
+  Quotation, or Invoice failed on every tenant provisioned before this
+  fix** — found via tenant 197349 (zero Price List records). Now
+  creates "Standard Selling"/"Standard Buying" Price Lists and sets
+  them as the Selling/Buying Settings defaults, idempotently (verified
+  by re-running against 197349 after manually creating the two price
+  lists there: no duplicates, no errors). `get_default_setup_status`
+  also reports a new `price_list` key for the admin "Manage" panel.
+  **Not yet backfilled for any tenant other than 197349** — if more
+  tenants exist by the time this is read, re-run `reconfigure_tenant_
+  defaults` for each (idempotent, safe) to pick up the fix.
 
 ## Incident log
 
@@ -385,7 +447,7 @@ mock as if it were done:**
 | Signup (OTP infra, `complete_signup`, pending-approval email) | Real, working. OTP verification itself is currently bypassed — admin approval is the actual gate. |
 | Tenant approval, per-tenant site provisioning, admin user creation, default company/CoA/warehouse setup | Real, working, idempotent (`reconfigure_tenant_defaults` can be re-run safely). |
 | Tenant admin roles (`TENANT_ADMIN_ROLES` full per-module stack) | Real, working — see role-hierarchy gotcha further up this file. |
-| Dynamic doctype list/form/child-table rendering, `depends_on` support, list-row click-through to edit, list filtering | Real, working (this session's fixes). |
+| Dynamic doctype list/form/child-table rendering, `depends_on` support, list-row click-through to edit, list filtering (search + per-column + dropdown), bulk select/delete/update, CSV export/import, print (via Frappe's own PDF rendering), List/Report/Kanban view toggle, item picker with attribute search + auto-populate on transaction lines | Real, working (this session's fixes). |
 | Admin portal pages: Plans, Modules, Features, Reports, Subscriptions, Billing, Coupons | **UI-only mockups** — hardcoded arrays in the `.tsx` files, no backing DocTypes, no persistence. Each page literally says so in an on-page note. |
 | **Module/plan entitlement enforcement** | **Does not exist anywhere.** `XentraERP Tenant.enabled_modules` is a stored comma-separated field but nothing reads it to gate navigation, routes, or API calls. Every tenant admin user's actual access today is whatever their granted Frappe roles allow — full ERPNext access, independent of plan/subscription. This is the single biggest gap vs. the SaaS vision and the top priority for the next implementation phase. |
 | Billing/payment integration, usage metering, coupons, audit log, notification templates as data (vs. one-off `frappe.sendmail` calls) | Not started. |
