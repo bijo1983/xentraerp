@@ -53,7 +53,7 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker }: P
         if (results.length > 0) {
           if (inputRef.current) {
             const rect = inputRef.current.getBoundingClientRect();
-            setDropdownStyle({ position: 'fixed', top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width, zIndex: 9999 });
+            setDropdownStyle({ position: 'fixed', top: rect.bottom, left: rect.left, width: rect.width, zIndex: 9999 });
           }
           setOpen(true);
         } else {
@@ -78,8 +78,8 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker }: P
       const rect = inputRef.current.getBoundingClientRect();
       setDropdownStyle({
         position: 'fixed',
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
+        top: rect.bottom,
+        left: rect.left,
         width: rect.width,
         zIndex: 9999,
       });

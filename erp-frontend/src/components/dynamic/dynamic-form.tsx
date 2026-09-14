@@ -147,6 +147,67 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     });
   }, [schema]);
 
+  // Company/Currency/Price List defaults — deliberately separate from the
+  // meta-driven defaults effect above, because these aren't in the
+  // doctype's own `default` metadata at all; Frappe Desk fills them from
+  // Global Defaults / Selling & Buying Settings via client script, which
+  // this generic form doesn't run. Without this every new transaction
+  // opened with Company, Currency, Price List, and Exchange Rate all
+  // blank, forcing a manual pick on every single record even though the
+  // tenant only has one company/currency. Only touches fields that exist
+  // on this doctype and aren't already set, and never overrides a real
+  // multi-currency choice the user makes afterward.
+  useEffect(() => {
+    if (!schema || name) return;
+    const fieldnames = new Set(schema.fields.map((f) => f.fieldname));
+    const relevant = ['company', 'currency', 'price_list_currency', 'selling_price_list', 'buying_price_list', 'conversion_rate', 'plc_conversion_rate'];
+    if (!relevant.some((f) => fieldnames.has(f))) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const gd = await fetch('/api/resource/Global%20Defaults/Global%20Defaults', { credentials: 'include' }).then((r) => r.json());
+        const company = gd?.data?.default_company;
+        const currency = gd?.data?.default_currency;
+        const patch: Record<string, unknown> = {};
+        if (fieldnames.has('company') && company) patch.company = company;
+        if (fieldnames.has('currency') && currency) patch.currency = currency;
+        if (fieldnames.has('price_list_currency') && currency) patch.price_list_currency = currency;
+        // Single-currency tenants (the common case): price list / customer
+        // currency equals the company currency, so a 1:1 conversion rate is
+        // correct. A genuinely multi-currency transaction still needs the
+        // user (or ERPNext's own validation) to correct this.
+        if (fieldnames.has('conversion_rate')) patch.conversion_rate = 1;
+        if (fieldnames.has('plc_conversion_rate')) patch.plc_conversion_rate = 1;
+
+        if (fieldnames.has('selling_price_list')) {
+          const ss = await fetch('/api/resource/Selling%20Settings/Selling%20Settings', { credentials: 'include' }).then((r) => r.json());
+          if (ss?.data?.selling_price_list) patch.selling_price_list = ss.data.selling_price_list;
+        }
+        if (fieldnames.has('buying_price_list')) {
+          const bs = await fetch('/api/resource/Buying%20Settings/Buying%20Settings', { credentials: 'include' }).then((r) => r.json());
+          if (bs?.data?.buying_price_list) patch.buying_price_list = bs.data.buying_price_list;
+        }
+
+        if (!cancelled && Object.keys(patch).length) {
+          setDoc((prev) => {
+            const next = { ...prev };
+            for (const [k, v] of Object.entries(patch)) {
+              if (next[k] === undefined || next[k] === null || next[k] === '') next[k] = v;
+            }
+            return next;
+          });
+        }
+      } catch {
+        // Best-effort — leave the fields blank for the user to fill in
+        // manually, same as before this convenience existed.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [schema, name]);
+
   const setField = (fieldname: string, value: unknown) => {
     setDoc((prev) => {
       const updated = { ...prev, [fieldname]: value };
