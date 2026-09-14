@@ -2,13 +2,15 @@
 import { useState, useEffect } from 'react';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
 import { AttachField } from '@/components/fields/attach-field';
 import { ChildTable } from './child-table';
 import { PrintPanel } from './print-panel';
-import { Printer } from 'lucide-react';
+import { RecordDrawer } from './record-drawer';
+import { Printer, PanelRight } from 'lucide-react';
 
 interface Props {
   doctype: string;
@@ -37,20 +39,37 @@ const AUTO_FIELDS = new Set([
   'docstatus', 'idx', 'parent', 'parentfield', 'parenttype',
 ]);
 
+// Splits on Tab Break fields *and* on any labeled Section Break — real
+// ERPNext doctypes group almost everything into one giant first tab with
+// many named sections (Accounting Dimensions, Taxes, Currency and Price
+// List, ...) rather than real tabs, which is exactly the "one long
+// scrolling form" experience that's hard to navigate. Promoting every
+// labeled section to its own tab (unlabeled ones still just group fields
+// within whatever tab is current — they're typically layout-only column
+// breaks) generically produces "required fields up front, everything else
+// in its own tab, accounting/tax/etc. each get their own tab" for any
+// doctype, without hardcoding which section names count as "accounting" or
+// "tax" — whatever the doctype's own authors labeled the section becomes
+// the tab name.
 function buildTabs(fields: CompiledField[]): Tab[] {
   const tabs: Tab[] = [];
   let currentTab: Tab = { label: 'Details', sections: [] };
   let currentSection: Section = { label: '', fields: [] };
 
   for (const f of fields) {
-    if (f.component === 'tab_break') {
+    if (f.component === 'tab_break' || (f.component === 'section_break' && f.label)) {
+      // A new tab — from a real Tab Break, or a labeled Section Break
+      // promoted to tab-level. No redundant section header repeating the
+      // tab's own label.
       if (currentSection.fields.length) currentTab.sections.push(currentSection);
       if (currentTab.sections.length) tabs.push(currentTab);
       currentTab = { label: f.label || 'Details', sections: [] };
-      currentSection = { label: '', fields: [] };
+      currentSection = { label: '', fields: [], depends_on: f.component === 'section_break' ? f.depends_on : undefined };
     } else if (f.component === 'section_break') {
+      // Unlabeled section break — just a layout grouping, stays in the
+      // current tab as its own (unlabeled) section.
       if (currentSection.fields.length) currentTab.sections.push(currentSection);
-      currentSection = { label: f.label || '', fields: [], depends_on: f.depends_on };
+      currentSection = { label: '', fields: [], depends_on: f.depends_on };
     } else if (
       !AUTO_FIELDS.has(f.fieldname) &&
       f.component !== 'hidden' &&
@@ -84,6 +103,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [transitioning, setTransitioning] = useState<'submit' | 'cancel' | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
@@ -287,27 +307,56 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const docstatus = Number(doc.docstatus ?? 0);
   const tabs = buildTabs(schema.fields);
 
+  // A tab whose fields include an unfilled required one gets flagged in the
+  // tab bar — the user shouldn't have to visit every tab to discover which
+  // one is blocking save. Only counts a field if its section and the field
+  // itself are actually visible right now (depends_on-gated fields the user
+  // can't even see yet don't count against the tab).
+  const isEmpty = (v: unknown) => v === undefined || v === null || v === '';
+  const tabMissingRequired = tabs.map((tab) =>
+    tab.sections.some(
+      (section) =>
+        evalDependsOn(section.depends_on, doc) &&
+        section.fields.some(
+          (f) =>
+            evalDependsOn(f.depends_on, doc) &&
+            (f.reqd || (f.mandatory_depends_on && evalDependsOn(f.mandatory_depends_on, doc))) &&
+            isEmpty(doc[f.fieldname])
+        )
+    )
+  );
+
   return (
-    <div className="space-y-0">
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
       {/* Tab bar */}
-      <div className="flex border-b border-border overflow-x-auto">
+      <div className="flex gap-1 overflow-x-auto border-b bg-muted/30 px-2 pt-2">
         {tabs.map((tab, i) => (
           <button
             key={i}
             onClick={() => setActiveTab(i)}
-            className={`px-5 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+            className={cn(
+              'relative flex items-center gap-1.5 whitespace-nowrap rounded-t-md px-3.5 py-2 text-[13px] font-medium transition-smooth transition-colors',
               activeTab === i
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
+                ? 'bg-card text-foreground'
+                : tabMissingRequired[i]
+                  ? 'text-destructive/90 hover:bg-card/60 hover:text-destructive'
+                  : 'text-muted-foreground hover:bg-card/60 hover:text-foreground'
+            )}
           >
             {tab.label}
+            {tabMissingRequired[i] && (
+              <span
+                className={cn('h-1.5 w-1.5 shrink-0 rounded-full', activeTab === i ? 'bg-destructive' : 'bg-destructive/80')}
+                title="This tab has a required field that isn't filled in yet"
+              />
+            )}
+            {activeTab === i && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />}
           </button>
         ))}
       </div>
 
       {/* Active tab content */}
-      <div className="p-4 space-y-6">
+      <div className="p-5 space-y-6">
         {tabs[activeTab]?.sections
           .filter((section) => evalDependsOn(section.depends_on, doc))
           .map((section, si) => {
@@ -382,6 +431,12 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
               Print
             </Button>
           )}
+          {name && (
+            <Button variant="outline" className="gap-1.5" onClick={() => setDrawerOpen((v) => !v)}>
+              <PanelRight className="h-3.5 w-3.5" />
+              {drawerOpen ? 'Hide' : ''} Comments &amp; Activity
+            </Button>
+          )}
           {(onCancel || onClose) && (
             <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving || !!transitioning}>
               Close
@@ -390,6 +445,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
         </div>
       </div>
       {name && <PrintPanel doctype={doctype} name={name} open={printOpen} onOpenChange={setPrintOpen} />}
+      {name && <RecordDrawer doctype={doctype} name={name} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
     </div>
   );
 }

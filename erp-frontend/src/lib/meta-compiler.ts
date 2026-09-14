@@ -83,7 +83,15 @@ export function compileMeta(rawMeta: any): CompiledMeta {
     .filter((f: any) => f.fieldname && f.fieldtype !== 'Column Break' && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Fold' && f.fieldtype !== 'Button')
     .map((f: any): CompiledField => ({
       fieldname: f.fieldname,
-      label: f.label || f.fieldname,
+      // Section/Tab Break fields routinely have NO label in the doctype's
+      // own meta (they're often pure layout dividers) — falling back to
+      // the raw fieldname (e.g. "section_break_31") for those, the same
+      // fallback a real data field needs so it always has *something*
+      // visible, instead surfaced fieldname-looking junk as literal tab/
+      // section titles once DynamicForm started promoting labeled
+      // sections to their own tabs. Only fall back for fields that are
+      // actually rendered as a labeled control.
+      label: f.label || (f.fieldtype === 'Section Break' || f.fieldtype === 'Tab Break' ? '' : f.fieldname),
       fieldtype: f.fieldtype,
       component: FIELDTYPE_MAP[f.fieldtype] || 'text',
       options: f.options,
