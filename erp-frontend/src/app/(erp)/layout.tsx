@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useERPStore } from '@/store/erp-store';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { cn } from '@/lib/utils';
+import { cn, primeCurrency } from '@/lib/utils';
 import { useTenantCode } from '@/lib/tenant';
 
 export default function ERPLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +18,7 @@ export default function ERPLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     checkSession();
+    primeCurrency();
   }, [checkSession]);
 
   useEffect(() => {

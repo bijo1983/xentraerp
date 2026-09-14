@@ -159,11 +159,25 @@ function evalAtom(atom: string, doc: DocLike): boolean | null {
     const [, field, op, rawVal] = m;
     const expected = coerceCmpValue(rawVal);
     const actualRaw = readDocField(doc, field);
-    let actual: string | number | boolean;
-    if (typeof expected === 'number') actual = Number(actualRaw ?? 0);
-    else if (typeof expected === 'boolean') actual = isTruthyDocValue(actualRaw);
-    else actual = String(actualRaw ?? '');
-    const equal = actual === expected;
+    let equal: boolean;
+    if (actualRaw === undefined || actualRaw === null) {
+      // Real JS/Frappe semantics: undefined/null is never loosely equal to
+      // a concrete literal — NOT even "" (`undefined == ""` is false in
+      // JS). Coercing an absent field to "" before comparing (the previous
+      // behavior) silently made `doc.field != ""` evaluate to FALSE for a
+      // field a row simply hasn't set yet, hiding fields ERPNext's own
+      // doctypes expect visible by default (e.g. Sales Order Item's `rate`,
+      // gated on `eval: doc.type != ""` — `type` is never actually present
+      // on the row, so real Frappe always shows it, but this evaluator was
+      // hiding it, making Rate look non-editable).
+      equal = false;
+    } else if (typeof expected === 'number') {
+      equal = Number(actualRaw) === expected;
+    } else if (typeof expected === 'boolean') {
+      equal = isTruthyDocValue(actualRaw) === expected;
+    } else {
+      equal = String(actualRaw) === expected;
+    }
     return op === '==' ? equal : !equal;
   }
 
