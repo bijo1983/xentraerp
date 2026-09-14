@@ -32,6 +32,7 @@ export interface CompiledField {
 export interface CompiledMeta {
   doctype: string;
   fields: CompiledField[];
+  is_submittable: boolean;
 }
 
 const FIELDTYPE_MAP: Record<string, ComponentType> = {
@@ -92,7 +93,7 @@ export function compileMeta(rawMeta: any): CompiledMeta {
       mandatory_depends_on: f.mandatory_depends_on,
     }));
 
-  return { doctype: rawMeta.name, fields };
+  return { doctype: rawMeta.name, fields, is_submittable: !!rawMeta.is_submittable };
 }
 
 // ---------------------------------------------------------------------------

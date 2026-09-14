@@ -66,6 +66,8 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [transitioning, setTransitioning] = useState<'submit' | 'cancel' | null>(null);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
 
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
@@ -159,11 +161,41 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     }
   };
 
+  // Submit/Cancel a saved submittable document. Frappe's REST resource API
+  // (used by handleSave above) never transitions docstatus — that requires
+  // calling frappe.client.submit/cancel explicitly, same as Frappe Desk
+  // does. Without this, every transaction created here stayed a Draft
+  // forever: no GL entries, no stock impact, and nothing downstream (a
+  // Delivery Note, a Purchase Invoice, ...) could properly reference it.
+  const runTransition = async (action: 'submit' | 'cancel') => {
+    if (!name) return;
+    setTransitioning(action);
+    setTransitionError(null);
+    try {
+      const res = await fetch(`/api/method/frappe.client.${action}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ doc: JSON.stringify({ ...doc, doctype, name }) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.exception || data?.message?.exception || data?.message || res.statusText);
+      const updated = data.message as Record<string, unknown>;
+      setDoc((prev) => ({ ...prev, ...updated }));
+      onSave?.(updated);
+    } catch (e) {
+      setTransitionError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setTransitioning(null);
+    }
+  };
+
   if (loading || docLoading) return <p className="text-muted-foreground p-4">Loading form…</p>;
   if (error) return <p className="text-destructive p-4">Error loading form: {error}</p>;
   if (docError) return <p className="text-destructive p-4">Error loading document: {docError}</p>;
   if (!schema) return null;
 
+  const docstatus = Number(doc.docstatus ?? 0);
   const tabs = buildTabs(schema.fields);
 
   return (
@@ -228,14 +260,36 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
             {saveError}
           </p>
         )}
+        {transitionError && (
+          <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+            {transitionError}
+          </p>
+        )}
 
         <div className="flex gap-2 pt-2">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : name ? 'Update' : 'Save'}
-          </Button>
+          {docstatus === 0 && (
+            <Button onClick={handleSave} disabled={saving || !!transitioning}>
+              {saving ? 'Saving…' : name ? 'Update' : 'Save'}
+            </Button>
+          )}
+          {schema.is_submittable && name && docstatus === 0 && (
+            <Button onClick={() => runTransition('submit')} disabled={saving || !!transitioning}>
+              {transitioning === 'submit' ? 'Submitting…' : 'Submit'}
+            </Button>
+          )}
+          {schema.is_submittable && name && docstatus === 1 && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => runTransition('cancel')}
+              disabled={!!transitioning}
+            >
+              {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
+            </Button>
+          )}
           {(onCancel || onClose) && (
-            <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving}>
-              Cancel
+            <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving || !!transitioning}>
+              Close
             </Button>
           )}
         </div>
