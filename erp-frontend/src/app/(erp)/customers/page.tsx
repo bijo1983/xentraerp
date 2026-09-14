@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,6 +11,7 @@ import {
 import { useFrappeList } from '@/hooks/use-frappe-list';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 interface CustomerRow {
   name: string;
@@ -21,6 +23,8 @@ interface CustomerRow {
 const columnHelper = createColumnHelper<CustomerRow>();
 
 export default function CustomersPage() {
+  const router = useRouter();
+  const tenantCode = useTenantCode();
   const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<CustomerRow>({
     doctype: 'Customer',
     fields: ['name', 'customer_name', 'customer_group', 'territory'],
@@ -42,7 +46,7 @@ export default function CustomersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Customers</h2>
-        <Button>New Customer</Button>
+        <Button onClick={() => router.push(withTenant('/app/Customer/new', tenantCode))}>New Customer</Button>
       </div>
       <Card>
         <CardHeader>

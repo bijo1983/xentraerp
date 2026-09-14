@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,6 +12,7 @@ import { useFrappeList } from '@/hooks/use-frappe-list';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 interface ItemRow {
   name: string;
@@ -23,6 +25,8 @@ interface ItemRow {
 const columnHelper = createColumnHelper<ItemRow>();
 
 export default function ItemsPage() {
+  const router = useRouter();
+  const tenantCode = useTenantCode();
   const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<ItemRow>({
     doctype: 'Item',
     fields: ['name', 'item_name', 'item_group', 'stock_uom', 'standard_rate'],
@@ -48,7 +52,7 @@ export default function ItemsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Items</h2>
-        <Button>New Item</Button>
+        <Button onClick={() => router.push(withTenant('/app/Item/new', tenantCode))}>New Item</Button>
       </div>
       <Card>
         <CardHeader>

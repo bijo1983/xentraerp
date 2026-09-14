@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,6 +12,7 @@ import { useFrappeList } from '@/hooks/use-frappe-list';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 interface SalesOrderRow {
   name: string;
@@ -23,6 +25,8 @@ interface SalesOrderRow {
 const columnHelper = createColumnHelper<SalesOrderRow>();
 
 export default function SalesPage() {
+  const router = useRouter();
+  const tenantCode = useTenantCode();
   const { data, loading, error, total, page, setPage, pageSize } = useFrappeList<SalesOrderRow>({
     doctype: 'Sales Order',
     fields: ['name', 'customer', 'transaction_date', 'grand_total', 'status'],
@@ -67,7 +71,7 @@ export default function SalesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Sales Orders</h2>
-        <Button>New Sales Order</Button>
+        <Button onClick={() => router.push(withTenant('/app/Sales%20Order/new', tenantCode))}>New Sales Order</Button>
       </div>
       <Card>
         <CardHeader>
