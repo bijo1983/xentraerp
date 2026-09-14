@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
-import { CompiledField, evalDependsOn, isChecked } from '@/lib/meta-compiler';
+import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
@@ -315,7 +315,7 @@ function renderField(
       return (
         <input
           type="checkbox"
-          checked={isChecked(value)}
+          checked={isTruthyDocValue(value)}
           disabled={readOnly}
           className="h-4 w-4"
           onChange={(e) => setField(f.fieldname, e.target.checked ? 1 : 0)}

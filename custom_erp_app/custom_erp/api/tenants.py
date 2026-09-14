@@ -27,6 +27,7 @@ TENANT_ADMIN_ROLES = [
 	"Accounts Manager",
 	"Stock User",
 	"Stock Manager",
+	"Item Manager",
 	"Manufacturing User",
 	"Manufacturing Manager",
 	"Projects User",

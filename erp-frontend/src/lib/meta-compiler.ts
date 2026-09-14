@@ -30,17 +30,6 @@ export interface CompiledField {
   mandatory_depends_on?: string;
 }
 
-// Frappe represents Check field values as 0/1, often as the *string* "0"/"1"
-// (every field default from getdoctype meta is a string, and saved doc
-// values can come back as strings too depending on the endpoint) — a plain
-// `!!value` treats the string "0" as truthy, since any non-empty string is
-// truthy in JS. That rendered every checkbox whose default is explicitly
-// "0" (e.g. Disabled) as pre-checked. Compare against the real 0/1 values
-// instead of relying on JS truthiness.
-export function isChecked(value: unknown): boolean {
-  return value === 1 || value === '1' || value === true;
-}
-
 export interface CompiledMeta {
   doctype: string;
   fields: CompiledField[];
@@ -144,7 +133,7 @@ function readDocField(doc: DocLike, field: string): unknown {
   return doc[field];
 }
 
-function isTruthyDocValue(v: unknown): boolean {
+export function isTruthyDocValue(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   if (typeof v === 'string') return v.trim() !== '' && v !== '0';
   if (typeof v === 'number') return v !== 0;
