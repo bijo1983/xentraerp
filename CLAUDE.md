@@ -351,6 +351,28 @@ changes.
   **Not yet backfilled for any tenant other than 197349** — if more
   tenants exist by the time this is read, re-run `reconfigure_tenant_
   defaults` for each (idempotent, safe) to pick up the fix.
+- **Fixed 2026-09-14**: reported as the Currency field dropdown "showing
+  down" (not visible) on a long Sales Order form, and Item search in
+  the transaction grid "doesn't filter". Same root cause in both:
+  `LinkField`'s suggestion dropdown used `position: 'fixed'` together
+  with `top: rect.bottom + window.scrollY` /
+  `left: rect.left + window.scrollX`. `getBoundingClientRect()` is
+  already viewport-relative, and so is `fixed` positioning — adding
+  `window.scrollY`/`scrollX` double-counts the scroll offset, so on a
+  form scrolled down any distance the dropdown rendered far below the
+  visible viewport. The backend search itself was always correct
+  (verified live — Item's `search_fields` includes `item_name`/
+  `description`, and `search_link` matched "Blue Pen" on the substring
+  "en"); the suggestions were just being rendered off-screen. Fixed by
+  dropping the scroll-offset addition. Also added a targeted smart-
+  defaults effect in `DynamicForm` (new records only) that fetches
+  Global Defaults once and fills `company`/`currency`/
+  `price_list_currency` (+ `selling_price_list`/`buying_price_list`
+  from Selling/Buying Settings, and a 1:1 conversion rate) for whichever
+  of those fields actually exist on the doctype and aren't already set
+  — these were blank on every new transaction because they're not in
+  the doctype's own field `default` metadata (Frappe Desk fills them
+  via a client script this generic form doesn't run).
 
 ## Incident log
 
