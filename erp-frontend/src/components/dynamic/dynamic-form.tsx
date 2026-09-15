@@ -15,6 +15,7 @@ import { AttachField } from '@/components/fields/attach-field';
 import { ChildTable } from './child-table';
 import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
+import { RecordSummary } from './record-summary';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Printer, PanelRight, Plus, ChevronDown, Loader2 } from 'lucide-react';
 
@@ -393,6 +394,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   return (
     <div className="flex items-start gap-4">
     <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
+      <RecordSummary fields={schema.fields} doc={doc} />
       {/* Tab bar */}
       <div className="flex gap-1 overflow-x-auto border-b bg-muted/30 px-2 pt-2">
         {tabs.map((tab, i) => (
@@ -532,7 +534,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           )}
         </div>
       </div>
-      {name && <PrintPanel doctype={doctype} name={name} open={printOpen} onOpenChange={setPrintOpen} />}
+      {name && <PrintPanel doctype={doctype} name={name} fields={schema.fields} open={printOpen} onOpenChange={setPrintOpen} />}
     </div>
     {name && drawerOpen && <RecordDrawer doctype={doctype} name={name} onClose={() => setDrawerOpen(false)} />}
     </div>

@@ -205,6 +205,32 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 		if country:
 			frappe.db.set_single_value("Global Defaults", "country", country)
 
+	# ERPNext's print engine (frappe.get_print, used by every "Print"
+	# button and the PDF download endpoint) draws the company header block
+	# on every printed document from whichever Letter Head has
+	# `is_default=1` -- normally created via the Setup Wizard, which we
+	# skip. Without one, `get_letter_head()` finds nothing and every
+	# printed Sales Order/Invoice/etc. renders with no company name/
+	# branding at the top at all -- found 2026-09-15 investigating a
+	# report that printed documents were missing "standard" information;
+	# tenant 197349 had zero Letter Head records. A plain text header (the
+	# company name) is enough to give every print a proper header; the
+	# tenant can still replace it with a real logo afterward via Setup >
+	# Letter Head. `before_insert` on this doctype unconditionally sets
+	# `source = "Image"`, but `validate()`'s `set_image()` only overwrites
+	# `content` when an `image` is actually attached -- with none attached
+	# it just warns and leaves our `content` HTML untouched, so this is
+	# safe without also uploading an image.
+	if company_name and not frappe.db.exists("Letter Head", company_name):
+		frappe.get_doc(
+			{
+				"doctype": "Letter Head",
+				"letter_head_name": company_name,
+				"content": f'<div style="text-align:center"><h2>{company_name}</h2></div>',
+				"is_default": 1,
+			}
+		).insert(ignore_permissions=True)
+
 	# Every transaction doctype's own validate() (get_item_details ->
 	# get_price_list_rate -> validate_conversion_rate) requires a selling/
 	# buying price list to exist and be set as the Selling/Buying Settings
@@ -274,6 +300,7 @@ def get_default_setup_status():
 		"time_zone_set": bool(frappe.db.get_single_value("System Settings", "time_zone")),
 		"price_list": bool(frappe.db.get_single_value("Selling Settings", "selling_price_list"))
 		and bool(frappe.db.get_single_value("Buying Settings", "buying_price_list")),
+		"letter_head": bool(frappe.db.get_value("Letter Head", {"is_default": 1})),
 	}
 
 

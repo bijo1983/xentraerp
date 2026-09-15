@@ -32,6 +32,7 @@ interface VersionRow {
 interface DashboardData {
   fieldname?: string;
   non_standard_fieldnames?: Record<string, string>;
+  internal_links?: Record<string, unknown>;
   transactions?: Array<{ label: string; items: string[] }>;
 }
 
@@ -39,6 +40,10 @@ interface LinkDef {
   link_doctype: string;
   link_fieldname: string;
   group: string;
+  /** True when the dashboard's `internal_links` marks this as a child-table
+   * back-reference with no single reliable count (see loadLinks below) —
+   * always shown as clickable instead of gated on a count. */
+  unknownCount?: boolean;
 }
 
 function parseVersionSummary(raw: string): string[] {
@@ -138,26 +143,41 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
       const dash = rawMeta?.__dashboard;
       const defaultField = dash?.fieldname;
       const overrides = dash?.non_standard_fieldnames || {};
+      // `internal_links` (e.g. Sales Order -> Quotation via each line's own
+      // `prevdoc_docname`) has no single reliable count per Frappe's own
+      // get_open_count below — always keep these clickable instead.
+      const internalLinks = new Set(Object.keys(dash?.internal_links || {}));
       const defs: LinkDef[] = [];
       for (const group of dash?.transactions || []) {
         for (const item of group.items) {
           const fieldname = overrides[item] || defaultField;
-          if (fieldname) defs.push({ link_doctype: item, link_fieldname: fieldname, group: group.label });
+          if (fieldname) defs.push({ link_doctype: item, link_fieldname: fieldname, group: group.label, unknownCount: internalLinks.has(item) });
         }
       }
       setLinks(defs);
-      const counts: Record<string, number> = {};
-      await Promise.all(
-        defs.map(async (l) => {
-          try {
-            const c = await frappe.getCount(l.link_doctype, { [l.link_fieldname]: name });
-            counts[l.link_doctype] = typeof c === 'number' ? c : 0;
-          } catch {
-            counts[l.link_doctype] = 0;
-          }
-        })
-      );
-      setLinkCounts(counts);
+      try {
+        // The exact endpoint Frappe Desk's own Connections tab uses for its
+        // count badges — deliberately NOT frappe.client.get_count, which
+        // queries the target doctype's own table directly with no
+        // child-table-filter resolution. Most real ERPNext connections
+        // (Sales Invoice/Delivery Note back to a Sales Order, Payment Entry
+        // back to an invoice, ...) store the back-reference on the child
+        // table, not a top-level field on the target doctype — get_count
+        // silently errored on the missing column and the catch below always
+        // set that count to 0, so a Sales Invoice created from a Sales
+        // Order never showed up as a connection. get_open_count already
+        // knows how to resolve this the same way Desk itself does.
+        const result = (await frappe.call('frappe.desk.notifications.get_open_count', { doctype, name })) as {
+          count?: Array<{ name: string; count?: number }>;
+        };
+        const counts: Record<string, number> = {};
+        for (const row of result?.count || []) {
+          if (typeof row.count === 'number') counts[row.name] = row.count;
+        }
+        setLinkCounts(counts);
+      } catch {
+        setLinkCounts({});
+      }
     } finally {
       setLinksLoading(false);
     }
@@ -313,6 +333,10 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
             ) : (
               links.map((l, i) => {
                 const count = linkCounts[l.link_doctype] ?? 0;
+                // internal_links doctypes never get a count back from
+                // get_open_count at all — treat as "may have rows",
+                // clickable either way, rather than always disabled at 0.
+                const clickable = l.unknownCount || count > 0;
                 const isOpen = expandedLink === l.link_doctype;
                 const showGroupHeader = i === 0 || links[i - 1].group !== l.group;
                 return (
@@ -324,21 +348,21 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
                     )}
                     <button
                       onClick={() => toggleLinkExpand(l.link_doctype, l.link_fieldname)}
-                      disabled={count === 0}
+                      disabled={!clickable}
                       className={cn(
                         'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-smooth',
-                        count > 0 ? 'hover:bg-accent/50' : 'opacity-50'
+                        clickable ? 'hover:bg-accent/50' : 'opacity-50'
                       )}
                     >
                       <span className="flex items-center gap-1.5">
-                        {count > 0 ? (
+                        {clickable ? (
                           isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
                         ) : (
                           <span className="w-3.5" />
                         )}
                         {l.link_doctype}
                       </span>
-                      <span className="text-xs text-muted-foreground">{count}</span>
+                      <span className="text-xs text-muted-foreground">{l.unknownCount ? '' : count}</span>
                     </button>
                     {isOpen && (
                       <div className="ml-5 space-y-0.5 border-l pl-2">
