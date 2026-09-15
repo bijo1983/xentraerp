@@ -28,6 +28,8 @@ export interface CompiledField {
   description?: string;
   depends_on?: string;
   mandatory_depends_on?: string;
+  /** Frappe's own flag for "show this field as a grid column" — used to keep ChildTable's compact columns limited to what ERPNext itself shows, instead of every field on the child doctype. */
+  in_list_view?: boolean;
 }
 
 export interface CompiledMeta {
@@ -81,7 +83,15 @@ export function compileMeta(rawMeta: any): CompiledMeta {
     .filter((f: any) => f.fieldname && f.fieldtype !== 'Column Break' && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Fold' && f.fieldtype !== 'Button')
     .map((f: any): CompiledField => ({
       fieldname: f.fieldname,
-      label: f.label || f.fieldname,
+      // Section/Tab Break fields routinely have NO label in the doctype's
+      // own meta (they're often pure layout dividers) — falling back to
+      // the raw fieldname (e.g. "section_break_31") for those, the same
+      // fallback a real data field needs so it always has *something*
+      // visible, instead surfaced fieldname-looking junk as literal tab/
+      // section titles once DynamicForm started promoting labeled
+      // sections to their own tabs. Only fall back for fields that are
+      // actually rendered as a labeled control.
+      label: f.label || (f.fieldtype === 'Section Break' || f.fieldtype === 'Tab Break' ? '' : f.fieldname),
       fieldtype: f.fieldtype,
       component: FIELDTYPE_MAP[f.fieldtype] || 'text',
       options: f.options,
@@ -92,6 +102,7 @@ export function compileMeta(rawMeta: any): CompiledMeta {
       description: f.description,
       depends_on: f.depends_on,
       mandatory_depends_on: f.mandatory_depends_on,
+      in_list_view: !!f.in_list_view,
     }));
 
   return { doctype: rawMeta.name, fields, is_submittable: !!rawMeta.is_submittable };
@@ -156,11 +167,25 @@ function evalAtom(atom: string, doc: DocLike): boolean | null {
     const [, field, op, rawVal] = m;
     const expected = coerceCmpValue(rawVal);
     const actualRaw = readDocField(doc, field);
-    let actual: string | number | boolean;
-    if (typeof expected === 'number') actual = Number(actualRaw ?? 0);
-    else if (typeof expected === 'boolean') actual = isTruthyDocValue(actualRaw);
-    else actual = String(actualRaw ?? '');
-    const equal = actual === expected;
+    let equal: boolean;
+    if (actualRaw === undefined || actualRaw === null) {
+      // Real JS/Frappe semantics: undefined/null is never loosely equal to
+      // a concrete literal — NOT even "" (`undefined == ""` is false in
+      // JS). Coercing an absent field to "" before comparing (the previous
+      // behavior) silently made `doc.field != ""` evaluate to FALSE for a
+      // field a row simply hasn't set yet, hiding fields ERPNext's own
+      // doctypes expect visible by default (e.g. Sales Order Item's `rate`,
+      // gated on `eval: doc.type != ""` — `type` is never actually present
+      // on the row, so real Frappe always shows it, but this evaluator was
+      // hiding it, making Rate look non-editable).
+      equal = false;
+    } else if (typeof expected === 'number') {
+      equal = Number(actualRaw) === expected;
+    } else if (typeof expected === 'boolean') {
+      equal = isTruthyDocValue(actualRaw) === expected;
+    } else {
+      equal = String(actualRaw) === expected;
+    }
     return op === '==' ? equal : !equal;
   }
 

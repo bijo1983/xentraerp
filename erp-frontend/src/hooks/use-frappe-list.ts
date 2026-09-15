@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { frappe } from '@/lib/frappe';
 
+// Frappe's REST API accepts filters either as a plain {field: value} dict
+// (implicit "=") or as a list of [field, operator, value] triples (for
+// "like", ">=", etc.) — support both shapes here.
+type FrappeFilters = Record<string, unknown> | Array<[string, string, unknown]>;
+
 interface UseFrappeListOptions {
   doctype: string;
   fields?: string[];
-  filters?: Record<string, unknown>;
+  filters?: FrappeFilters;
   orderBy?: string;
   pageSize?: number;
   enabled?: boolean;

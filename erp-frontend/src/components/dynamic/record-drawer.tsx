@@ -1,0 +1,365 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { X, MessageSquare, History, Link2, ChevronRight, ChevronDown, Send, Loader2 } from 'lucide-react';
+import { frappe } from '@/lib/frappe';
+import { formatDate, cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { useTenantCode, withTenant } from '@/lib/tenant';
+
+interface Props {
+  doctype: string;
+  name: string;
+  onClose: () => void;
+}
+
+type DrawerTab = 'comments' | 'activity' | 'connections';
+
+interface CommentRow {
+  name: string;
+  content: string;
+  owner: string;
+  creation: string;
+}
+
+interface VersionRow {
+  name: string;
+  owner: string;
+  creation: string;
+  data: string;
+}
+
+interface DashboardData {
+  fieldname?: string;
+  non_standard_fieldnames?: Record<string, string>;
+  transactions?: Array<{ label: string; items: string[] }>;
+}
+
+interface LinkDef {
+  link_doctype: string;
+  link_fieldname: string;
+  group: string;
+}
+
+function parseVersionSummary(raw: string): string[] {
+  try {
+    const d = JSON.parse(raw || '{}');
+    const lines: string[] = [];
+    if (Array.isArray(d.changed)) {
+      for (const [field, oldV, newV] of d.changed) {
+        lines.push(`${field}: ${oldV ?? '—'} → ${newV ?? '—'}`);
+      }
+    }
+    if (Array.isArray(d.row_changed) && d.row_changed.length) {
+      lines.push(`${d.row_changed.length} row change(s) in a child table`);
+    }
+    if (Array.isArray(d.added) && d.added.length) lines.push(`${d.added.length} row(s) added`);
+    if (Array.isArray(d.removed) && d.removed.length) lines.push(`${d.removed.length} row(s) removed`);
+    if (lines.length === 0 && d.creation) lines.push('Document created');
+    return lines;
+  } catch {
+    return [];
+  }
+}
+
+export function RecordDrawer({ doctype, name, onClose }: Props) {
+  const router = useRouter();
+  const tenantCode = useTenantCode();
+  const [tab, setTab] = useState<DrawerTab>('comments');
+
+  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [posting, setPosting] = useState(false);
+
+  const [versions, setVersions] = useState<VersionRow[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+
+  const [links, setLinks] = useState<LinkDef[]>([]);
+  const [linkCounts, setLinkCounts] = useState<Record<string, number>>({});
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [expandedLink, setExpandedLink] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Record<string, { name: string }[]>>({});
+
+  const loadComments = async () => {
+    setCommentsLoading(true);
+    try {
+      const rows = await frappe.getList('Comment', {
+        fields: JSON.stringify(['name', 'content', 'owner', 'creation']),
+        filters: JSON.stringify([
+          ['reference_doctype', '=', doctype],
+          ['reference_name', '=', name],
+          ['comment_type', '=', 'Comment'],
+        ]),
+        order_by: 'creation asc',
+        limit_page_length: 0,
+      });
+      setComments((Array.isArray(rows) ? rows : []) as CommentRow[]);
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  const loadVersions = async () => {
+    setVersionsLoading(true);
+    try {
+      const rows = await frappe.getList('Version', {
+        fields: JSON.stringify(['name', 'owner', 'creation', 'data']),
+        filters: JSON.stringify([
+          ['ref_doctype', '=', doctype],
+          ['docname', '=', name],
+        ]),
+        order_by: 'creation desc',
+        limit_page_length: 50,
+      });
+      setVersions((Array.isArray(rows) ? rows : []) as VersionRow[]);
+    } finally {
+      setVersionsLoading(false);
+    }
+  };
+
+  const loadLinks = async () => {
+    setLinksLoading(true);
+    try {
+      // The doctype's own `links` meta array is sparse (a handful of
+      // explicit Link-field-back-references) — the real "which documents
+      // reference this one" data ERPNext's own Connections tab shows comes
+      // from `__dashboard` (built server-side from each doctype's
+      // `<doctype>_dashboard.py get_data()`, e.g. Customer's dashboard
+      // groups Opportunity/Quotation/Sales Order/Delivery Note/Sales
+      // Invoice/Payment Entry/... under labeled categories with a default
+      // link fieldname plus per-doctype overrides for the odd one out
+      // like Quotation using `party_name` instead of `customer`).
+      const meta = await fetch(`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`, {
+        credentials: 'include',
+      }).then((r) => r.json());
+      const docs: Array<{ name?: string; __dashboard?: DashboardData }> = meta?.docs || [];
+      const rawMeta = docs.find((d) => d.name === doctype) || docs[0];
+      const dash = rawMeta?.__dashboard;
+      const defaultField = dash?.fieldname;
+      const overrides = dash?.non_standard_fieldnames || {};
+      const defs: LinkDef[] = [];
+      for (const group of dash?.transactions || []) {
+        for (const item of group.items) {
+          const fieldname = overrides[item] || defaultField;
+          if (fieldname) defs.push({ link_doctype: item, link_fieldname: fieldname, group: group.label });
+        }
+      }
+      setLinks(defs);
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        defs.map(async (l) => {
+          try {
+            const c = await frappe.getCount(l.link_doctype, { [l.link_fieldname]: name });
+            counts[l.link_doctype] = typeof c === 'number' ? c : 0;
+          } catch {
+            counts[l.link_doctype] = 0;
+          }
+        })
+      );
+      setLinkCounts(counts);
+    } finally {
+      setLinksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'comments' && comments.length === 0) loadComments();
+    if (tab === 'activity' && versions.length === 0) loadVersions();
+    if (tab === 'connections' && links.length === 0) loadLinks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, doctype, name]);
+
+  const postComment = async () => {
+    if (!newComment.trim()) return;
+    setPosting(true);
+    try {
+      await frappe.createDoc('Comment', {
+        comment_type: 'Comment',
+        reference_doctype: doctype,
+        reference_name: name,
+        content: newComment.trim(),
+      });
+      setNewComment('');
+      await loadComments();
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const toggleLinkExpand = async (linkDoctype: string, linkFieldname: string) => {
+    if (expandedLink === linkDoctype) {
+      setExpandedLink(null);
+      return;
+    }
+    setExpandedLink(linkDoctype);
+    if (!expandedRows[linkDoctype]) {
+      const rows = await frappe.getList(linkDoctype, {
+        fields: JSON.stringify(['name']),
+        filters: JSON.stringify([[linkFieldname, '=', name]]),
+        limit_page_length: 20,
+        order_by: 'modified desc',
+      });
+      setExpandedRows((prev) => ({ ...prev, [linkDoctype]: (Array.isArray(rows) ? rows : []) as { name: string }[] }));
+    }
+  };
+
+  return (
+    <div className="sticky top-4 flex h-[calc(100vh-6rem)] w-80 shrink-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
+      <div className="flex items-center justify-between border-b px-3 py-2.5">
+        <div className="flex gap-1">
+          {(
+            [
+              { key: 'comments', label: 'Comments', icon: MessageSquare },
+              { key: 'activity', label: 'Activity', icon: History },
+              { key: 'connections', label: 'Connections', icon: Link2 },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              title={t.label}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-smooth transition-colors',
+                tab === t.key ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+              )}
+            >
+              <t.icon className="h-3.5 w-3.5" />
+            </button>
+          ))}
+        </div>
+        <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3">
+        {tab === 'comments' && (
+          <div className="space-y-3">
+            {commentsLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No comments yet</p>
+            ) : (
+              comments.map((c) => (
+                <div key={c.name} className="rounded-md border bg-muted/30 p-2.5 text-sm">
+                  <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{c.owner}</span>
+                    <span>{formatDate(c.creation)}</span>
+                  </div>
+                  <p className="whitespace-pre-wrap">{c.content}</p>
+                </div>
+              ))
+            )}
+            <div className="sticky bottom-0 space-y-2 border-t bg-card pt-2">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Write a comment…"
+                rows={2}
+                className="w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <Button size="sm" className="w-full gap-1.5" onClick={postComment} disabled={posting || !newComment.trim()}>
+                {posting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Comment
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'activity' && (
+          <div className="space-y-2">
+            {versionsLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : versions.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No activity recorded</p>
+            ) : (
+              versions.map((v) => {
+                const lines = parseVersionSummary(v.data);
+                return (
+                  <div key={v.name} className="rounded-md border p-2.5 text-sm">
+                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{v.owner}</span>
+                      <span>{formatDate(v.creation)}</span>
+                    </div>
+                    {lines.length > 0 ? (
+                      <ul className="space-y-0.5 text-xs text-muted-foreground">
+                        {lines.map((l, i) => (
+                          <li key={i}>{l}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Updated</p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {tab === 'connections' && (
+          <div className="space-y-1">
+            {linksLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : links.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No linked documents</p>
+            ) : (
+              links.map((l, i) => {
+                const count = linkCounts[l.link_doctype] ?? 0;
+                const isOpen = expandedLink === l.link_doctype;
+                const showGroupHeader = i === 0 || links[i - 1].group !== l.group;
+                return (
+                  <div key={l.link_doctype}>
+                    {showGroupHeader && (
+                      <p className="mb-1 mt-3 px-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground first:mt-0">
+                        {l.group}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => toggleLinkExpand(l.link_doctype, l.link_fieldname)}
+                      disabled={count === 0}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-smooth',
+                        count > 0 ? 'hover:bg-accent/50' : 'opacity-50'
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {count > 0 ? (
+                          isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
+                        ) : (
+                          <span className="w-3.5" />
+                        )}
+                        {l.link_doctype}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{count}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="ml-5 space-y-0.5 border-l pl-2">
+                        {(expandedRows[l.link_doctype] || []).map((r) => (
+                          <button
+                            key={r.name}
+                            onClick={() => router.push(withTenant(`/app/${encodeURIComponent(l.link_doctype)}/${encodeURIComponent(r.name)}`, tenantCode))}
+                            className="block w-full truncate rounded px-1.5 py-1 text-left text-xs text-primary hover:bg-accent/50 hover:underline"
+                          >
+                            {r.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

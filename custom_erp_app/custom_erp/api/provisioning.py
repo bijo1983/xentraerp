@@ -205,6 +205,41 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 		if country:
 			frappe.db.set_single_value("Global Defaults", "country", country)
 
+	# Every transaction doctype's own validate() (get_item_details ->
+	# get_price_list_rate -> validate_conversion_rate) requires a selling/
+	# buying price list to exist and be set as the Selling/Buying Settings
+	# default — normally created by the Setup Wizard, which we skip. Without
+	# this, saving ANY Sales/Purchase Order, Quotation, Invoice etc. fails
+	# with "Exchange Rate is mandatory" or a MandatoryError on
+	# selling_price_list, on a tenant that otherwise looks fully set up
+	# (found 2026-09-14 testing tenant 197349, which had zero Price List
+	# records at all). Idempotent, like the rest of this function.
+	price_list_currency = currency or frappe.db.get_single_value("Global Defaults", "default_currency") or "USD"
+	if not frappe.db.exists("Price List", "Standard Selling"):
+		frappe.get_doc(
+			{
+				"doctype": "Price List",
+				"price_list_name": "Standard Selling",
+				"currency": price_list_currency,
+				"selling": 1,
+				"enabled": 1,
+			}
+		).insert(ignore_permissions=True)
+	if not frappe.db.exists("Price List", "Standard Buying"):
+		frappe.get_doc(
+			{
+				"doctype": "Price List",
+				"price_list_name": "Standard Buying",
+				"currency": price_list_currency,
+				"buying": 1,
+				"enabled": 1,
+			}
+		).insert(ignore_permissions=True)
+	if not frappe.db.get_single_value("Selling Settings", "selling_price_list"):
+		frappe.db.set_single_value("Selling Settings", "selling_price_list", "Standard Selling")
+	if not frappe.db.get_single_value("Buying Settings", "buying_price_list"):
+		frappe.db.set_single_value("Buying Settings", "buying_price_list", "Standard Buying")
+
 	frappe.db.commit()
 
 
@@ -237,6 +272,8 @@ def get_default_setup_status():
 		"cost_center": frappe.db.count("Cost Center") > 0,
 		"currency_set": bool(frappe.db.get_single_value("Global Defaults", "default_currency")),
 		"time_zone_set": bool(frappe.db.get_single_value("System Settings", "time_zone")),
+		"price_list": bool(frappe.db.get_single_value("Selling Settings", "selling_price_list"))
+		and bool(frappe.db.get_single_value("Buying Settings", "buying_price_list")),
 	}
 
 
