@@ -56,7 +56,37 @@ function buildTabs(fields: CompiledField[]): Tab[] {
   if (currentSection.fields.length) currentTab.sections.push(currentSection);
   if (currentTab.sections.length) tabs.push(currentTab);
 
-  return tabs.length ? tabs : [{ label: 'Details', sections: [{ label: '', fields: [] }] }];
+  const rawTabs = tabs.length ? tabs : [{ label: 'Details', sections: [{ label: '', fields: [] }] }];
+  return consolidateTabs(rawTabs);
+}
+
+// ERPNext transaction doctypes routinely define far more Tab Break fields
+// than fit in a tab bar without horizontal scrolling (Sales Order alone has
+// around a dozen — Details, Accounting Dimensions, Currency and Price List,
+// Items, Taxes, Totals, Additional Discount, Tax Breakup, Packing List,
+// Pricing Rules, ...). Frappe Desk's own tab bar has an overflow affordance
+// for this; this generic renderer doesn't, so instead of a scrolling wall
+// of tabs, keep only the ones that matter for day-to-day data entry — the
+// first tab, and any tab holding a child table (the actual working data:
+// Items, Taxes and Charges, Packing List, ...) — and fold every other
+// tab's sections into one trailing "More Details" tab. Nothing is removed,
+// it's just not a dedicated top-level tab anymore.
+function consolidateTabs(rawTabs: Tab[]): Tab[] {
+  const hasTable = (tab: Tab) => tab.sections.some((s) => s.fields.some((f) => f.component === 'table'));
+
+  const primary: Tab[] = [];
+  const secondary: Tab[] = [];
+  rawTabs.forEach((tab, i) => {
+    if (i === 0 || hasTable(tab)) primary.push(tab);
+    else secondary.push(tab);
+  });
+
+  if (!secondary.length) return primary;
+
+  const moreSections: Section[] = secondary.flatMap((tab) =>
+    tab.sections.map((section) => ({ ...section, label: section.label || tab.label }))
+  );
+  return [...primary, { label: 'More Details', sections: moreSections }];
 }
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
