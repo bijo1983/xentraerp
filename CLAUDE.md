@@ -4,6 +4,25 @@ Persistent notes about the production server so future sessions don't have
 to rediscover this from scratch. Update this file whenever server topology
 changes.
 
+## POS app (feature/pos-app branch, PR #4) — action needed on deploy
+
+The new `pos.xentraerp.net` app (Vue 3, `pos-frontend/`) gates its login on
+the tenant's subscription via `custom_erp.api.pos._tenant_has_module`, which
+checks `XentraERP Tenant.enabled_modules` on the **control-plane site** by
+making a plain internal HTTP call from whichever tenant site the login runs
+on (Frappe sites are separate databases — there's no direct cross-site
+query). **This check silently does nothing (fails open) until
+`XENTRAERP_CONTROL_PLANE_HOST` is set** (in `common_site_config.json`/
+`site_config.json`, or as an env var for the bench worker process) to the
+control-plane site's actual hostname. Until then, every tenant can use POS
+regardless of subscription. Confirm which site is actually the control
+plane in this deployment (CLAUDE.md's "Architecture decisions" section
+below says `erp.badmintonbooking.com` — verify before setting this) before
+configuring it. Same fail-open error gets logged via `frappe.log_error` on
+every login attempt until it's set, so `bench --site <x> execute
+frappe.get_all --args '["Error Log"]'` (or the admin portal, once it reads
+error logs) will show it happening.
+
 ## Production server
 
 - Host: `ubuntu-s-2vcpu-4gd-innovgicit` (DigitalOcean droplet, 2 vCPU / 4GB)

@@ -12,6 +12,7 @@ never across tenants.
 """
 
 import hashlib
+import os
 
 import frappe
 from frappe.utils import cint
@@ -19,10 +20,65 @@ from frappe.utils import cint
 PIN_MIN_LENGTH = 4
 MAX_FAILED_ATTEMPTS = 8
 LOCKOUT_MINUTES = 15
+POS_MODULE_CODE = "pos"
 
 
 def _hash_pin(pin: str) -> str:
 	return hashlib.sha256(pin.encode()).hexdigest()
+
+
+def _tenant_has_module(module_code: str) -> bool:
+	"""Ask the control-plane site whether this tenant's subscription
+	includes `module_code`. custom_erp.api.tenants.get_enabled_modules
+	lives on the control-plane site's database — a different site/database
+	entirely from wherever this function runs — so this is a plain
+	internal HTTP call to the control-plane site (same box, loopback),
+	not a cross-site frappe.get_doc (in-process site-switching has already
+	proven unreliable elsewhere in this app, see provisioning.py).
+
+	FAILS OPEN (returns True) whenever the check can't actually be
+	performed — no control-plane host configured, or the request fails —
+	because a broken check should never silently lock every tenant out of
+	login. It still logs an error either way, so "this isn't actually
+	enforced yet" is visible in the error log rather than silently true.
+
+	To activate this gate, set XENTRAERP_CONTROL_PLANE_HOST (in
+	site_config.json or as an env var for the bench worker process) to
+	the control-plane site's hostname (e.g. erp.badmintonbooking.com per
+	CLAUDE.md, if that's still the control-plane site in this deployment —
+	confirm before setting it). Until that's set, POS (and any future
+	module gated the same way) is NOT actually restricted by subscription,
+	regardless of enabled_modules — every tenant can use it.
+	"""
+	control_plane_host = frappe.conf.get("control_plane_host") or os.environ.get("XENTRAERP_CONTROL_PLANE_HOST")
+	if not control_plane_host:
+		frappe.log_error(
+			title="XentraERP module entitlement check not configured",
+			message=(
+				f"Checked whether this tenant has the '{module_code}' module, but "
+				"XENTRAERP_CONTROL_PLANE_HOST isn't set — entitlement is NOT "
+				"enforced; every tenant can use this module regardless of "
+				"subscription until this is configured."
+			),
+		)
+		return True
+
+	tenant_code = frappe.local.site.split(".")[0]
+	try:
+		import requests
+
+		resp = requests.get(
+			"http://127.0.0.1:8001/api/method/custom_erp.api.tenants.get_enabled_modules",
+			params={"tenant_code": tenant_code},
+			headers={"Host": control_plane_host},
+			timeout=3,
+		)
+		resp.raise_for_status()
+		enabled = resp.json().get("message") or []
+		return module_code in enabled
+	except Exception:
+		frappe.log_error(title="XentraERP module entitlement check failed")
+		return True
 
 
 def _throttle_key() -> str:
@@ -56,6 +112,9 @@ def _clear_throttle():
 @frappe.whitelist(allow_guest=True)
 def pin_login(pin: str):
 	"""Log in whichever active cashier this PIN belongs to, on this site."""
+	if not _tenant_has_module(POS_MODULE_CODE):
+		frappe.throw("The Point of Sale module isn't included in this organization's current plan.")
+
 	_check_not_locked_out()
 
 	pin = (pin or "").strip()

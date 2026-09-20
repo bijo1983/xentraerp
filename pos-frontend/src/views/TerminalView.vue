@@ -2,7 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { usePrinterStore } from '@/stores/printer'
 import { api } from '@/lib/api'
+import type { ReceiptData } from '@/lib/receipt'
 
 interface Item {
   name: string
@@ -34,9 +36,14 @@ const selectedPayment = ref('')
 const charging = ref(false)
 const chargeError = ref<string | null>(null)
 const lastInvoice = ref<string | null>(null)
+const lastReceipt = ref<ReceiptData | null>(null)
+const printerSettingsOpen = ref(false)
+
+const printer = usePrinterStore()
 
 onMounted(async () => {
   selectedPayment.value = profile.value.payment_methods[0] || ''
+  printer.tryReconnect()
   try {
     items.value = await api.getList<Item>('Item', {
       fields: ['name', 'item_name', 'item_group', 'standard_rate'],
@@ -141,11 +148,32 @@ async function charge() {
     })
 
     lastInvoice.value = submitted?.name || draft.name
+    lastReceipt.value = {
+      orgName: auth.orgName || profile.value.company,
+      posProfile: profile.value.name,
+      invoiceName: lastInvoice.value,
+      cashier: auth.user?.full_name || '',
+      timestamp: new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
+      currency: profile.value.currency,
+      lines: cartLines.value.map((l) => ({ name: l.item_name, qty: l.qty, rate: l.rate, amount: l.rate * l.qty })),
+      total: draft.grand_total,
+      paymentMethod: selectedPayment.value,
+    }
     cart.value = {}
+    await printLastReceipt()
   } catch (err) {
     chargeError.value = err instanceof Error ? err.message : 'Could not complete this sale'
   } finally {
     charging.value = false
+  }
+}
+
+async function printLastReceipt() {
+  if (!lastReceipt.value) return
+  try {
+    await printer.printReceipt(lastReceipt.value)
+  } catch (err) {
+    chargeError.value = err instanceof Error ? err.message : 'Sale completed, but the receipt failed to print'
   }
 }
 
@@ -169,10 +197,46 @@ async function signOut() {
           <span class="icn">⌕</span>
           <input v-model="search" type="text" placeholder="Search items…" />
         </div>
+        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="printerSettingsOpen = !printerSettingsOpen">
+          🖨️ Printer
+        </button>
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="switchRegister">
           Switch register
         </button>
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="signOut">Sign out</button>
+      </div>
+
+      <div v-if="printerSettingsOpen" style="padding: 14px 22px; border-bottom: 1px solid var(--border-soft); background: var(--surface)">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <span style="font-size: 12.5px; color: var(--text-muted)">Print via:</span>
+          <button
+            class="cat-chip"
+            :class="{ active: printer.method === 'browser' }"
+            @click="printer.setMethod('browser')"
+          >
+            Browser (network / AirPrint)
+          </button>
+          <button
+            class="cat-chip"
+            :class="{ active: printer.method === 'bluetooth' }"
+            @click="printer.setMethod('bluetooth')"
+          >
+            Bluetooth thermal printer
+          </button>
+          <button
+            v-if="printer.method === 'bluetooth'"
+            class="btn btn-ghost"
+            style="padding: 7px 12px; font-size: 12.5px"
+            :disabled="printer.connecting"
+            @click="printer.connectBluetoothPrinter()"
+          >
+            {{ printer.connected ? `Connected: ${printer.connected.device.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
+          </button>
+        </div>
+        <p v-if="printer.method === 'bluetooth' && !printer.bluetoothSupported" style="margin: 8px 0 0; font-size: 11.5px; color: var(--warning)">
+          This browser doesn't support Bluetooth printing — use Chrome or Edge (not Safari).
+        </p>
+        <p v-if="printer.error" style="margin: 8px 0 0; font-size: 11.5px; color: var(--danger)">{{ printer.error }}</p>
       </div>
 
       <div class="cat-rail">
@@ -246,8 +310,9 @@ async function signOut() {
       </div>
 
       <p v-if="chargeError" class="error-box" style="margin: 0 20px 12px">{{ chargeError }}</p>
-      <p v-if="lastInvoice" style="margin: 0 20px 12px; color: var(--success); font-size: 13px">
-        Sale complete — {{ lastInvoice }}
+      <p v-if="lastInvoice" style="margin: 0 20px 12px; color: var(--success); font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span>Sale complete — {{ lastInvoice }}</span>
+        <button class="btn btn-ghost" style="padding: 5px 10px; font-size: 11.5px" @click="printLastReceipt">Print again</button>
       </p>
 
       <button

@@ -192,6 +192,29 @@ def reject_tenant(tenant_name: str, reason: str | None = None):
 	return {"status": tenant.status}
 
 
+@frappe.whitelist(allow_guest=True)
+def get_enabled_modules(tenant_code: str):
+	"""Which module codes this tenant's subscription includes — read from
+	the control-plane site's own XentraERP Tenant record.
+
+	Guest-accessible for the same reason tenant_lookup/list_countries are:
+	this is called as a server-to-server request from a TENANT's own site
+	(see custom_erp.api.pos._tenant_has_module) — that request carries no
+	browser session/cookie, since it's a plain internal HTTP call between
+	Frappe sites on the same box, not a browser request. Only exposes the
+	module code list for the given tenant code, nothing else.
+	"""
+	tenant = frappe.get_all(
+		"XentraERP Tenant",
+		filters={"tenant_code": tenant_code},
+		fields=["enabled_modules", "status"],
+		limit_page_length=1,
+	)
+	if not tenant or tenant[0].status not in ("Trial", "Active"):
+		return []
+	return [m for m in (tenant[0].enabled_modules or "").split(",") if m]
+
+
 @frappe.whitelist()
 def tenant_stats():
 	"""Aggregate counts for the admin dashboard."""
