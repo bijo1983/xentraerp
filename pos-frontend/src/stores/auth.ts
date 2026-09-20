@@ -15,6 +15,7 @@ export interface POSProfileSummary {
   currency: string
   customer: string | null
   payment_methods: string[]
+  selling_price_list: string | null
 }
 
 interface AuthState {

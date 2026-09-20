@@ -73,8 +73,28 @@ async function createDoc<T = Record<string, unknown>>(doctype: string, doc: Reco
   return data.data
 }
 
+// A child table field (e.g. POS Invoice's `payments`) isn't a plain
+// column — frappe.client.set_value delegates to a database field update
+// and can't persist it. A real document update (PUT), the same REST path
+// createDoc/handleSave already use elsewhere in this app, goes through
+// the document's normal set()/append() machinery and does.
+async function updateDoc<T = Record<string, unknown>>(
+  doctype: string,
+  name: string,
+  patch: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(`/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  const data = await handle<{ data: T }>(res)
+  return data.data
+}
+
 async function logout(): Promise<void> {
   await call('logout')
 }
 
-export const api = { setTenantCookie, call, getList, getDoc, createDoc, getLoggedUser, logout }
+export const api = { setTenantCookie, call, getList, getDoc, createDoc, updateDoc, getLoggedUser, logout }

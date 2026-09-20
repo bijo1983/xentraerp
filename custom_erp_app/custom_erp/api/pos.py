@@ -179,6 +179,20 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None):
 		frappe.throw(f"No such user: {user}")
 
 	pin_hash = _hash_pin(pin)
+
+	# Only `user` is unique on this doctype — nothing stops two cashiers
+	# from ending up with the same PIN otherwise. pin_login's lookup takes
+	# the first match, so a collision would let one cashier's PIN
+	# authenticate as whichever other cashier happens to sort first,
+	# misattributing their sales.
+	collision = frappe.get_all(
+		"XentraERP POS PIN",
+		filters={"pin_hash": pin_hash, "active": 1, "user": ["!=", user]},
+		limit_page_length=1,
+	)
+	if collision:
+		frappe.throw("This PIN is already in use by another cashier. Choose a different one.")
+
 	if frappe.db.exists("XentraERP POS PIN", user):
 		doc = frappe.get_doc("XentraERP POS PIN", user)
 		doc.pin_hash = pin_hash
@@ -201,6 +215,31 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None):
 	return {"success": True}
 
 
+def validate_pos_invoice_profile(doc, method=None):
+	"""doc_events validate hook on POS Invoice (see hooks.py): if the
+	CURRENT session user is a PIN-restricted cashier, reject saving a POS
+	Invoice against any other POS Profile.
+
+	This has to live here, not just in the frontend's switchRegister() —
+	clearing client-side Pinia state doesn't stop a request straight
+	against the API from naming a different pos_profile, and the register
+	picker's own auto-select is a convenience, not a security boundary.
+	Runs for every save regardless of how it was made (REST, Desk, this
+	app, anything) since it's a validate hook, not app-specific code.
+
+	Only restricts a user who actually has an active PIN with a
+	pos_profile restriction set — an admin/back-office user creating a
+	POS Invoice directly (no PIN record at all) is unaffected.
+	"""
+	restriction = frappe.db.get_value(
+		"XentraERP POS PIN",
+		{"user": frappe.session.user, "active": 1},
+		"pos_profile",
+	)
+	if restriction and doc.pos_profile != restriction:
+		frappe.throw(f"Your PIN is restricted to the '{restriction}' register — you can't post against a different one.")
+
+
 @frappe.whitelist()
 def list_pos_profiles():
 	"""POS Profiles available on this tenant's site, for the register-select
@@ -211,7 +250,7 @@ def list_pos_profiles():
 	profiles = frappe.get_all(
 		"POS Profile",
 		filters={"disabled": 0},
-		fields=["name", "company", "currency", "warehouse", "customer"],
+		fields=["name", "company", "currency", "warehouse", "customer", "selling_price_list"],
 	)
 	for profile in profiles:
 		payments = frappe.get_all(

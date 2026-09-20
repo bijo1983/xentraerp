@@ -26,6 +26,15 @@ const auth = useAuthStore()
 const profile = computed(() => auth.posProfile!)
 
 const items = ref<Item[]>([])
+// item_code -> rate from the POS Profile's actual configured selling price
+// list. A tenant that prices differently per price list (common — "Retail"
+// vs "Wholesale") would otherwise get standard_rate on every sale
+// regardless of which register/price list is in effect. Doesn't cover
+// customer-specific pricing or quantity-break Pricing Rules — a documented
+// simplification, same as the item-detail auto-populate elsewhere in this
+// codebase; the base price list rate is still far more correct than a
+// single global standard_rate.
+const priceListRates = ref<Record<string, number>>({})
 const loadingItems = ref(true)
 const loadError = ref<string | null>(null)
 const search = ref('')
@@ -53,12 +62,30 @@ onMounted(async () => {
       ],
       limit_page_length: 200,
     })
+
+    if (profile.value.selling_price_list) {
+      const prices = await api.getList<{ item_code: string; price_list_rate: number }>('Item Price', {
+        fields: ['item_code', 'price_list_rate'],
+        filters: [
+          ['price_list', '=', profile.value.selling_price_list],
+          ['selling', '=', 1],
+        ],
+        limit_page_length: 500,
+      })
+      const map: Record<string, number> = {}
+      for (const p of prices) map[p.item_code] = p.price_list_rate
+      priceListRates.value = map
+    }
   } catch (err) {
     loadError.value = err instanceof Error ? err.message : 'Could not load items'
   } finally {
     loadingItems.value = false
   }
 })
+
+function rateFor(it: Item): number {
+  return priceListRates.value[it.name] ?? it.standard_rate ?? 0
+}
 
 const groups = computed(() => {
   const seen = new Set<string>()
@@ -96,7 +123,7 @@ function addItem(it: Item) {
       item_code: it.name,
       item_name: it.item_name,
       item_group: it.item_group,
-      rate: it.standard_rate || 0,
+      rate: rateFor(it),
       qty: 1,
     }
   }
@@ -136,11 +163,12 @@ async function charge() {
       items: cartLines.value.map((l) => ({ item_code: l.item_code, qty: l.qty, rate: l.rate })),
     })
 
-    const paid = await api.call<{ name: string }>('frappe.client.set_value', {
-      doctype: 'POS Invoice',
-      name: draft.name,
-      fieldname: 'payments',
-      value: [{ mode_of_payment: selectedPayment.value, amount: draft.grand_total }],
+    // payments is a child table, not a plain column — frappe.client.set_value
+    // delegates to a database field update and can't persist it. A real
+    // document update goes through the doc's own set()/append() machinery
+    // and does.
+    const paid = await api.updateDoc<{ name: string }>('POS Invoice', draft.name, {
+      payments: [{ mode_of_payment: selectedPayment.value, amount: draft.grand_total }],
     })
 
     const submitted = await api.call<{ name: string }>('frappe.client.submit', {
@@ -256,7 +284,7 @@ async function signOut() {
           <div class="cat-tag">{{ it.item_group }}</div>
           <div>
             <div class="nm">{{ it.item_name }}</div>
-            <div class="pr tabular">{{ money(it.standard_rate || 0) }}</div>
+            <div class="pr tabular">{{ money(rateFor(it)) }}</div>
           </div>
         </button>
       </div>
