@@ -23,5 +23,10 @@ doc_events = {
         # Frappe's document.py _validate_links patch also handles this)
         "validate": "custom_erp.api.utils.replace_user_placeholders",
         "before_save": "custom_erp.api.utils.replace_user_placeholders",
-    }
+    },
+    "POS Invoice": {
+        # A PIN restricted to one register must actually be enforced
+        # server-side, not just steered client-side by the POS app.
+        "validate": "custom_erp.api.pos.validate_pos_invoice_profile",
+    },
 }
