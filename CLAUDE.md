@@ -608,9 +608,32 @@ error logs) will show it happening.
 - **Module gate**: `common_site_config.json` has `control_plane_host = erp.badmintonbooking.com`; `pin_login` asks the
   control plane whether the tenant's `enabled_modules` includes `pos`. It fails OPEN (and logs) if the control plane is
   unreachable, by design. `pos` is in tenant 197349's list.
+- **Checkout document (setting `checkout_document`)**: `POS Invoice` (default — one submitted POS Invoice, must be
+  paid in full) or `Draft Invoice + Receipt` (F&B `close_bill` creates a *Draft Sales Invoice*; on payment it is
+  submitted and one Payment Entry receipt per payment leg is created against it, non-cash legs first so change comes out
+  of cash). ERPNext can only attach a receipt to a *submitted Sales Invoice*, never to a Draft or a POS Invoice — that is
+  why the draft is submitted at completion. **Partial payment** (`allow_partial=1`, draft mode only): invoice is
+  submitted, shows Partly Paid (due_date is +30 days so it doesn't flip to Overdue), the order becomes `Part Paid`
+  (table stays occupied, items locked, can't be cancelled) and is finished by `bill_order` again / `settle_invoice`
+  (retail) — `list_open_balances` is the pending list. Reopening a closed check discards its draft.
+- **Locations** (`XentraERP POS Location`: code, cost centre, warehouse, registers): each location's invoices, POS
+  invoices and receipts get their own naming series (`<CODE>-INV-.YYYY.-`, `-POS-`, `-RCT-`), added to the doctypes'
+  `naming_series` options via Property Setter on first use (Frappe rejects a series that isn't an option). The
+  location's cost centre/warehouse override the register's. Location is stamped on shift/order/KOT/tender; tables can
+  belong to a location and each location has its own kitchen; the EOD report can filter/break down by location. A
+  register belongs to at most one location; no locations = standard ERPNext numbering. Disabled location = fallback.
+- **Staff & roles**: `POS Cashier` role (created on demand, READ-only on Item/Item Price/Item Group/POS Profile/Mode of
+  Payment/Customer/Price List/Currency — what the POS screens read over REST; everything that writes goes through
+  server methods). `create_pos_user` / `set_pin` (gives the role) / `set_pin_active` / `list_pos_users`, all
+  System-Manager-only, surfaced in the POS app under Settings → Staff & PINs. Administrators' PINs don't get the role.
+- **Gotchas found while building this**: `default` is a reserved SQL word (the original `list_pos_profiles`
+  `order_by="default desc"` crashed as soon as a register existed — backtick it); a document whose owner is changed in
+  the DB but not in memory can't be submitted ("Value cannot be changed for Created By"); ERPNext regenerates Payment
+  Entry remarks unless `custom_remarks=1`; a POS-created invoice built under the elevated scope must be re-owned to the
+  cashier (done) or reports attribute sales to Administrator.
 - Not built: cash pay-in/pay-out/drops, cash-only float transfers between shifts, per-tender refunds UI, printing a KOT
   to a kitchen printer (KOTs show on the kitchen screen), customer-specific pricing rules at the POS.
-- Tests: `scripts/pos-checks/` (see README there). The UI screens were type-checked and built, and every API they call
+- Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), all rolled back, plus `e2e_http.py` (64, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after). The UI screens were type-checked and built, and every API they call
   is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
 
 ## Incident log

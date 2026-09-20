@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePrinterStore } from '@/stores/printer'
+import { usePosStore } from '@/stores/pos'
 import { api } from '@/lib/api'
 import PayDialog from '@/components/PayDialog.vue'
 import type { ReceiptData } from '@/lib/receipt'
@@ -25,6 +26,8 @@ interface Order {
   guests: number
   total: number
   invoice: string | null
+  draft_invoice?: string | null
+  balance?: number
   bill_closed: number
   items: Line[]
 }
@@ -51,6 +54,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const printer = usePrinterStore()
+const pos = usePosStore()
 const profile = computed(() => auth.posProfile!)
 
 const order = ref<Order | null>(null)
@@ -76,7 +80,9 @@ const transferTarget = ref('')
 
 const money = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: profile.value.currency }).format(n)
 const orderId = computed(() => String(route.params.id))
-const locked = computed(() => !!order.value?.bill_closed)
+const partPaid = computed(() => order.value?.status === 'Part Paid')
+// A closed check, or one that already has a posted invoice + receipts, can't be edited.
+const locked = computed(() => !!order.value?.bill_closed || partPaid.value)
 
 function fail(e: unknown) {
   error.value = e instanceof Error ? e.message : String(e)
@@ -84,10 +90,10 @@ function fail(e: unknown) {
 
 async function loadOrder() {
   order.value = await api.call<Order>(FNB + 'get_order', { order: orderId.value })
-  if (order.value.status !== 'Open') router.replace('/floor')
+  if (order.value.status !== 'Open' && order.value.status !== 'Part Paid') router.replace('/floor')
 }
 async function loadFloor() {
-  floor.value = await api.call<FloorTable[]>(FNB + 'list_tables')
+  floor.value = await api.call<FloorTable[]>(FNB + 'list_tables', { pos_profile: profile.value.name })
 }
 
 onMounted(async () => {
@@ -221,7 +227,7 @@ const startPay = () =>
     paying.value = true
   })
 
-async function pay(payments: { mode_of_payment: string; currency: string; tendered: number }[]) {
+async function pay(payments: { mode_of_payment: string; currency: string; tendered: number }[], partial = false) {
   if (!order.value) return
   busy.value = true
   payError.value = null
@@ -230,9 +236,11 @@ async function pay(payments: { mode_of_payment: string; currency: string; tender
       invoice: string
       total: number
       change: number
+      partial?: boolean
+      balance?: number
       payments: { mode_of_payment: string; currency: string; tendered: number }[]
       lines: { name: string; qty: number; rate: number; amount: number }[]
-    }>(FNB + 'bill_order', { order: order.value.name, payments: JSON.stringify(payments) })
+    }>(FNB + 'bill_order', { order: order.value.name, payments: JSON.stringify(payments), allow_partial: partial ? 1 : 0 })
     paying.value = false
     const receipt: ReceiptData = {
       orgName: auth.orgName || profile.value.company,
@@ -247,6 +255,12 @@ async function pay(payments: { mode_of_payment: string; currency: string; tender
     }
     printer.printReceipt(receipt).catch(() => {})
     await loadFloor()
+    if (r.partial) {
+      // Part payment: the invoice is posted and Partly Paid; the table stays with its balance open.
+      notice.value = `Part payment taken — ${money(r.balance || 0)} still to collect on ${r.invoice}`
+      await loadOrder()
+      return
+    }
     const stillHere = tableBills.value
     router.push(stillHere.length ? `/order/${stillHere[0].name}` : '/floor')
   } catch (e) {
@@ -349,7 +363,7 @@ const unsent = computed(() => (order.value?.items || []).some((l) => l.qty > l.k
 
     <div class="cart">
       <div class="cart-head">
-        <div class="row1"><h3>Order {{ order?.name }}</h3><span v-if="locked" class="pill warn">bill closed</span></div>
+        <div class="row1"><h3>Order {{ order?.name }}</h3><span v-if="partPaid" class="pill warn">part paid</span><span v-else-if="locked" class="pill warn">bill closed</span></div>
         <div v-if="tableBills.length" class="row" style="margin-top: 6px">
           <span class="sub2">Other bills:</span>
           <a v-for="b in tableBills" :key="b.name" class="pill" style="cursor: pointer" @click="router.push(`/order/${b.name}`)">{{ b.name.slice(-5) }} · {{ money(b.total) }}</a>
@@ -372,7 +386,8 @@ const unsent = computed(() => (order.value?.items || []).some((l) => l.qty > l.k
 
       <div class="cart-totals">
         <div class="trow grand"><span>Total</span><span class="val tabular">{{ money(order?.total || 0) }}</span></div>
-        <div v-if="totals && locked" class="trow"><span>Due incl. tax</span><span class="val tabular">{{ money(totals.due) }}</span></div>
+        <div v-if="totals && locked && !partPaid" class="trow"><span>Due incl. tax</span><span class="val tabular">{{ money(totals.due) }}</span></div>
+        <div v-if="partPaid" class="trow" style="color: var(--warning)"><span>Balance to collect</span><span class="val tabular">{{ money(order?.balance || 0) }}</span></div>
       </div>
 
       <p v-if="error" class="error-box" style="margin: 0 20px 10px">{{ error }}</p>
@@ -405,19 +420,19 @@ const unsent = computed(() => (order.value?.items || []).some((l) => l.qty > l.k
         </div>
       </div>
 
-      <div class="row" style="padding: 0 14px 10px">
+      <div v-if="!partPaid" class="row" style="padding: 0 14px 10px">
         <button class="btn btn-ghost mini" :disabled="locked || (order?.items.length || 0) < 2" @click="openSplit">Split</button>
         <button class="btn btn-ghost mini" :disabled="locked" @click="panel = panel === 'merge' ? null : 'merge'">Merge</button>
         <button class="btn btn-ghost mini" @click="panel = panel === 'transfer' ? null : 'transfer'">Move table</button>
         <button class="btn btn-ghost mini" @click="newBill">New bill</button>
         <button class="btn btn-ghost mini" style="color: var(--danger)" @click="cancel">Cancel</button>
       </div>
-      <div class="row" style="padding: 0 14px 14px">
+      <div v-if="!partPaid" class="row" style="padding: 0 14px 14px">
         <button class="btn btn-ghost" style="flex: 1" :disabled="busy || locked || !unsent" @click="sendKot">Send to kitchen (KOT)</button>
         <button v-if="!locked" class="btn btn-ghost" style="flex: 1" :disabled="busy || !order?.items.length" @click="closeBill">Close bill</button>
         <button v-else class="btn btn-ghost" style="flex: 1" :disabled="busy" @click="reopenBill">Re-open</button>
       </div>
-      <button class="charge-btn" :disabled="busy || !order?.items.length" @click="startPay"><span>Pay</span><span class="r tabular">{{ money(order?.total || 0) }}</span></button>
+      <button class="charge-btn" :disabled="busy || !order?.items.length" @click="startPay"><span>{{ partPaid ? 'Collect balance' : 'Pay' }}</span><span class="r tabular">{{ money(partPaid ? order?.balance || 0 : order?.total || 0) }}</span></button>
     </div>
 
     <PayDialog
@@ -428,6 +443,8 @@ const unsent = computed(() => (order.value?.items || []).some((l) => l.qty > l.k
       :methods="profile.payment_methods"
       :busy="busy"
       :error="payError"
+      :allow-partial="pos.draftMode"
+      :balance-of="partPaid ? order?.balance || 0 : 0"
       @pay="pay"
       @cancel="paying = false"
     />

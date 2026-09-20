@@ -12,6 +12,7 @@ interface FloorOrder {
   waiter: string | null
   bill_closed: number
   merged: boolean
+  part_paid?: boolean
   primary_table: string
   kots_pending: number
 }
@@ -40,7 +41,7 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 async function load() {
   try {
-    tables.value = await api.call<FloorTable[]>(FNB + 'list_tables')
+    tables.value = await api.call<FloorTable[]>(FNB + 'list_tables', { pos_profile: profile.value.name })
     error.value = null
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
@@ -109,6 +110,7 @@ async function toggleReserved(t: FloorTable) {
   <div class="page">
     <div class="page-head">
       <h2>{{ profile.name }} · Tables</h2>
+      <span v-if="profile.location" class="pill">{{ profile.location_name || profile.location }}</span>
       <span class="pill ok">F&amp;B</span>
       <button class="btn btn-ghost mini" @click="router.push('/kitchen')">Kitchen (KOT)</button>
       <button class="btn btn-ghost mini" @click="router.push('/terminal')">Quick sale</button>
@@ -136,7 +138,8 @@ async function toggleReserved(t: FloorTable) {
             <b class="tabular">{{ money(t.total) }}</b>
             <template v-if="t.orders[0]?.merged"> · merged</template>
             <span v-if="t.kots_pending" class="pill warn" style="margin-left: 6px">{{ t.kots_pending }} in kitchen</span>
-            <span v-if="t.orders.some((o) => o.bill_closed)" class="pill" style="margin-left: 6px">bill closed</span>
+            <span v-if="t.orders.some((o) => o.part_paid)" class="pill warn" style="margin-left: 6px">part paid</span>
+            <span v-else-if="t.orders.some((o) => o.bill_closed)" class="pill" style="margin-left: 6px">bill closed</span>
           </div>
         </button>
       </div>

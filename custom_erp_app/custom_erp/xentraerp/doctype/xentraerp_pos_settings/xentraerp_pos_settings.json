@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "pos_mode",
+  "checkout_document",
   "hours_section",
   "require_shift",
   "pos_247",
@@ -51,6 +52,14 @@
    "fieldtype": "Time",
    "label": "...until",
    "default": "05:00:00"
+  },
+  {
+   "fieldname": "checkout_document",
+   "fieldtype": "Select",
+   "label": "Checkout document",
+   "options": "POS Invoice\nDraft Invoice + Receipt",
+   "default": "POS Invoice",
+   "description": "POS Invoice: one submitted POS Invoice with the payments inside it. Draft Invoice + Receipt: checkout creates a Draft Sales Invoice; when payment is finalized it is submitted and a receipt (Payment Entry) is created against it with the chosen mode of payment."
   }
  ],
  "links": [],

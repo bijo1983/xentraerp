@@ -57,8 +57,8 @@ def _tables_of(order) -> set:
 def _open_orders() -> list:
 	return frappe.get_all(
 		"XentraERP POS Order",
-		filters={"status": "Open"},
-		fields=["name", "pos_table", "merged_tables", "guests", "total", "creation", "waiter", "bill_closed", "business_date"],
+		filters={"status": ["in", ["Open", "Part Paid"]]},
+		fields=["name", "pos_table", "merged_tables", "guests", "total", "creation", "waiter", "bill_closed", "business_date", "status", "draft_invoice", "location"],
 		order_by="creation asc",
 		limit_page_length=0,
 	)
@@ -82,15 +82,19 @@ def _table_status(disabled, reserved, has_order) -> str:
 
 
 @frappe.whitelist()
-def list_tables():
-	"""Every table with its live status and the open bills sitting on it."""
+def list_tables(pos_profile: str | None = None):
+	"""Every table with its live status and the open bills sitting on it. Given a
+	register, only that register's location's tables (plus any shared ones)."""
 	_require_fnb()
 	tables = frappe.get_all(
 		"XentraERP POS Table",
-		fields=["name", "zone", "seats", "reserved", "disabled"],
+		fields=["name", "zone", "seats", "reserved", "disabled", "location"],
 		order_by="zone asc, name asc",
 		limit_page_length=0,
 	)
+	loc = core.location_of(pos_profile) if pos_profile else None
+	if loc:
+		tables = [t for t in tables if not t.location or t.location == loc.location_code]
 	orders = _open_orders()
 	pending = {}
 	for k in frappe.get_all(
@@ -112,6 +116,7 @@ def list_tables():
 			{
 				"name": t.name,
 				"zone": t.zone or "",
+				"location": t.location or "",
 				"seats": cint(t.seats),
 				"reserved": cint(t.reserved),
 				"disabled": cint(t.disabled),
@@ -125,6 +130,8 @@ def list_tables():
 						"total": flt(o.total),
 						"waiter": o.waiter,
 						"bill_closed": cint(o.bill_closed),
+						"status": o.status,
+						"part_paid": o.status == "Part Paid",
 						"merged": o.pos_table != t.name,
 						"primary_table": o.pos_table,
 						"kots_pending": pending.get(o.name, 0),
@@ -142,7 +149,7 @@ def list_tables():
 
 
 @frappe.whitelist()
-def save_table(table_name: str, zone: str | None = None, seats: int = 4, reserved: int = 0, disabled: int = 0):
+def save_table(table_name: str, zone: str | None = None, seats: int = 4, reserved: int = 0, disabled: int = 0, location: str | None = None):
 	"""Admin: add a table, or update an existing one (its name is its identity)."""
 	core.require_manager()
 	table_name = (table_name or "").strip()
@@ -151,7 +158,9 @@ def save_table(table_name: str, zone: str | None = None, seats: int = 4, reserve
 	seats = cint(seats)
 	if not 1 <= seats <= 99:
 		frappe.throw("Seats must be between 1 and 99.")
-	values = {"zone": (zone or "").strip(), "seats": seats, "reserved": cint(bool(cint(reserved))), "disabled": cint(bool(cint(disabled)))}
+	if location and not frappe.db.exists("XentraERP POS Location", location):
+		frappe.throw(f"No such location: {location}")
+	values = {"zone": (zone or "").strip(), "location": location or None, "seats": seats, "reserved": cint(bool(cint(reserved))), "disabled": cint(bool(cint(disabled)))}
 	if frappe.db.exists("XentraERP POS Table", table_name):
 		if values["disabled"] and _orders_touching(table_name):
 			frappe.throw("This table has an open order — bill or cancel it before disabling the table.")
@@ -206,6 +215,9 @@ def _order_payload(doc) -> dict:
 		"waiter": doc.waiter,
 		"total": flt(doc.total),
 		"invoice": doc.invoice,
+		"draft_invoice": doc.draft_invoice,
+		"location": doc.location,
+		"balance": flt(frappe.db.get_value("Sales Invoice", doc.draft_invoice, "outstanding_amount")) if doc.status == "Part Paid" and doc.draft_invoice else 0,
 		"business_date": str(doc.business_date) if doc.business_date else None,
 		"bill_closed": cint(doc.bill_closed),
 		"items": [
@@ -234,6 +246,18 @@ def _open_order(order: str, for_update: bool = False):
 	return doc
 
 
+def _payable_order(order: str, for_update: bool = False):
+	"""An order that can still take payment: open, or part-paid."""
+	if not frappe.db.exists("XentraERP POS Order", order):
+		frappe.throw("No such order.")
+	if for_update:
+		frappe.db.sql("select name from `tabXentraERP POS Order` where name=%s for update", (order,))
+	doc = frappe.get_doc("XentraERP POS Order", order)
+	if doc.status not in ("Open", "Part Paid"):
+		frappe.throw(f"This order is already {doc.status.lower()}.")
+	return doc
+
+
 def _editable(doc):
 	if cint(doc.bill_closed):
 		frappe.throw("This bill is closed. Re-open it to change or send items.")
@@ -255,6 +279,7 @@ def _new_order(source, table=None) -> "frappe.model.document.Document":
 			"guests": 0,
 			"customer": source.get("customer"),
 			"waiter": source.get("waiter"),
+			"location": source.get("location"),
 			"business_date": source.get("business_date"),
 		}
 	)
@@ -277,9 +302,14 @@ def open_order(table: str, pos_profile: str, guests: int = 1, customer: str | No
 	if here and any(o.pos_table != table for o in here) and not any(o.pos_table == table for o in here):
 		frappe.throw("This table is part of a merged party. Use that party's bill.")
 	core.get_profile(pos_profile)
+	ploc = core.location_of(pos_profile)
+	tloc = frappe.db.get_value("XentraERP POS Table", table, "location")
+	if ploc and tloc and tloc != ploc.location_code:
+		frappe.throw(f"Table {table} belongs to location {tloc}, not to this register's location ({ploc.location_code}).")
 	doc = frappe.get_doc(
 		{
 			"doctype": "XentraERP POS Order",
+			"location": core.location_code(ploc),
 			"pos_table": table,
 			"pos_profile": pos_profile,
 			"status": "Open",
@@ -388,6 +418,7 @@ def send_kot(order: str):
 			"pos_order": doc.name,
 			"pos_table": doc.pos_table,
 			"pos_profile": doc.pos_profile,
+			"location": doc.location,
 			"status": "New",
 			"created_by": frappe.session.user,
 			"items": fresh,
@@ -411,8 +442,9 @@ def _kot_payload(k) -> dict:
 
 
 @frappe.whitelist()
-def list_kots(statuses=None):
-	"""Tickets for the kitchen screen — oldest first. Active ones by default."""
+def list_kots(statuses=None, pos_profile: str | None = None):
+	"""Tickets for the kitchen screen — oldest first. Active ones by default.
+	Given a register, only its location's tickets (each site has its own kitchen)."""
 	_require_fnb()
 	if isinstance(statuses, str):
 		try:
@@ -420,7 +452,11 @@ def list_kots(statuses=None):
 		except ValueError:
 			statuses = [statuses]
 	wanted = [s for s in (statuses or ACTIVE_KOT) if s in ("New", "Preparing", "Ready", "Served", "Cancelled")]
-	rows = frappe.get_all("XentraERP KOT", filters={"status": ["in", wanted]}, fields=["name"], order_by="creation asc", limit_page_length=200)
+	filters = {"status": ["in", wanted]}
+	loc = core.location_of(pos_profile) if pos_profile else None
+	if loc:
+		filters["location"] = loc.location_code
+	rows = frappe.get_all("XentraERP KOT", filters=filters, fields=["name"], order_by="creation asc", limit_page_length=200)
 	return [_kot_payload(frappe.get_doc("XentraERP KOT", r.name)) for r in rows]
 
 
@@ -609,11 +645,17 @@ def split_order(order: str, moves):
 
 @frappe.whitelist()
 def cancel_order(order: str):
-	"""Abandon an order. Once food has gone to the kitchen only an admin may."""
+	"""Abandon an order. Once food has gone to the kitchen only an admin may. A
+	part-paid order has a submitted invoice and receipts, so it can't be
+	cancelled here — collect the balance (or reverse it in the back office)."""
 	_require_fnb()
 	doc = _open_order(order, for_update=True)
 	if any(flt(r.kot_qty) > 0 for r in doc.items) and not core.is_manager():
 		frappe.throw("Items were already sent to the kitchen — ask a manager to cancel this order.")
+	if doc.draft_invoice:
+		core.discard_draft_invoice(doc.draft_invoice)
+		doc.draft_invoice = None
+		doc.invoice_doctype = None
 	doc.status = "Cancelled"
 	doc.save(ignore_permissions=True)
 	for k in frappe.get_all("XentraERP KOT", filters={"pos_order": doc.name, "status": ["in", list(ACTIVE_KOT)]}, pluck="name"):
@@ -631,13 +673,27 @@ def _lines(doc) -> list:
 
 @frappe.whitelist()
 def close_bill(order: str):
-	"""Close the check: lock the items and return what the guest owes (with
-	the server's own tax and rounding) so it can be printed and paid."""
+	"""Close the check: lock the items and return what the guest owes (with the
+	server's own tax and rounding) so it can be printed and paid. When checkout
+	is set to Draft Invoice + Receipt this also creates the Draft Sales Invoice
+	that payment will later submit."""
 	_require_fnb()
 	doc = _open_order(order, for_update=True)
 	if not doc.items:
 		frappe.throw("The order has no items to bill.")
-	totals = core.estimate_totals(core.get_profile(doc.pos_profile), _lines(doc), doc.customer)
+	profile = core.get_profile(doc.pos_profile)
+	if core.draft_mode():
+		if doc.draft_invoice:
+			core.discard_draft_invoice(doc.draft_invoice)
+		inv = core.create_draft_invoice(profile, _lines(doc), doc.customer, doc.business_date and getdate(doc.business_date))
+		doc.draft_invoice, doc.invoice_doctype = inv.name, "Sales Invoice"
+		prec = inv.precision("grand_total")
+		due = flt(inv.rounded_total or inv.grand_total, prec)
+		totals = {"net": flt(inv.net_total, prec), "tax": flt(inv.total_taxes_and_charges, prec), "grand": flt(inv.grand_total, prec),
+		          "rounded": flt(inv.rounded_total, prec) if inv.rounded_total else 0, "due": due, "currency": profile.currency,
+		          "invoice": inv.name}
+	else:
+		totals = core.estimate_totals(profile, _lines(doc), doc.customer)
 	doc.bill_closed = 1
 	doc.bill_closed_at = now_datetime()
 	doc.save(ignore_permissions=True)
@@ -647,11 +703,16 @@ def close_bill(order: str):
 
 @frappe.whitelist()
 def reopen_bill(order: str):
-	"""Re-open a closed check to add or change items (the waiter or an admin)."""
+	"""Re-open a closed check to add or change items (the waiter or an admin).
+	Any Draft Sales Invoice made for it is discarded — it is rebuilt at the next close."""
 	_require_fnb()
 	doc = _open_order(order, for_update=True)
 	if doc.waiter != frappe.session.user and not core.is_manager():
 		frappe.throw("Only the waiter on this bill, or a manager, can re-open it.", frappe.PermissionError)
+	if doc.draft_invoice:
+		core.discard_draft_invoice(doc.draft_invoice)
+		doc.draft_invoice = None
+		doc.invoice_doctype = None
 	doc.bill_closed = 0
 	doc.bill_closed_at = None
 	doc.save(ignore_permissions=True)
@@ -661,44 +722,76 @@ def reopen_bill(order: str):
 
 @frappe.whitelist()
 def bill_totals(order: str):
-	"""What this bill comes to right now (no changes made)."""
+	"""What is owed on this bill right now (no changes made): the balance for a
+	part-paid order, the draft invoice's total once the check is closed, else an estimate."""
 	_require_fnb()
 	doc = frappe.get_doc("XentraERP POS Order", order)
+	if doc.status == "Part Paid" and doc.draft_invoice:
+		bal = flt(frappe.db.get_value("Sales Invoice", doc.draft_invoice, "outstanding_amount"))
+		return {"net": 0, "tax": 0, "grand": bal, "rounded": 0, "due": bal, "partial": True}
 	if not doc.items:
 		return {"net": 0, "tax": 0, "grand": 0, "rounded": 0, "due": 0}
+	if core.draft_mode() and doc.draft_invoice and cint(doc.bill_closed):
+		return {"net": 0, "tax": 0, "grand": core.draft_due(doc.draft_invoice), "rounded": 0, "due": core.draft_due(doc.draft_invoice)}
 	return core.estimate_totals(core.get_profile(doc.pos_profile), _lines(doc), doc.customer)
 
 
 @frappe.whitelist()
-def bill_order(order: str, payment_method: str | None = None, payments=None):
-	"""Settle the bill: create and submit the real POS Invoice (one or more
-	payments, possibly in several currencies — see pos_core.post_invoice),
-	close the order and free its tables. All-or-nothing: if the invoice can't
-	be posted (stock, payment mode, tax setup, no open shift, ...) nothing is
-	committed, the order stays open, and the reason is returned.
+def bill_order(order: str, payment_method: str | None = None, payments=None, allow_partial: int = 0):
+	"""Settle the bill: post the sale, close the order and free its tables.
 
-	`payments` = [{mode_of_payment, currency?, tendered}]. For the simple
-	case, `payment_method` alone pays the whole bill with that one method."""
+	With checkout = POS Invoice, one submitted POS Invoice carries the payments.
+	With checkout = Draft Invoice + Receipt, the Draft Sales Invoice is submitted
+	and one receipt (Payment Entry) per payment leg is created against it. There
+	a *partial* payment (`allow_partial=1`) is allowed: the invoice is submitted,
+	shows as Partly Paid, and the order becomes Part Paid — the table stays
+	occupied and the cashier finishes billing by paying the balance (call this
+	again). All-or-nothing per call: if anything can't be posted (stock, payment
+	mode, tax setup, no open shift, ...) nothing is committed and the reason is
+	returned.
+
+	`payments` = [{mode_of_payment, currency?, tendered}]. `payment_method`
+	alone pays everything still owed with that one method."""
 	_require_fnb()
-	doc = _open_order(order, for_update=True)
-	if not doc.items:
-		frappe.throw("The order has no items to bill.")
+	doc = _payable_order(order, for_update=True)
 	profile = core.get_profile(doc.pos_profile)
-	if not payments:
-		if not payment_method:
-			frappe.throw("Choose how the bill is being paid.")
-		due = core.estimate_totals(profile, _lines(doc), doc.customer)["due"]
-		payments = [{"mode_of_payment": payment_method, "tendered": due}]
-	result = core.post_invoice(
-		profile, _lines(doc), payments, customer=doc.customer, business_dt=doc.business_date and getdate(doc.business_date)
-	)
-	doc.status = "Billed"
-	doc.invoice = result["invoice"]
-	doc.total = flt(result["total"])
-	doc.save(ignore_permissions=True)
+
+	if doc.status == "Part Paid":
+		balance = flt(frappe.db.get_value("Sales Invoice", doc.draft_invoice, "outstanding_amount"))
+		if not payments:
+			if not payment_method:
+				frappe.throw("Choose how the balance is being paid.")
+			payments = [{"mode_of_payment": payment_method, "tendered": balance}]
+		result = core.settle_invoice(doc.draft_invoice, payments, allow_partial)
+		if not result["partial"]:
+			doc.status = "Billed"
+			doc.total = flt(result["invoice_total"])
+			doc.save(ignore_permissions=True)
+	else:
+		if not doc.items:
+			frappe.throw("The order has no items to bill.")
+		lines = _lines(doc)
+		draft = doc.draft_invoice if (core.draft_mode() and cint(doc.bill_closed) and doc.draft_invoice) else None
+		if not payments:
+			if not payment_method:
+				frappe.throw("Choose how the bill is being paid.")
+			due = core.draft_due(draft) if draft else core.estimate_totals(profile, lines, doc.customer)["due"]
+			payments = [{"mode_of_payment": payment_method, "tendered": due}]
+		result = core.post_invoice(
+			profile, lines, payments, customer=doc.customer, business_dt=doc.business_date and getdate(doc.business_date),
+			draft_name=draft, allow_partial=allow_partial,
+		)
+		if result["invoice_doctype"] == "Sales Invoice":
+			doc.draft_invoice, doc.invoice_doctype = result["invoice"], "Sales Invoice"
+			doc.status = "Part Paid" if result.get("partial") else "Billed"
+		else:
+			doc.invoice, doc.invoice_doctype, doc.status = result["invoice"], "POS Invoice", "Billed"
+		doc.total = flt(result["total"])
+		doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {
 		**result,
 		"table": doc.pos_table,
+		"order_status": doc.status,
 		"lines": [{"name": r.item_name, "qty": flt(r.qty), "rate": flt(r.rate), "amount": flt(r.amount)} for r in doc.items],
 	}

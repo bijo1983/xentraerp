@@ -17,6 +17,7 @@ export interface Shift {
   pos_profile: string
   cashier: string
   status: 'Open' | 'Closed'
+  location?: string | null
   business_date: string | null
   opened_at: string | null
   closed_at: string | null
@@ -28,6 +29,7 @@ export interface Shift {
 
 export interface PosSettings {
   pos_mode: PosMode
+  checkout_document: 'POS Invoice' | 'Draft Invoice + Receipt'
   require_shift: number
   pos_247: number
   previous_day_billing: number
@@ -55,6 +57,8 @@ export const usePosStore = defineStore('pos', {
     },
     canAdmin: (s) => !!s.settings?.can_switch,
     needsShift: (s) => !!s.settings?.require_shift && !s.shift,
+    // Checkout leaves a Draft invoice that becomes a real invoice + receipts, and allows part payment.
+    draftMode: (s) => s.settings?.checkout_document === 'Draft Invoice + Receipt',
   },
   actions: {
     async load() {
@@ -72,7 +76,7 @@ export const usePosStore = defineStore('pos', {
       await api.call(CORE + 'set_pos_mode', { mode })
       await this.load()
     },
-    async saveSettings(patch: Partial<Pick<PosSettings, 'require_shift' | 'pos_247' | 'previous_day_billing' | 'previous_day_until'>>) {
+    async saveSettings(patch: Partial<Pick<PosSettings, 'require_shift' | 'pos_247' | 'previous_day_billing' | 'previous_day_until' | 'checkout_document'>>) {
       await api.call(CORE + 'save_pos_settings', patch)
       await this.load()
     },

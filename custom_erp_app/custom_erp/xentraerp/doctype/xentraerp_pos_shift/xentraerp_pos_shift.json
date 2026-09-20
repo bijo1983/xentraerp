@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "pos_profile",
+  "location",
   "cashier",
   "status",
   "column_break_1",
@@ -101,6 +102,14 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Closing Notes"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "label": "Location",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
   }
  ],
  "links": [],

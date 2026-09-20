@@ -19,9 +19,13 @@ const props = defineProps<{
   methods: string[]
   busy?: boolean
   error?: string | null
+  // Draft Invoice + Receipt checkout: let the cashier take part of the bill and leave the rest open.
+  allowPartial?: boolean
+  // The amount already received when this is collecting a balance (display only).
+  balanceOf?: number
 }>()
 const emit = defineEmits<{
-  (e: 'pay', payments: { mode_of_payment: string; currency: string; tendered: number }[]): void
+  (e: 'pay', payments: { mode_of_payment: string; currency: string; tendered: number }[], partial: boolean): void
   (e: 'cancel'): void
 }>()
 
@@ -31,6 +35,7 @@ interface Leg {
   tendered: string
 }
 
+const partial = ref(false)
 const currencies = ref<Currency[]>([{ currency: props.currency, rate: 1, base: true }])
 const legs = ref<Leg[]>([{ mode_of_payment: props.methods[0] || '', currency: props.currency, tendered: props.due ? String(props.due) : '' }])
 
@@ -50,6 +55,8 @@ const received = computed(() => legs.value.reduce((sum, l) => sum + (Number(l.te
 const remaining = computed(() => Math.max(0, props.due - received.value))
 const change = computed(() => Math.max(0, received.value - props.due))
 const short = computed(() => received.value + 0.0005 < props.due)
+// A short payment is only acceptable when the cashier has chosen to leave a balance open.
+const blocked = computed(() => short.value && !partial.value)
 
 function money(n: number, currency = props.currency) {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n)
@@ -74,7 +81,7 @@ function submit() {
   const payments = legs.value
     .filter((l) => Number(l.tendered) > 0)
     .map((l) => ({ mode_of_payment: l.mode_of_payment, currency: l.currency, tendered: Number(l.tendered) }))
-  if (payments.length && !short.value) emit('pay', payments)
+  if (payments.length && !blocked.value) emit('pay', payments, short.value && partial.value)
 }
 </script>
 
@@ -82,7 +89,7 @@ function submit() {
   <div class="modal-back" @click.self="emit('cancel')">
     <div class="modal">
       <h3 style="margin: 0 0 4px">Take payment</h3>
-      <p class="sub2" style="margin: 0 0 14px">Amount due <b class="tabular">{{ money(due) }}</b></p>
+      <p class="sub2" style="margin: 0 0 14px">{{ balanceOf ? 'Balance due' : 'Amount due' }} <b class="tabular">{{ money(due) }}</b></p>
 
       <div v-for="(l, i) in legs" :key="i" class="pay-leg">
         <select v-model="l.mode_of_payment" class="fld">
@@ -102,15 +109,18 @@ function submit() {
 
       <div class="pay-summary">
         <div class="trow"><span>Received</span><span class="val tabular">{{ money(received) }}</span></div>
-        <div v-if="short" class="trow" style="color: var(--warning)"><span>Still owed</span><span class="val tabular">{{ money(remaining) }}</span></div>
+        <div v-if="short" class="trow" style="color: var(--warning)"><span>{{ partial ? 'Balance left open' : 'Still owed' }}</span><span class="val tabular">{{ money(remaining) }}</span></div>
         <div v-else class="trow" style="color: var(--success)"><span>Change to give</span><span class="val tabular">{{ money(change) }}</span></div>
       </div>
 
+      <label v-if="allowPartial" class="row" style="margin-top: 10px; font-size: 13px">
+        <input v-model="partial" type="checkbox" /> Partial payment — invoice is posted as <b>Partly Paid</b> and the balance can be collected later
+      </label>
       <p v-if="error" class="error-box" style="margin: 10px 0 0">{{ error }}</p>
       <div style="display: flex; gap: 10px; margin-top: 14px">
         <button class="btn btn-ghost" style="flex: 1" @click="emit('cancel')">Cancel</button>
-        <button class="btn btn-primary" style="flex: 2" :disabled="busy || short || received <= 0" @click="submit">
-          {{ busy ? 'Posting…' : 'Complete payment' }}
+        <button class="btn btn-primary" style="flex: 2" :disabled="busy || blocked || received <= 0" @click="submit">
+          {{ busy ? 'Posting…' : short && partial ? 'Take part payment' : 'Complete payment' }}
         </button>
       </div>
     </div>

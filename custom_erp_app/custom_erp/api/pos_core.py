@@ -28,6 +28,7 @@ from frappe.utils import add_days, cint, flt, get_time, getdate, now_datetime
 
 SETTINGS = "XentraERP POS Settings"
 MODES = ("Retail", "F&B")
+CHECKOUT_DOCS = ("POS Invoice", "Draft Invoice + Receipt")
 
 
 # --------------------------------------------------------------- guards
@@ -63,12 +64,19 @@ def settings() -> dict:
 	until = raw.get("previous_day_until") or "05:00:00"
 	return {
 		"pos_mode": mode if mode in MODES else "Retail",
+		"checkout_document": raw.get("checkout_document") if raw.get("checkout_document") in CHECKOUT_DOCS else "POS Invoice",
 		# A never-saved Single has no rows: "require shift" then defaults on.
 		"require_shift": cint(raw.get("require_shift", 1)) if raw else 1,
 		"pos_247": cint(raw.get("pos_247")),
 		"previous_day_billing": cint(raw.get("previous_day_billing")),
 		"previous_day_until": str(until),
 	}
+
+
+def draft_mode() -> bool:
+	"""True when checkout produces a Draft Sales Invoice that is submitted, with
+	receipts (Payment Entries) against it, once payment is finalized."""
+	return settings()["checkout_document"] == "Draft Invoice + Receipt"
 
 
 def business_date(now=None):
@@ -105,7 +113,7 @@ def set_pos_mode(mode: str):
 	# Leaving F&B while dine-in orders are open would strand them (no screen
 	# could bill them), so finish or cancel those first.
 	if current == "F&B":
-		open_orders = frappe.db.count("XentraERP POS Order", {"status": "Open"})
+		open_orders = frappe.db.count("XentraERP POS Order", {"status": ["in", ["Open", "Part Paid"]]})
 		if open_orders:
 			frappe.throw(
 				f"There {'is' if open_orders == 1 else 'are'} {open_orders} open table order"
@@ -117,10 +125,14 @@ def set_pos_mode(mode: str):
 
 
 @frappe.whitelist()
-def save_pos_settings(require_shift=None, pos_247=None, previous_day_billing=None, previous_day_until=None):
-	"""Tenant admin: operating-hours behaviour."""
+def save_pos_settings(require_shift=None, pos_247=None, previous_day_billing=None, previous_day_until=None, checkout_document=None):
+	"""Tenant admin: operating-hours behaviour and what a checkout produces."""
 	require_manager()
 	updates = {}
+	if checkout_document is not None:
+		if checkout_document not in CHECKOUT_DOCS:
+			frappe.throw(f"Checkout document must be one of: {', '.join(CHECKOUT_DOCS)}")
+		updates["checkout_document"] = checkout_document
 	for key, val in (("require_shift", require_shift), ("pos_247", pos_247), ("previous_day_billing", previous_day_billing)):
 		if val is not None:
 			updates[key] = cint(bool(cint(val)))
@@ -157,6 +169,121 @@ def get_profile(pos_profile: str):
 	if not frappe.db.exists("POS Profile", {"name": pos_profile, "disabled": 0}):
 		frappe.throw(f"POS Profile '{pos_profile}' isn't available.")
 	return frappe.get_doc("POS Profile", pos_profile)
+
+
+# ------------------------------------------------------------- locations
+# A location is a site (branch, outlet, floor) with its own registers, tables,
+# cost center and warehouse, and a short code that is part of every bill number
+# so bills from different sites are told apart at a glance.
+
+# Invoice / receipt numbering per location. The tail (.#####) is added by Frappe.
+SERIES = {"Sales Invoice": "{code}-INV-.YYYY.-", "POS Invoice": "{code}-POS-.YYYY.-", "Payment Entry": "{code}-RCT-.YYYY.-"}
+
+
+def location_of(pos_profile: str):
+	"""The active location this register belongs to, or None (single-site tenants
+	that never define locations keep ERPNext's normal numbering)."""
+	name = frappe.db.sql(
+		"""select l.name from `tabXentraERP POS Location` l
+		   join `tabXentraERP POS Location Profile` p on p.parent = l.name
+		   where p.pos_profile = %s and l.disabled = 0 limit 1""",
+		(pos_profile,),
+	)
+	return frappe.get_doc("XentraERP POS Location", name[0][0]) if name else None
+
+
+def location_code(loc) -> str | None:
+	return loc.location_code if loc else None
+
+
+def ensure_series(doctype: str, series: str):
+	"""Make `series` a valid naming series for `doctype`. Frappe only accepts a
+	naming_series that is one of the field's options, so a new location's series
+	is appended to those options (a Property Setter, exactly what the Naming
+	Series tool does) the first time it is needed."""
+	field = frappe.get_meta(doctype).get_field("naming_series")
+	options = [o for o in (field.options or "").split("\n") if o]
+	if series in options:
+		return
+	with _elevated():
+		frappe.make_property_setter(
+			{"doctype": doctype, "doctype_or_field": "DocField", "fieldname": "naming_series", "property": "options",
+			 "value": "\n".join(options + [series]), "property_type": "Text"}
+		)
+		frappe.clear_cache(doctype=doctype)
+
+
+def series_for(doctype: str, loc) -> str | None:
+	if not loc:
+		return None
+	series = SERIES[doctype].format(code=loc.location_code)
+	ensure_series(doctype, series)
+	return series
+
+
+@frappe.whitelist()
+def list_locations():
+	require_pos_user()
+	out = []
+	for l in frappe.get_all("XentraERP POS Location", fields=["name", "location_name", "company", "cost_center", "warehouse", "disabled"], order_by="name asc"):
+		out.append({
+			"code": l.name, "name": l.location_name, "company": l.company, "cost_center": l.cost_center, "warehouse": l.warehouse,
+			"disabled": cint(l.disabled),
+			"profiles": frappe.get_all("XentraERP POS Location Profile", filters={"parent": l.name}, pluck="pos_profile"),
+		})
+	return out
+
+
+@frappe.whitelist()
+def save_location(location_code: str, location_name: str, cost_center: str | None = None, warehouse: str | None = None, profiles=None, disabled: int = 0):
+	"""Tenant admin: define (or update) a location and the registers that belong to it."""
+	require_manager()
+	import re
+
+	code = (location_code or "").strip().upper()
+	if not re.fullmatch(r"[A-Z0-9]{2,8}", code):
+		frappe.throw("The location code must be 2-8 letters or numbers, e.g. MAIN or AIR2.")
+	if not (location_name or "").strip():
+		frappe.throw("Give the location a name.")
+	if isinstance(profiles, str):
+		profiles = json.loads(profiles or "[]")
+	profiles = list(dict.fromkeys(profiles or []))
+	for pr in profiles:
+		if not frappe.db.exists("POS Profile", pr):
+			frappe.throw(f"No such register (POS Profile): {pr}")
+		other = frappe.db.sql(
+			"select parent from `tabXentraERP POS Location Profile` where pos_profile=%s and parent != %s limit 1", (pr, code)
+		)
+		if other:
+			frappe.throw(f"'{pr}' already belongs to location {other[0][0]}. A register can serve only one location.")
+	for field, dt in (("cost_center", "Cost Center"), ("warehouse", "Warehouse")):
+		val = {"cost_center": cost_center, "warehouse": warehouse}[field]
+		if val and not frappe.db.exists(dt, val):
+			frappe.throw(f"No such {dt.lower()}: {val}")
+	values = {"location_name": location_name.strip(), "cost_center": cost_center or None, "warehouse": warehouse or None,
+	          "disabled": cint(bool(cint(disabled))), "profiles": [{"pos_profile": pr} for pr in profiles]}
+	if frappe.db.exists("XentraERP POS Location", code):
+		doc = frappe.get_doc("XentraERP POS Location", code)
+		doc.update(values)
+		doc.save(ignore_permissions=True)
+	else:
+		doc = frappe.get_doc({"doctype": "XentraERP POS Location", "location_code": code, **values})
+		doc.insert(ignore_permissions=True)
+	# Numbering is ready the moment the location exists, not at its first sale.
+	for dt in SERIES:
+		series_for(dt, doc)
+	frappe.db.commit()
+	return {"code": doc.name}
+
+
+@frappe.whitelist()
+def delete_location(location_code: str):
+	require_manager()
+	if any(frappe.db.exists(dt, {"location": location_code}) for dt in ("XentraERP POS Shift", "XentraERP POS Order", "XentraERP POS Tender")):
+		frappe.throw("This location has trading history, so it can't be deleted. Disable it instead.")
+	frappe.delete_doc("XentraERP POS Location", location_code, ignore_permissions=True)
+	frappe.db.commit()
+	return {"success": True}
 
 
 # ---------------------------------------------------- multi-currency
@@ -247,6 +374,7 @@ def _shift_payload(shift) -> dict:
 	return {
 		"name": shift.name,
 		"pos_profile": shift.pos_profile,
+		"location": shift.location,
 		"cashier": shift.cashier,
 		"status": shift.status,
 		"business_date": str(shift.business_date) if shift.business_date else None,
@@ -305,6 +433,7 @@ def open_shift(pos_profile: str, opening_cash=None):
 		{
 			"doctype": "XentraERP POS Shift",
 			"pos_profile": pos_profile,
+			"location": location_code(location_of(pos_profile)),
 			"cashier": user,
 			"status": "Open",
 			"business_date": business_date(),
@@ -327,11 +456,13 @@ def _cash_taken(shift_name: str) -> dict:
 
 
 def _shift_sales(shift_name: str) -> tuple:
-	invoices = frappe.db.sql_list("select distinct invoice from `tabXentraERP POS Tender` where shift=%s and invoice is not null", (shift_name,))
-	if not invoices:
-		return 0, 0.0
-	total = frappe.db.sql("select sum(base_grand_total) from `tabPOS Invoice` where name in %s and docstatus=1", (invoices,))[0][0]
-	return len(invoices), flt(total)
+	rows = frappe.db.sql("select distinct invoice, invoice_doctype from `tabXentraERP POS Tender` where shift=%s and invoice is not null", (shift_name,))
+	total = 0.0
+	for doctype in ("POS Invoice", "Sales Invoice"):
+		names = [r[0] for r in rows if (r[1] or "POS Invoice") == doctype]
+		if names:
+			total += flt(frappe.db.sql(f"select sum(base_grand_total) from `tab{doctype}` where name in %s and docstatus=1", (names,))[0][0])
+	return len(rows), total
 
 
 @frappe.whitelist()
@@ -377,7 +508,7 @@ def close_shift(shift: str, counted=None, notes: str | None = None):
 	if doc.cashier != frappe.session.user and not is_manager():
 		frappe.throw("Only the cashier who opened this shift (or an administrator) can close it.", frappe.PermissionError)
 	if not settings()["pos_247"]:
-		open_orders = frappe.db.count("XentraERP POS Order", {"status": "Open", "pos_profile": doc.pos_profile})
+		open_orders = frappe.db.count("XentraERP POS Order", {"status": ["in", ["Open", "Part Paid"]], "pos_profile": doc.pos_profile})
 		if open_orders:
 			frappe.throw(f"{open_orders} table order(s) are still open on this register. Bill or cancel them first.")
 	if isinstance(counted, str):
@@ -460,6 +591,8 @@ def enforce_register_restriction(pos_profile: str, user: str):
 
 
 def _profile_invoice(profile, lines, customer=None, business_dt=None):
+	loc = location_of(profile.name)
+	series = series_for("POS Invoice", loc)
 	d = {
 		"doctype": "POS Invoice",
 		"company": profile.company,
@@ -469,6 +602,16 @@ def _profile_invoice(profile, lines, customer=None, business_dt=None):
 		"is_pos": 1,
 		"items": [{"item_code": l["item_code"], "qty": l["qty"], "rate": l["rate"]} for l in lines],
 	}
+	if series:
+		d["naming_series"] = series
+	if loc and loc.cost_center:
+		d["cost_center"] = loc.cost_center
+		for row in d["items"]:
+			row["cost_center"] = loc.cost_center
+	if loc and loc.warehouse:
+		d["set_warehouse"] = loc.warehouse
+		for row in d["items"]:
+			row["warehouse"] = loc.warehouse
 	if business_dt:
 		# Post to the business day, at the real time of day.
 		d.update({"set_posting_time": 1, "posting_date": str(business_dt), "posting_time": now_datetime().strftime("%H:%M:%S")})
@@ -506,27 +649,13 @@ def _parse_payments(payments) -> list:
 	return payments
 
 
-def post_invoice(profile, lines, payments, *, customer=None, business_dt=None) -> dict:
-	"""The one place a POS Invoice is created — Retail and F&B both come here.
-
-	Builds the invoice with its payment rows in a single insert (ERPNext
-	refuses a POS Invoice with none), converts each tendered leg to the
-	invoice currency, works out change (which may only come out of cash), and
-	records the legs in the tender ledger. All-or-nothing: any failure raises
-	before anything is committed and the caller's transaction is rolled back."""
-	if not lines:
-		frappe.throw("There's nothing to bill.")
-	payments = _parse_payments(payments)
-	cashier = frappe.session.user
-	enforce_register_restriction(profile.name, cashier)
-	shift = require_billing_shift(profile.name)
-	business_dt = business_dt or business_date()
+def _build_legs(profile, payments, business_dt) -> list:
+	"""Validate the payment legs and convert each to its tendered currency rate."""
 	allowed = {p.mode_of_payment for p in profile.payments}
 	if not allowed:
 		frappe.throw("This register has no payment methods configured.")
-
 	legs = []
-	for raw in payments:
+	for raw in _parse_payments(payments):
 		mop = (raw or {}).get("mode_of_payment")
 		if mop not in allowed:
 			frappe.throw(f"'{mop}' isn't a payment method on this register ({', '.join(sorted(allowed))}).")
@@ -543,6 +672,81 @@ def post_invoice(profile, lines, payments, *, customer=None, business_dt=None) -
 		legs.append({"mop": mop, "type": mode_type, "currency": currency, "tendered": tendered, "rate": rate})
 	if not legs:
 		frappe.throw("Enter at least one payment amount.")
+	return legs
+
+
+def _settle(legs, due, prec, profile, allow_partial=False) -> tuple:
+	"""Convert legs to the invoice currency; return (paid, change). Raises if
+	the bill isn't covered (unless a partial payment was asked for — the
+	balance then stays open), or if non-cash payments would need change."""
+	for leg in legs:
+		leg["amount"] = flt(leg["tendered"] * leg["rate"], prec)
+	paid = flt(sum(l["amount"] for l in legs), prec)
+	if paid + 10 ** -prec / 2 < due and allow_partial:
+		return paid, 0.0
+	if paid + 10 ** -prec / 2 < due:
+		frappe.throw(f"Payment is short by {flt(due - paid, prec):g} {profile.currency} (bill {due:g}, received {paid:g}).")
+	change = flt(max(0.0, paid - due), prec)
+	cash_in = sum(l["amount"] for l in legs if l["type"] == "Cash")
+	if change > cash_in + 10 ** -prec / 2:
+		frappe.throw("Card and other non-cash payments can't exceed the amount due — only cash gives change.")
+	return paid, change
+
+
+def _write_tenders(invoice, invoice_doctype, legs, change, profile, shift, cashier, business_dt, receipts=None):
+	"""One ledger row per tendered leg (in the currency handed over), plus a
+	negative cash row for change given back."""
+	receipts = receipts or {}
+	rows = list(legs)
+	if change:
+		change_mop = next(l["mop"] for l in legs if l["type"] == "Cash")
+		rows.append({"mop": change_mop, "type": "Cash", "currency": profile.currency, "tendered": -change, "rate": 1.0, "amount": -change})
+	for i, r in enumerate(rows):
+		frappe.get_doc(
+			{
+				"doctype": "XentraERP POS Tender",
+				"invoice": invoice,
+				"invoice_doctype": invoice_doctype,
+				"receipt": receipts.get(i),
+				"shift": shift.name if shift else None,
+				"pos_profile": profile.name,
+				"location": location_code(location_of(profile.name)),
+				"cashier": cashier,
+				"business_date": business_dt,
+				"mode_of_payment": r["mop"],
+				"mode_type": r["type"],
+				"currency": r["currency"],
+				"tendered": r["tendered"],
+				"exchange_rate": r["rate"],
+				"amount": r["amount"],
+			}
+		).insert(ignore_permissions=True)
+
+
+def post_invoice(profile, lines, payments, *, customer=None, business_dt=None, draft_name=None, allow_partial=False) -> dict:
+	"""The one place a sale is posted — Retail and F&B both come here.
+
+	Two checkout documents (a tenant setting):
+	* POS Invoice — built with its payment rows in a single insert (ERPNext
+	  refuses a POS Invoice with none) and submitted.
+	* Draft Invoice + Receipt — a Draft Sales Invoice (created earlier, when the
+	  check was closed, or here) is submitted once payment is finalized and one
+	  receipt (Payment Entry) per payment leg is created against it.
+
+	Either way each tendered leg is converted to the invoice currency, change may
+	only come out of cash, and the legs are recorded in the tender ledger.
+	All-or-nothing: any failure raises before anything is committed and the
+	caller's transaction is rolled back."""
+	if not lines:
+		frappe.throw("There's nothing to bill.")
+	cashier = frappe.session.user
+	enforce_register_restriction(profile.name, cashier)
+	shift = require_billing_shift(profile.name)
+	business_dt = business_dt or business_date()
+	legs = _build_legs(profile, payments, business_dt)
+
+	if draft_mode():
+		return _finalize_draft_invoice(profile, lines, legs, customer=customer, business_dt=business_dt, shift=shift, cashier=cashier, draft_name=draft_name, allow_partial=cint(allow_partial))
 
 	first_mop = legs[0]["mop"]
 	d = _profile_invoice(profile, lines, customer, business_dt)
@@ -552,16 +756,7 @@ def post_invoice(profile, lines, payments, *, customer=None, business_dt=None) -
 		inv.insert(ignore_permissions=True)
 	prec = inv.precision("grand_total")
 	due = flt(inv.rounded_total or inv.grand_total, prec)
-
-	for leg in legs:
-		leg["amount"] = flt(leg["tendered"] * leg["rate"], prec)
-	paid = flt(sum(l["amount"] for l in legs), prec)
-	if paid + 10 ** -prec / 2 < due:
-		frappe.throw(f"Payment is short by {flt(due - paid, prec):g} {profile.currency} (bill {due:g}, received {paid:g}).")
-	change = flt(max(0.0, paid - due), prec)
-	cash_in = sum(l["amount"] for l in legs if l["type"] == "Cash")
-	if change > cash_in + 10 ** -prec / 2:
-		frappe.throw("Card and other non-cash payments can't exceed the amount due — only cash gives change.")
+	paid, change = _settle(legs, due, prec, profile)
 
 	inv.set("payments", [])
 	for leg in legs:
@@ -576,38 +771,252 @@ def post_invoice(profile, lines, payments, *, customer=None, business_dt=None) -
 	# The invoice belongs to the cashier who rang it up, not to the system
 	# scope it was built under (reports attribute sales by owner).
 	frappe.db.set_value("POS Invoice", inv.name, "owner", cashier, update_modified=False)
-	rows = list(legs)
-	if change:
-		change_mop = next(l["mop"] for l in legs if l["type"] == "Cash")
-		rows.append({"mop": change_mop, "type": "Cash", "currency": profile.currency, "tendered": -change, "rate": 1.0, "amount": -change})
-	for r in rows:
-		frappe.get_doc(
-			{
-				"doctype": "XentraERP POS Tender",
-				"invoice": inv.name,
-				"shift": shift.name if shift else None,
-				"pos_profile": profile.name,
-				"cashier": cashier,
-				"business_date": business_dt,
-				"mode_of_payment": r["mop"],
-				"mode_type": r["type"],
-				"currency": r["currency"],
-				"tendered": r["tendered"],
-				"exchange_rate": r["rate"],
-				"amount": r["amount"],
-			}
-		).insert(ignore_permissions=True)
+	_write_tenders(inv.name, "POS Invoice", legs, change, profile, shift, cashier, business_dt)
+	return _result(inv.name, "POS Invoice", profile, inv, due, paid, change, business_dt, legs)
 
+
+def _result(name, doctype, profile, inv, due, paid, change, business_dt, legs, receipts=None) -> dict:
+	prec = inv.precision("grand_total")
 	return {
-		"invoice": inv.name,
+		"invoice": name,
+		"invoice_doctype": doctype,
+		"receipts": receipts or [],
 		"currency": profile.currency,
 		"total": flt(inv.grand_total, prec),
 		"due": due,
 		"paid": paid,
 		"change": change,
 		"business_date": str(business_dt),
+		"location": location_code(location_of(profile.name)),
 		"payments": [{"mode_of_payment": l["mop"], "currency": l["currency"], "tendered": l["tendered"], "amount": l["amount"]} for l in legs],
 	}
+
+
+# ---------------------------------- draft invoice + receipt (Payment Entry)
+
+
+def _draft_invoice_doc(profile, lines, customer, business_dt):
+	loc = location_of(profile.name)
+	warehouse = (loc.warehouse if loc and loc.warehouse else None) or profile.warehouse
+	cost_center = (loc.cost_center if loc and loc.cost_center else None) or profile.cost_center
+	items = []
+	for l in lines:
+		row = {"item_code": l["item_code"], "qty": l["qty"], "rate": l["rate"]}
+		if warehouse:
+			row["warehouse"] = warehouse
+		if cost_center:
+			row["cost_center"] = cost_center
+		if profile.income_account:
+			row["income_account"] = profile.income_account
+		items.append(row)
+	d = {
+		"doctype": "Sales Invoice",
+		"company": profile.company,
+		"customer": customer or profile.customer,
+		"currency": profile.currency,
+		"selling_price_list": profile.selling_price_list,
+		"posting_date": str(business_dt),
+		"set_posting_time": 1,
+		"posting_time": now_datetime().strftime("%H:%M:%S"),
+		# A balance left open at the till should read "Partly Paid", not flip to "Overdue" at midnight.
+		"due_date": str(add_days(business_dt, 30)),
+		"update_stock": cint(profile.update_stock),
+		"pos_profile": profile.name,
+		"remarks": f"POS sale · {profile.name}" + (f" · {loc.location_code}" if loc else ""),
+		"items": items,
+	}
+	series = series_for("Sales Invoice", loc)
+	if series:
+		d["naming_series"] = series
+	if cost_center:
+		d["cost_center"] = cost_center
+	if profile.taxes_and_charges:
+		d["taxes_and_charges"] = profile.taxes_and_charges
+	return frappe.get_doc(d)
+
+
+def create_draft_invoice(profile, lines, customer=None, business_dt=None):
+	"""Insert a Draft Sales Invoice for this sale (nothing is posted to the
+	books until it is submitted). Returns the saved draft."""
+	business_dt = business_dt or business_date()
+	inv = _draft_invoice_doc(profile, lines, customer, business_dt)
+	with _elevated():
+		inv.run_method("set_missing_values")
+		inv.run_method("calculate_taxes_and_totals")
+		inv.insert(ignore_permissions=True)
+	# Owned by the cashier, not the elevated scope it was built under. The in-memory
+	# copy must match the database or Frappe refuses to submit it later
+	# ("Value cannot be changed for Created By").
+	frappe.db.set_value("Sales Invoice", inv.name, "owner", frappe.session.user, update_modified=False)
+	inv.owner = frappe.session.user
+	return inv
+
+
+def discard_draft_invoice(name: str):
+	"""Delete a POS-created draft (only ever a draft — a submitted invoice is never touched)."""
+	if name and frappe.db.get_value("Sales Invoice", name, "docstatus") == 0:
+		with _elevated():
+			frappe.delete_doc("Sales Invoice", name, ignore_permissions=True, force=1)
+
+
+def draft_due(name: str) -> float:
+	row = frappe.db.get_value("Sales Invoice", name, ["rounded_total", "grand_total"], as_dict=True)
+	return flt(row.rounded_total or row.grand_total) if row else 0.0
+
+
+def _make_receipts(inv, legs, remaining, profile, cashier, business_dt, prec) -> tuple:
+	"""Create one receipt (Payment Entry) per payment leg against `inv`, taking at
+	most `remaining` in total. Non-cash legs are taken in full and cash absorbs
+	whatever is left, so change comes out of cash — never out of a card payment.
+	Returns ({leg index: receipt name}, [receipt names], total allocated)."""
+	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+	from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
+
+	order = sorted(range(len(legs)), key=lambda i: legs[i]["type"] == "Cash")
+	receipts, made, taken = {}, [], 0.0
+	for i in order:
+		leg = legs[i]
+		alloc = flt(min(leg["amount"], remaining), prec)
+		if alloc <= 0:
+			continue
+		with _elevated():
+			pe = get_payment_entry("Sales Invoice", inv.name, party_amount=alloc)
+			rseries = series_for("Payment Entry", location_of(profile.name))
+			if rseries:
+				pe.naming_series = rseries
+			pe.mode_of_payment = leg["mop"]
+			account = get_bank_cash_account(leg["mop"], profile.company)["account"]
+			pe.paid_to = account
+			pe.paid_to_account_currency = frappe.db.get_value("Account", account, "account_currency")
+			pe.posting_date = str(business_dt)
+			pe.reference_no = pe.reference_no or inv.name
+			pe.reference_date = str(business_dt)
+			note = f"POS receipt · {leg['mop']}"
+			if leg["currency"] != profile.currency:
+				note += f" · tendered {leg['tendered']:g} {leg['currency']} @ {leg['rate']:g}"
+			pe.remarks = note
+			pe.custom_remarks = 1  # otherwise ERPNext regenerates the remarks and drops the tendered-currency note
+			pe.insert(ignore_permissions=True)
+			pe.submit()
+		frappe.db.set_value("Payment Entry", pe.name, "owner", cashier, update_modified=False)
+		remaining = flt(remaining - alloc, prec)
+		taken = flt(taken + alloc, prec)
+		receipts[i], _ = pe.name, made.append(pe.name)
+	return receipts, made, taken
+
+
+def _finalize_draft_invoice(profile, lines, legs, *, customer, business_dt, shift, cashier, draft_name, allow_partial=0):
+	created_here = False
+	if draft_name and frappe.db.get_value("Sales Invoice", draft_name, "docstatus") == 0:
+		inv = frappe.get_doc("Sales Invoice", draft_name)
+	else:
+		inv = create_draft_invoice(profile, lines, customer, business_dt)
+		created_here = True
+	try:
+		prec = inv.precision("grand_total")
+		due = flt(inv.rounded_total or inv.grand_total, prec)
+		paid, change = _settle(legs, due, prec, profile, bool(allow_partial))
+	except Exception:
+		# Not enough to settle the bill: don't leave a stray draft behind.
+		if created_here:
+			discard_draft_invoice(inv.name)
+		raise
+
+	# Payment is finalized: post the invoice, then a receipt per leg against it.
+	# With a partial payment the invoice is still submitted — it is real,
+	# outstanding revenue — and shows as "Partly Paid" with its balance open.
+	with _elevated():
+		inv.submit()
+	receipts, made, taken = _make_receipts(inv, legs, due, profile, cashier, business_dt, prec)
+	inv.reload()
+	balance = flt(inv.outstanding_amount, prec)
+	if balance > 10 ** -prec / 2 and not allow_partial:
+		frappe.throw(f"The receipts don't clear the invoice ({balance:g} still outstanding).")
+	frappe.db.set_value("Sales Invoice", inv.name, "owner", cashier, update_modified=False)
+	_write_tenders(inv.name, "Sales Invoice", legs, change, profile, shift, cashier, business_dt, receipts)
+	out = _result(inv.name, "Sales Invoice", profile, inv, due, paid, change, business_dt, legs, made)
+	out.update({"balance": balance, "status": inv.status, "partial": balance > 10 ** -prec / 2})
+	return out
+
+
+def _pos_sales_invoice(invoice: str):
+	"""A submitted Sales Invoice that this POS created (it has tender rows)."""
+	if not frappe.db.exists("XentraERP POS Tender", {"invoice": invoice, "invoice_doctype": "Sales Invoice"}):
+		frappe.throw("That isn't a POS invoice.")
+	inv = frappe.get_doc("Sales Invoice", invoice)
+	if inv.docstatus != 1:
+		frappe.throw("That invoice isn't submitted.")
+	return inv
+
+
+@frappe.whitelist()
+def settle_invoice(invoice: str, payments, allow_partial: int = 0):
+	"""Finish billing a part-paid invoice: take (more of) the balance. One receipt
+	per payment leg is created against the same invoice; when the balance reaches
+	zero it becomes Paid. Change is given only from cash."""
+	require_pos_user()
+	if not draft_mode():
+		frappe.throw("Balances are only kept open when checkout is set to Draft Invoice + Receipt.")
+	inv = _pos_sales_invoice(invoice)
+	profile = get_profile(inv.pos_profile)
+	cashier = frappe.session.user
+	enforce_register_restriction(profile.name, cashier)
+	shift = require_billing_shift(profile.name)
+	prec = inv.precision("grand_total")
+	balance = flt(inv.outstanding_amount, prec)
+	if balance <= 10 ** -prec / 2:
+		frappe.throw("This invoice is already fully paid.")
+	today = business_date()
+	legs = _build_legs(profile, payments, today)
+	paid, change = _settle(legs, balance, prec, profile, bool(cint(allow_partial)))
+	receipts, made, taken = _make_receipts(inv, legs, balance, profile, cashier, today, prec)
+	inv.reload()
+	left = flt(inv.outstanding_amount, prec)
+	if left > 10 ** -prec / 2 and not cint(allow_partial):
+		frappe.throw(f"The receipts don't clear the invoice ({left:g} still outstanding).")
+	_write_tenders(inv.name, "Sales Invoice", legs, change, profile, shift, cashier, today, receipts)
+	out = _result(inv.name, "Sales Invoice", profile, inv, balance, paid, change, today, legs, made)
+	out.update({"balance": left, "status": inv.status, "partial": left > 10 ** -prec / 2, "invoice_total": flt(inv.grand_total, prec)})
+	return out
+
+
+@frappe.whitelist()
+def list_open_balances(pos_profile: str | None = None):
+	"""Part-paid POS invoices with a balance still to collect, newest last."""
+	require_pos_user()
+	names = frappe.db.sql_list("select distinct invoice from `tabXentraERP POS Tender` where invoice_doctype='Sales Invoice'")
+	if not names:
+		return []
+	filters = {"name": ["in", names], "docstatus": 1, "outstanding_amount": [">", 0]}
+	if pos_profile:
+		filters["pos_profile"] = pos_profile
+	rows = frappe.get_all(
+		"Sales Invoice",
+		filters=filters,
+		fields=["name", "customer", "grand_total", "outstanding_amount", "status", "posting_date", "pos_profile", "currency", "owner"],
+		order_by="creation asc",
+		limit_page_length=200,
+	)
+	tables = {}
+	for o in frappe.get_all("XentraERP POS Order", filters={"draft_invoice": ["in", [r.name for r in rows] or [""]]}, fields=["draft_invoice", "pos_table", "name"]):
+		tables[o.draft_invoice] = o
+	return [
+		{
+			"invoice": r.name,
+			"customer": r.customer,
+			"total": flt(r.grand_total),
+			"balance": flt(r.outstanding_amount),
+			"paid": flt(r.grand_total) - flt(r.outstanding_amount),
+			"status": r.status,
+			"date": str(r.posting_date),
+			"pos_profile": r.pos_profile,
+			"currency": r.currency,
+			"cashier": r.owner,
+			"table": tables[r.name].pos_table if r.name in tables else None,
+			"order": tables[r.name].name if r.name in tables else None,
+		}
+		for r in rows
+	]
 
 
 def _retail_lines(profile, items) -> list:
@@ -641,12 +1050,16 @@ def retail_estimate(pos_profile: str, items):
 
 
 @frappe.whitelist()
-def retail_checkout(pos_profile: str, items, payments, customer: str | None = None):
+def retail_checkout(pos_profile: str, items, payments, customer: str | None = None, allow_partial: int = 0):
 	"""Counter sale. Rates come from the register's price list, not the client,
-	unless the POS Profile allows rate changes."""
+	unless the POS Profile allows rate changes. With checkout = Draft Invoice +
+	Receipt, `allow_partial=1` takes what was paid and leaves the balance open
+	(Partly Paid) to be collected later with settle_invoice."""
 	require_pos_user()
 	profile = get_profile(pos_profile)
-	result = post_invoice(profile, _retail_lines(profile, items), payments, customer=customer)
+	if cint(allow_partial) and not draft_mode():
+		frappe.throw("Part payment needs checkout set to Draft Invoice + Receipt.")
+	result = post_invoice(profile, _retail_lines(profile, items), payments, customer=customer, allow_partial=cint(allow_partial))
 	frappe.db.commit()
 	return result
 
@@ -655,77 +1068,111 @@ def retail_checkout(pos_profile: str, items, payments, customer: str | None = No
 
 
 @frappe.whitelist()
-def end_of_day_report(date: str | None = None):
-	"""Administrator: everything traded on one business day."""
+def end_of_day_report(date: str | None = None, location: str | None = None):
+	"""Administrator: everything traded on one business day, optionally for one
+	location. Covers both checkout documents (POS Invoices and Sales Invoices +
+	receipts) and shows part-paid balances that are still to be collected."""
 	require_manager()
 	bd = str(getdate(date)) if date else str(business_date())
 	company_ccy = frappe.db.get_value("Company", frappe.db.get_single_value("Global Defaults", "default_company"), "default_currency")
+	loc_sql, loc_args = (" and location=%s", (location,)) if location else ("", ())
 
-	inv = frappe.db.sql(
-		"""select name, owner, pos_profile, base_grand_total, base_net_total, base_total_taxes_and_charges, is_return
-		   from `tabPOS Invoice` where posting_date=%s and docstatus=1""",
-		(bd,),
-		as_dict=True,
+	tender_docs = frappe.db.sql(
+		f"select distinct invoice, invoice_doctype from `tabXentraERP POS Tender` where business_date=%s{loc_sql}", (bd, *loc_args)
 	)
+	pos_names = [r[0] for r in tender_docs if (r[1] or "POS Invoice") == "POS Invoice"]
+	si_names = [r[0] for r in tender_docs if r[1] == "Sales Invoice"]
+	if not location:  # POS Invoices booked outside this app's tender ledger still count
+		pos_names = list({*pos_names, *frappe.db.sql_list("select name from `tabPOS Invoice` where posting_date=%s and docstatus=1", (bd,))})
+
+	inv = []
+	for doctype, names in (("POS Invoice", pos_names), ("Sales Invoice", si_names)):
+		if not names:
+			continue
+		extra = ", outstanding_amount" if doctype == "Sales Invoice" else ", 0 as outstanding_amount"
+		for r in frappe.db.sql(
+			f"""select name, owner, pos_profile, base_grand_total, base_net_total, base_total_taxes_and_charges, is_return{extra}
+			    from `tab{doctype}` where name in %s and docstatus=1""",
+			(names,), as_dict=True,
+		):
+			r["doctype"] = doctype
+			inv.append(r)
 	sales = [i for i in inv if not i.is_return]
 	returns = [i for i in inv if i.is_return]
-	names = [i.name for i in inv] or [""]
 	by_payment = frappe.db.sql(
-		"""select mode_of_payment, currency, sum(tendered) as tendered, sum(amount) as amount
-		   from `tabXentraERP POS Tender` where business_date=%s group by mode_of_payment, currency order by mode_of_payment""",
-		(bd,),
-		as_dict=True,
+		f"""select mode_of_payment, currency, sum(tendered) as tendered, sum(amount) as amount
+		    from `tabXentraERP POS Tender` where business_date=%s{loc_sql} group by mode_of_payment, currency order by mode_of_payment""",
+		(bd, *loc_args), as_dict=True,
+	)
+	by_location = frappe.db.sql(
+		"""select coalesce(location, '') as location, count(distinct invoice) as invoices, sum(amount) as received
+		   from `tabXentraERP POS Tender` where business_date=%s group by location order by location""",
+		(bd,), as_dict=True,
 	)
 	cashiers = {}
 	for i in inv:
 		c = cashiers.setdefault(i.owner, {"cashier": i.owner, "invoices": 0, "total": 0.0})
 		c["invoices"] += 1
 		c["total"] += flt(i.base_grand_total)
-	top_items = frappe.db.sql(
-		"""select item_code, item_name, sum(qty) as qty, sum(base_amount) as amount from `tabPOS Invoice Item`
-		   where parent in %s group by item_code, item_name order by amount desc limit 10""",
-		(names,),
-		as_dict=True,
-	)
+	top_items = []
+	for doctype, names in (("POS Invoice", pos_names), ("Sales Invoice", si_names)):
+		if names:
+			top_items += frappe.db.sql(
+				f"select item_code, item_name, sum(qty) as qty, sum(base_amount) as amount from `tab{doctype} Item` where parent in %s group by item_code, item_name",
+				(names,), as_dict=True,
+			)
+	merged = {}
+	for t in top_items:
+		m = merged.setdefault(t.item_code, {"item_code": t.item_code, "item_name": t.item_name, "qty": 0.0, "amount": 0.0})
+		m["qty"] += flt(t.qty)
+		m["amount"] += flt(t.amount)
+	shift_filters = {"business_date": bd, **({"location": location} if location else {})}
 	shifts = frappe.get_all(
-		"XentraERP POS Shift",
-		filters={"business_date": bd},
-		fields=["name", "cashier", "pos_profile", "status", "opened_at", "closed_at", "invoice_count", "total_sales"],
-		order_by="opened_at asc",
-		limit_page_length=0,
+		"XentraERP POS Shift", filters=shift_filters,
+		fields=["name", "cashier", "pos_profile", "location", "status", "opened_at", "closed_at", "invoice_count", "total_sales"],
+		order_by="opened_at asc", limit_page_length=0,
 	)
-	for s in shifts:
-		s["variance"] = [
+	for sh in shifts:
+		sh["variance"] = [
 			{"currency": c.currency, "variance": flt(c.variance)}
-			for c in frappe.get_all("XentraERP POS Shift Cash", filters={"parent": s.name}, fields=["currency", "variance"])
+			for c in frappe.get_all("XentraERP POS Shift Cash", filters={"parent": sh.name}, fields=["currency", "variance"])
 		]
-		s["opened_at"], s["closed_at"] = str(s.opened_at or ""), str(s.closed_at or "")
+		sh["opened_at"], sh["closed_at"] = str(sh.opened_at or ""), str(sh.closed_at or "")
+	order_filter = " and location=%s" if location else ""
 	orders = frappe.db.sql(
-		"select status, count(*), coalesce(sum(guests),0) from `tabXentraERP POS Order` where business_date=%s group by status",
-		(bd,),
+		f"select status, count(*), coalesce(sum(guests),0) from `tabXentraERP POS Order` where business_date=%s{order_filter} group by status",
+		(bd, *loc_args),
 	)
 	order_counts = {r[0]: {"orders": cint(r[1]), "guests": cint(r[2])} for r in orders}
-	billed = order_counts.get("Billed", {"orders": 0, "guests": 0})
+	billed = {"orders": sum(order_counts.get(k, {"orders": 0})["orders"] for k in ("Billed", "Part Paid")),
+	          "guests": sum(order_counts.get(k, {"guests": 0})["guests"] for k in ("Billed", "Part Paid"))}
 	gross = flt(sum(flt(i.base_grand_total) for i in sales))
+	outstanding = flt(sum(flt(i.outstanding_amount) for i in sales))
 	warnings = []
-	open_shifts = [s.name for s in shifts if s.status == "Open"]
+	open_shifts = [sh.name for sh in shifts if sh.status == "Open"]
 	if open_shifts:
 		warnings.append(f"{len(open_shifts)} shift(s) are still open: {', '.join(open_shifts)}.")
-	open_orders = frappe.db.count("XentraERP POS Order", {"status": "Open", "business_date": bd})
+	open_orders = frappe.db.count("XentraERP POS Order", {"status": "Open", "business_date": bd, **({"location": location} if location else {})})
 	if open_orders:
 		warnings.append(f"{open_orders} table order(s) from this day are still open.")
+	part = [i for i in sales if flt(i.outstanding_amount) > 0.0005]
+	if part:
+		warnings.append(f"{len(part)} invoice(s) are part-paid with {outstanding:g} still to collect.")
 	return {
 		"business_date": bd,
+		"location": location,
 		"currency": company_ccy,
 		"invoice_count": len(sales),
 		"gross_sales": gross,
 		"net_sales": flt(sum(flt(i.base_net_total) for i in sales)),
 		"tax": flt(sum(flt(i.base_total_taxes_and_charges) for i in sales)),
+		"outstanding_balance": outstanding,
 		"returns": {"count": len(returns), "total": flt(sum(flt(i.base_grand_total) for i in returns))},
 		"average_bill": gross / len(sales) if sales else 0.0,
 		"by_payment": [{"mode": r.mode_of_payment, "currency": r.currency, "tendered": flt(r.tendered), "amount": flt(r.amount)} for r in by_payment],
+		"by_location": [{"location": r.location, "invoices": cint(r.invoices), "received": flt(r.received)} for r in by_location],
 		"by_cashier": sorted(cashiers.values(), key=lambda c: -c["total"]),
-		"top_items": [{"item_code": t.item_code, "item_name": t.item_name, "qty": flt(t.qty), "amount": flt(t.amount)} for t in top_items],
+		"top_items": sorted(merged.values(), key=lambda t: -t["amount"])[:10],
 		"shifts": shifts,
 		"fnb": {
 			"billed_orders": billed["orders"],

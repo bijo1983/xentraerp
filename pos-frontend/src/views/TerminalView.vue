@@ -46,6 +46,42 @@ const activeGroup = ref('all')
 const cart = ref<Record<string, CartLine>>({})
 const paying = ref(false)
 const payDue = ref(0)
+const partialNote = ref<string | null>(null)
+
+// Part-paid invoices waiting for the rest of their payment (Draft Invoice + Receipt checkout).
+interface OpenBalance { invoice: string; customer: string; total: number; paid: number; balance: number; status: string; date: string; table: string | null }
+const balancesOpen = ref(false)
+const balances = ref<OpenBalance[]>([])
+const settling = ref<OpenBalance | null>(null)
+const settleError = ref<string | null>(null)
+
+async function openBalances() {
+  balancesOpen.value = true
+  try {
+    balances.value = await api.call<OpenBalance[]>('custom_erp.api.pos_core.list_open_balances', { pos_profile: profile.value.name })
+  } catch (err) {
+    chargeError.value = err instanceof Error ? err.message : 'Could not load balances'
+  }
+}
+async function settle(payments: { mode_of_payment: string; currency: string; tendered: number }[], partial = false) {
+  if (!settling.value) return
+  charging.value = true
+  settleError.value = null
+  try {
+    const r = await api.call<{ invoice: string; partial?: boolean; balance?: number }>('custom_erp.api.pos_core.settle_invoice', {
+      invoice: settling.value.invoice,
+      payments: JSON.stringify(payments),
+      allow_partial: partial ? 1 : 0,
+    })
+    partialNote.value = r.partial ? `Part payment taken — ${money(r.balance || 0)} still to collect on ${r.invoice}` : `${r.invoice} is now fully paid`
+    settling.value = null
+    await openBalances()
+  } catch (err) {
+    settleError.value = err instanceof Error ? err.message : 'Could not take this payment'
+  } finally {
+    charging.value = false
+  }
+}
 const charging = ref(false)
 const chargeError = ref<string | null>(null)
 const lastInvoice = ref<string | null>(null)
@@ -166,7 +202,7 @@ async function charge() {
   }
 }
 
-async function pay(payments: { mode_of_payment: string; currency: string; tendered: number }[]) {
+async function pay(payments: { mode_of_payment: string; currency: string; tendered: number }[], partial = false) {
   chargeError.value = null
   charging.value = true
   try {
@@ -174,8 +210,10 @@ async function pay(payments: { mode_of_payment: string; currency: string; tender
       invoice: string
       total: number
       change: number
+      partial?: boolean
+      balance?: number
       payments: { mode_of_payment: string; currency: string; tendered: number }[]
-    }>('custom_erp.api.pos_core.retail_checkout', { pos_profile: profile.value.name, items: lineArgs(), payments: JSON.stringify(payments) })
+    }>('custom_erp.api.pos_core.retail_checkout', { pos_profile: profile.value.name, items: lineArgs(), payments: JSON.stringify(payments), allow_partial: partial ? 1 : 0 })
     paying.value = false
     lastInvoice.value = r.invoice
     lastReceipt.value = {
@@ -190,6 +228,7 @@ async function pay(payments: { mode_of_payment: string; currency: string; tender
       paymentMethod: r.payments.map((p) => `${p.mode_of_payment} ${p.tendered} ${p.currency}`).join(' + ') + (r.change ? ` (change ${r.change})` : ''),
     }
     cart.value = {}
+    if (r.partial) partialNote.value = `Part payment taken — ${money(r.balance || 0)} still to collect on ${r.invoice}`
     await printLastReceipt()
   } catch (err) {
     chargeError.value = err instanceof Error ? err.message : 'Could not complete this sale'
@@ -230,6 +269,7 @@ async function signOut() {
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="printerSettingsOpen = !printerSettingsOpen">
           🖨️ Printer
         </button>
+        <button v-if="pos.draftMode" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="openBalances">Pending balances</button>
         <button v-if="pos.isFnb" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/floor')">Tables</button>
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/shift')">Shift</button>
         <button v-if="pos.canAdmin" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/admin')">Settings</button>
@@ -328,6 +368,7 @@ async function signOut() {
         </p>
       </div>
 
+      <p v-if="partialNote" style="margin: 0 20px 12px; color: var(--warning); font-size: 13px">{{ partialNote }}</p>
       <p v-if="chargeError" class="error-box" style="margin: 0 20px 12px">{{ chargeError }}</p>
       <p v-if="lastInvoice" style="margin: 0 20px 12px; color: var(--success); font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px">
         <span>Sale complete — {{ lastInvoice }}</span>
@@ -351,8 +392,42 @@ async function signOut() {
       :methods="profile.payment_methods"
       :busy="charging"
       :error="chargeError"
+      :allow-partial="pos.draftMode"
       @pay="pay"
       @cancel="paying = false"
+    />
+    <div v-if="balancesOpen && !settling" class="modal-back" @click.self="balancesOpen = false">
+      <div class="modal">
+        <h3 style="margin: 0 0 10px">Pending balances</h3>
+        <p v-if="!balances.length" style="color: var(--text-muted)">Nothing waiting — every invoice is fully paid.</p>
+        <table v-else class="simple-table">
+          <thead><tr><th>Invoice</th><th>Table</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Balance</th><th /></tr></thead>
+          <tbody>
+            <tr v-for="b in balances" :key="b.invoice">
+              <td>{{ b.invoice }}<div class="sub2">{{ b.status }} · {{ b.date }}</div></td>
+              <td>{{ b.table || '—' }}</td>
+              <td class="num tabular">{{ money(b.total) }}</td>
+              <td class="num tabular">{{ money(b.paid) }}</td>
+              <td class="num tabular"><b>{{ money(b.balance) }}</b></td>
+              <td class="num"><button class="btn btn-primary mini" @click="settling = b; settleError = null">Collect</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top: 12px"><button class="btn btn-ghost" @click="balancesOpen = false">Close</button></div>
+      </div>
+    </div>
+    <PayDialog
+      v-if="settling"
+      :pos-profile="profile.name"
+      :currency="profile.currency"
+      :due="settling.balance"
+      :balance-of="settling.paid"
+      :methods="profile.payment_methods"
+      :busy="charging"
+      :error="settleError"
+      :allow-partial="true"
+      @pay="settle"
+      @cancel="settling = null"
     />
   </div>
 </template>

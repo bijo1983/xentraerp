@@ -72,7 +72,7 @@ async function signOut() {
       <button v-for="p in profiles" :key="p.name" class="reg-card" @click="select(p)">
         <div class="icon">🧾</div>
         <div class="name">{{ p.name }}</div>
-        <div class="meta">{{ p.company }} · {{ p.currency }}</div>
+        <div class="meta">{{ p.location_name || p.location ? `${p.location_name || p.location} · ` : '' }}{{ p.company }} · {{ p.currency }}</div>
       </button>
     </div>
   </div>

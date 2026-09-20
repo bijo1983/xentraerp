@@ -4,6 +4,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface Kot {
   name: string
@@ -22,6 +23,7 @@ const NEXT: Record<string, { to: string; label: string }> = {
 }
 
 const router = useRouter()
+const auth = useAuthStore()
 const kots = ref<Kot[]>([])
 const error = ref<string | null>(null)
 const now = ref(Date.now())
@@ -29,7 +31,8 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 async function load() {
   try {
-    kots.value = await api.call<Kot[]>(FNB + 'list_kots')
+    // Each location has its own kitchen: only this register's location's tickets.
+    kots.value = await api.call<Kot[]>(FNB + 'list_kots', { pos_profile: auth.posProfile?.name })
     error.value = null
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)

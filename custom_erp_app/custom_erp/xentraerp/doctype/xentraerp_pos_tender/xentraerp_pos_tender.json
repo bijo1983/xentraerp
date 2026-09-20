@@ -6,8 +6,11 @@
  "engine": "InnoDB",
  "field_order": [
   "invoice",
+  "invoice_doctype",
+  "receipt",
   "shift",
   "pos_profile",
+  "location",
   "cashier",
   "business_date",
   "column_break_1",
@@ -21,9 +24,8 @@
  "fields": [
   {
    "fieldname": "invoice",
-   "fieldtype": "Link",
-   "label": "POS Invoice",
-   "options": "POS Invoice",
+   "fieldtype": "Data",
+   "label": "Invoice",
    "in_list_view": 1,
    "in_standard_filter": 1
   },
@@ -95,6 +97,26 @@
    "fieldtype": "Currency",
    "label": "Amount (invoice currency)",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "invoice_doctype",
+   "fieldtype": "Data",
+   "label": "Invoice Type",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "receipt",
+   "fieldtype": "Data",
+   "label": "Receipt (Payment Entry)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "label": "Location",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
   }
  ],
  "links": [],

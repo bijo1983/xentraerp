@@ -181,8 +181,10 @@ def _require_system_manager():
 
 
 @frappe.whitelist()
-def set_pin(user: str, pin: str, pos_profile: str | None = None):
-	"""Admin action: set or replace a cashier's PIN on this tenant's site."""
+def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: int = 1):
+	"""Admin action: set or replace a cashier's PIN on this tenant's site. Also gives
+	them the least-privilege POS Cashier role (unless assign_role=0), so their
+	screens can read items and prices."""
 	_require_system_manager()
 
 	pin = (pin or "").strip()
@@ -223,8 +225,14 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None):
 			}
 		)
 		doc.insert(ignore_permissions=True)
+	if cint(assign_role) and not _is_system_manager_user(user):
+		_give_pos_role(user)
 	frappe.db.commit()
 	return {"success": True}
+
+
+def _is_system_manager_user(user: str) -> bool:
+	return "System Manager" in frappe.get_roles(user)
 
 
 def validate_pos_invoice_profile(doc, method=None):
@@ -265,11 +273,101 @@ def list_pos_profiles():
 		fields=["name", "company", "currency", "warehouse", "customer", "selling_price_list"],
 	)
 	for profile in profiles:
+		from custom_erp.api.pos_core import location_of
+
+		loc = location_of(profile["name"])
+		profile["location"] = loc.location_code if loc else None
+		profile["location_name"] = loc.location_name if loc else None
 		payments = frappe.get_all(
 			"POS Payment Method",
 			filters={"parent": profile["name"], "parenttype": "POS Profile"},
 			fields=["mode_of_payment", "default"],
-			order_by="default desc, idx asc",
+			order_by="`default` desc, idx asc",
 		)
 		profile["payment_methods"] = [p["mode_of_payment"] for p in payments]
 	return profiles
+
+
+# ---------------------------------------------------------- staff & roles
+
+POS_ROLE = "POS Cashier"
+# What a cashier's own screens read directly over the REST API (the item grid,
+# prices, payment modes, the register). Everything that changes data goes
+# through the server-side POS methods, which do their own checks — so this role
+# is read-only on purpose.
+POS_ROLE_READS = ("Item", "Item Price", "Item Group", "POS Profile", "Mode of Payment", "Customer", "Price List", "Currency")
+
+
+def ensure_pos_role() -> str:
+	"""Create the least-privilege "POS Cashier" role (and its read permissions)
+	the first time it is needed."""
+	from frappe.permissions import add_permission
+
+	if not frappe.db.exists("Role", POS_ROLE):
+		frappe.get_doc({"doctype": "Role", "role_name": POS_ROLE, "desk_access": 0}).insert(ignore_permissions=True)
+	for doctype in POS_ROLE_READS:
+		if frappe.db.exists("DocType", doctype) and not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": POS_ROLE, "permlevel": 0}):
+			add_permission(doctype, POS_ROLE, 0)
+	return POS_ROLE
+
+
+def _give_pos_role(user: str):
+	ensure_pos_role()
+	doc = frappe.get_doc("User", user)
+	if POS_ROLE not in [r.role for r in doc.roles]:
+		doc.append("roles", {"role": POS_ROLE})
+		doc.save(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def list_pos_users():
+	"""Administrator: everyone who could work the tills, and whether they have a PIN."""
+	_require_system_manager()
+	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "active"])}
+	out = []
+	for u in frappe.get_all("User", filters={"enabled": 1, "name": ["not in", ["Guest", "Administrator"]]}, fields=["name", "full_name"], order_by="full_name asc"):
+		roles = frappe.get_roles(u.name)
+		p = pins.get(u.name)
+		out.append(
+			{
+				"user": u.name,
+				"full_name": u.full_name,
+				"has_pin": bool(p),
+				"active": bool(p and p.active),
+				"pos_profile": p.pos_profile if p else None,
+				"is_cashier_role": POS_ROLE in roles,
+				"is_admin": "System Manager" in roles,
+			}
+		)
+	return out
+
+
+@frappe.whitelist()
+def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | None = None):
+	"""Administrator: add a staff member who works the tills — a login-less user
+	(PIN only) with the POS Cashier role and a PIN, optionally locked to one register."""
+	_require_system_manager()
+	email = (email or "").strip().lower()
+	full_name = (full_name or "").strip()
+	if "@" not in email or not full_name:
+		frappe.throw("Enter the person's email and full name.")
+	if frappe.db.exists("User", email):
+		frappe.throw(f"{email} already exists — set a PIN for that user instead.")
+	_validate_pin_format((pin or "").strip())
+	ensure_pos_role()
+	frappe.get_doc(
+		{"doctype": "User", "email": email, "first_name": full_name, "send_welcome_email": 0, "enabled": 1, "roles": [{"role": POS_ROLE}]}
+	).insert(ignore_permissions=True)
+	set_pin(email, pin, pos_profile, 0)
+	return {"user": email}
+
+
+@frappe.whitelist()
+def set_pin_active(user: str, active: int = 1):
+	"""Administrator: switch a cashier's PIN off (e.g. they left) or back on."""
+	_require_system_manager()
+	if not frappe.db.exists("XentraERP POS PIN", user):
+		frappe.throw("That user has no PIN.")
+	frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
+	frappe.db.commit()
+	return {"success": True}

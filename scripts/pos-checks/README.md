@@ -8,3 +8,6 @@ Run from `/home/frappe/innovegic-bench/sites` with the bench Python (they use te
 - `e2e_setup.py` → `e2e_http.py` → `e2e_cleanup.py` — the same flow driven over real HTTPS through
   nginx → Next.js → Frappe with PIN login and cookies (this is what caught the session-clobbering bug that in-process
   tests cannot see). Setup creates temporary users/PINs/register; cleanup removes them.
+
+- `locations_receipts_suite.py` — locations & per-location numbering, Draft Invoice + Receipt, partial payment and settling, location-scoped tables/KOT, EOD by location (rolled back).
+- `staff_suite.py` — the POS Cashier role and staff/PIN management (rolled back).
