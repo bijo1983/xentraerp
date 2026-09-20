@@ -18,7 +18,7 @@ export function useDocTypeSchema(doctype: string) {
     }
 
     setLoading(true);
-    fetch(`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}&with_parent=1`, {
+    fetch(`/api/method/xentraerp.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}&with_parent=1`, {
       credentials: 'include',
     })
       .then((r) => r.json())

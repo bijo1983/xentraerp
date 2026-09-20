@@ -141,24 +141,32 @@ function consolidateTabs(rawTabs: Tab[]): Tab[] {
 
   if (!folded.length) return visible;
 
-  const moreSections: Section[] = folded.flatMap((tab) =>
-    tab.sections.map((section) => ({ ...section, label: section.label || tab.label }))
-  );
+  const toSections = (tabs: Tab[]): Section[] =>
+    tabs.flatMap((tab) => tab.sections.map((section) => ({ ...section, label: section.label || tab.label })));
 
-  // Attach the folded content to the tab holding the main child table
-  // (Items, for every real sales/purchase transaction) instead of a
-  // separate "More Details" tab — Currency/Totals/Discount/Accounting
-  // Dimensions read naturally right below the line items, the same place
-  // Frappe Desk itself surfaces running totals, rather than one more tab
-  // to hunt through. Falls back to a trailing "More Details" tab only
-  // when no visible tab has a table at all (a pure master doctype with
-  // nothing to attach this to).
+  // Price-related information should be readable on one page: Currency and
+  // Price List, Additional Discount and Totals are folded into the tab
+  // holding the main child table (Items, for every real sales/purchase
+  // transaction), directly below the line items. Only those three — every
+  // other folded tab (Accounting Dimensions, Terms, Address, More Info, ...)
+  // stays out of Items, in the trailing "More Details" tab. Falls back to
+  // "More Details" for everything when no visible tab has a table at all
+  // (a pure master doctype with nothing to attach the price sections to).
   const targetIdx = visible.findIndex(hasTable);
-  if (targetIdx === -1) {
-    return [...visible, { label: 'More Details', sections: moreSections }];
-  }
-  return visible.map((tab, i) => (i === targetIdx ? { ...tab, sections: [...tab.sections, ...moreSections] } : tab));
+  const priceTabs = targetIdx === -1 ? [] : folded.filter((tab) => PRICE_TAB_LABEL.test(tab.label.trim()));
+  const otherTabs = folded.filter((tab) => !priceTabs.includes(tab));
+
+  const withPrice = visible.map((tab, i) =>
+    i === targetIdx && priceTabs.length ? { ...tab, sections: [...tab.sections, ...toSections(priceTabs)] } : tab
+  );
+  return otherTabs.length ? [...withPrice, { label: 'More Details', sections: toSections(otherTabs) }] : withPrice;
 }
+
+// Sections that make up a document's price picture — see consolidateTabs.
+// Matches ERPNext's own labels ("Currency and Price List", "Additional
+// Discount", "Totals") on Sales/Purchase Order, Quotation, Invoices, and
+// Delivery Note/Purchase Receipt.
+const PRICE_TAB_LABEL = /^(currency and price list|additional discount( and coupon code)?|totals)$/i;
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
   const router = useRouter();
@@ -357,7 +365,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     setTransitioning(action);
     setTransitionError(null);
     try {
-      const res = await fetch(`/api/method/frappe.client.${action}`, {
+      const res = await fetch(`/api/method/xentraerp.client.${action}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

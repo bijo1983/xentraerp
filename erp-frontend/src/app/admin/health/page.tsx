@@ -18,7 +18,7 @@ export default function HealthPage() {
   useEffect(() => {
     async function run() {
       try {
-        const res = await fetch('/api/method/frappe.auth.get_logged_user');
+        const res = await fetch('/api/method/xentraerp.auth.get_logged_user');
         setChecks((c) => c.map((chk) =>
           chk.label === 'Frappe Backend'
             ? { ...chk, status: res.ok ? 'ok' : 'fail', detail: `HTTP ${res.status}` }

@@ -83,11 +83,29 @@ changes.
 - nginx listens on `:80`/`:443` and terminates TLS — mapping confirmed
   2026-09-14 by grepping `/etc/nginx/sites-available/` (the actual
   config files; `/etc/nginx/sites-enabled/*` are symlinks to these):
-  - `erp.badmintonbooking.com` (`sites-available/erp`) → `proxy_pass
-    http://localhost:8083` — this is the erp-frontend pm2 process. Single
-    `location /` block; the Next.js app itself proxies `/api/*` through to
-    the Frappe backend on `:8001` internally (see gunicorn note above),
-    nginx doesn't split that out.
+  - **`xentraerp.net` / `www.xentraerp.net`** (`sites-available/xentraerp.
+    net`, added 2026-09-20) → `proxy_pass http://localhost:8083` — this is
+    the erp-frontend pm2 process and the ONLY public hostname for the app.
+    Single `location /` block; the Next.js app itself proxies `/api/*`
+    through to the Frappe backend on `:8001` internally (see gunicorn note
+    above), nginx doesn't split that out. Let's Encrypt cert
+    `xentraerp.net` (webroot `/var/www/html`, expires 2026-12-19,
+    auto-renewed). **DNS**: the zone lives in DigitalOcean
+    (`doctl compute domain records list xentraerp.net`), with the
+    nameservers at the registrar (GoDaddy) pointed to
+    `ns1/2/3.digitalocean.com`. Do not move DNS back to GoDaddy's — its
+    hidden Websites + Marketing product injected two stray AWS A records
+    (`3.33.130.190`, `15.197.148.33`) that couldn't be removed from the
+    panel.
+  - `erp.badmintonbooking.com` — **removed from nginx 2026-09-20** (no
+    redirect, per user; sole user, still in development). Original config
+    backed up at `/root/erp.nginx.bak-1789898088`; its cert
+    (`/etc/letsencrypt/live/erp.badmintonbooking.com`) was left in place.
+    **Do NOT confuse with the Frappe *site* of the same name in
+    `sites/`** — that is the control-plane site, and
+    `ERP_BACKEND_HOST=erp.badmintonbooking.com` in `erp-frontend/.env.local`
+    is the internal Host header used to select it, not a public URL. Leave
+    both unchanged.
   - `badmintonbooking.com` / `www.badmintonbooking.com`
     (`sites-available/badmintonbooking.com`) — **unrelated app**, not
     erp-frontend: `location /api/` and `/health` → `:3001`
@@ -103,7 +121,8 @@ changes.
 
 ## Known application facts
 
-- URL scheme for tenants: `https://erp.badmintonbooking.com/<tenant_code>/...`
+- URL scheme for tenants: `https://xentraerp.net/<tenant_code>/...`
+  (moved from `erp.badmintonbooking.com` on 2026-09-20)
   — `src/middleware.ts` in erp-frontend strips the leading tenant-code path
   segment via a rewrite (not a `[tenant]` route folder) and sets an
   `xentra_tenant` cookie. Reserved first-segments (admin, api, login, app,
@@ -459,6 +478,77 @@ changes.
   concept) — nothing is created until that New form is actually saved.
   If a future doctype needs this and isn't in the table, it needs a
   manually-added entry, not just a data change.
+
+- **Fixed 2026-09-20**: print/PDF failed with HTTP 417 (`PDF generation
+  failed because of broken image links`, wkhtmltopdf `ContentNotFoundError`)
+  on every doctype — it can never have worked on this box. Cause: Frappe's
+  `/assets` static serving (`SharedDataMiddleware`) only exists in the dev
+  server (`bench start`); under production gunicorn (`:8001`) nothing serves
+  `/assets` or `/files` — Frappe expects nginx to. wkhtmltopdf fetches the
+  print stylesheet from `frappe.utils.get_url()`, which is `host_name` from
+  site config (`http://197349.xentraerp.local:8001`), got a 404, and Frappe
+  reports that as "broken image links". (Diagnosis trap: the 404 is also
+  written to the `website_404` redis hash, and a hand-made `curl` can give
+  inconsistent 200/404 depending on that cache and query string —
+  reproduce with wkhtmltopdf directly, not curl.) **Fix**: new internal-only
+  nginx listener `127.0.0.1:8002`
+  (`sites-available/frappe-internal`) that serves `/assets` and per-site
+  `/files` from disk and proxies everything else to gunicorn; tenant
+  `197349.xentraerp.local`'s `host_name` set to `...:8002` (was `...:8001`;
+  roll back with `bench --site <site> set-config host_name <old>`).
+  Verified: PDF for `SAL-ORD-2026-00002` generates (valid `%PDF-`, 21 KB).
+  **Every new tenant site needs the same `host_name` (`http://<site>:8002`)
+  — `provisioning.py` does not set it yet, so new tenants will hit this
+  again until it does.** `erp.badmintonbooking.com` / `demo.innovegicit.com`
+  have no `host_name` set and were not changed.
+- **Changed 2026-09-20**: `consolidateTabs` in `dynamic-form.tsx` had folded
+  *every* non-table tab (Accounting Dimensions, Terms, Address, More Info,
+  ...) into the Items tab. Now only the price sections — Currency and Price
+  List, Additional Discount (and Coupon Code), Totals, matched by
+  `PRICE_TAB_LABEL` — go into Items, so pricing reads on one page; all other
+  folded tabs return to a trailing "More Details" tab. Not verified visually
+  (no browser on this box).
+
+- **Added 2026-09-20 — backend names hidden from public URLs.** Requested:
+  nothing framework-branded visible when inspecting network traffic.
+  `src/lib/method-alias.ts` maps public method names to the backend's in the
+  `/api/method` and `/api/erp` proxies: `xentraerp.<x>` -> `frappe.<x>`,
+  `xentraerp.erp.<x>` -> `erpnext.<x>`; every frontend method string was
+  renamed (e.g. `/api/method/xentraerp.utils.print_format.download_pdf`).
+  Legacy `frappe.*` names are still *accepted* by the proxy (a stale cached
+  page keeps working) — they're just never emitted. Error responses (>= 400)
+  through all three proxies are scrubbed: `exc` (traceback) dropped, and
+  `frappe.`/`erpnext.` module paths in `exc_type`/`exception`/
+  `_server_messages` aliased. Verified: shipped client bundles contain no
+  `frappe.*`/`erpnext.*` method strings. **Not hidden**: the session cookie
+  names (`sid`, `system_user`, ...) are Frappe's standard ones and are passed
+  through as-is; `/api/resource/<DocType>` URLs necessarily contain ERPNext
+  doctype names. If a new frontend call to a backend method is added, use the
+  `xentraerp.` name (a bare `frappe.*` string would work but re-leaks it).
+- **Added 2026-09-20 — print designer.** Requested: position/remove fields,
+  global + custom header/footer, HTML-based printing. `PrintPanel` >
+  Customize now opens `print-designer.tsx` beside the live preview. A layout
+  (which header fields, side/order; item columns, order/label/align/width;
+  total rows; header/footer; font size) is compiled by `lib/print-layout.ts`
+  to the Jinja of a REAL Print Format (`custom_format: 1`), and the layout
+  JSON is embedded in that html as a `{# xentra-layout:v1 ... #}` Jinja
+  comment so the template can be reopened and edited. A Print Format without
+  that marker (hand-written, or older) opens in the raw HTML editor;
+  `standard: Yes` formats can't be edited in place, so they start a new
+  template. **Global header/footer = Frappe Letter Head** (the `is_default`
+  one applies to every print; `letter-head-dialog.tsx` manages them; the
+  print toolbar picks default / a specific one / none via the PDF endpoint's
+  `letterhead` / `no_letterhead` params). Frappe forces `source = Image` on
+  Letter Head insert, so the dialog re-saves it as HTML after creating.
+  Custom per-template header/footer is written into the template; a footer
+  is wrapped in `<div id="footer-html" class="visible-pdf">` (that id is what
+  Frappe lifts into the repeating PDF footer). Don't add the `page-break`
+  class to the root div — it forces a blank trailing page. Verified on
+  tenant 197349 by rendering real PDFs (field removal, reordering,
+  custom header/footer on every page, chosen/none/default letter head) and
+  the Letter Head create/update/default flow as `admin@jjc.com`. **The
+  designer UI itself has not been exercised in a browser** (none on this box).
+  Old `lib/print-template.ts` (fixed field-picker) was removed.
 
 ## Incident log
 

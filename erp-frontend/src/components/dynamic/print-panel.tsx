@@ -1,13 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Printer, Download, ExternalLink, Settings2, Loader2 } from 'lucide-react';
+import { Printer, Download, ExternalLink, Settings2, Loader2, PanelTop } from 'lucide-react';
 import { frappe } from '@/lib/frappe';
 import { CompiledField } from '@/lib/meta-compiler';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
-import { buildCustomPrintHtml } from '@/lib/print-template';
+import { PrintDesigner } from './print-designer';
+import { LetterHeadDialog } from './letter-head-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Props {
@@ -18,63 +18,34 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-// Fields the base template (lib/print-template.ts) already renders on its
-// own — offering these again in the "add extra fields" picker would just
-// duplicate them on the page.
-const ALREADY_SHOWN_HEADER = new Set([
-  'customer', 'customer_name', 'supplier', 'supplier_name', 'party_name', 'lead_name',
-  'company', 'currency', 'status', 'grand_total', 'rounded_total', 'total',
-  'discount_amount', 'additional_discount_percentage', 'outstanding_amount',
-  'in_words', 'terms', 'transaction_date', 'posting_date', 'delivery_date', 'due_date',
-]);
-const ALREADY_SHOWN_ITEM = new Set(['item_code', 'item_name', 'description', 'qty', 'uom', 'rate', 'amount']);
-const SYSTEM_FIELDNAMES = new Set([
-  'name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx',
-  'parent', 'parentfield', 'parenttype', 'naming_series', 'amended_from',
-]);
-
-const PICKABLE_COMPONENTS = new Set(['text', 'number', 'date', 'datetime', 'check', 'select', 'link', 'readonly', 'textarea']);
-
 // Frappe's own print-format rendering (letterhead, tax breakdowns, per-
 // doctype layout) already covers what a compliant business document needs
 // far better than a from-scratch React reimplementation would — this panel
 // just gives that existing PDF a modern in-app preview instead of a bare
-// new-tab link. The "Customize" flow below still follows that principle:
-// instead of drawing extra fields onto the PDF ourselves, it builds and
-// saves a real Print Format (Jinja) record that Frappe's own engine then
-// renders — see lib/print-template.ts.
+// new-tab link. The "Customize" flow still follows that principle: the
+// designer (print-designer.tsx) doesn't draw anything itself — it compiles a
+// layout to a real Print Format (Jinja) record that Frappe's own engine then
+// renders — see lib/print-layout.ts.
 export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props) {
   const [formats, setFormats] = useState<string[]>([]);
   const [format, setFormat] = useState<string>('');
-  const [noLetterhead, setNoLetterhead] = useState(false);
+  // '' = the tenant's default header/footer, '__none__' = no header/footer,
+  // anything else = a specific Letter Head chosen for this print.
+  const [letterHead, setLetterHead] = useState<string>('');
+  const [letterHeads, setLetterHeads] = useState<Array<{ name: string; is_default: number }>>([]);
+  const [manageHeadsOpen, setManageHeadsOpen] = useState(false);
   const [previewState, setPreviewState] = useState<'loading' | 'ok' | 'error'>('loading');
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+  // Bumped after a template is saved so the preview re-renders even when the
+  // selected format name (and therefore the URL) hasn't changed.
+  const [previewNonce, setPreviewNonce] = useState(0);
 
   const [customizing, setCustomizing] = useState(false);
-  const [templateName, setTemplateName] = useState('');
-  const [headerPicks, setHeaderPicks] = useState<Set<string>>(new Set());
-  const [itemPicks, setItemPicks] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const itemsField = useMemo(() => fields.find((f) => f.component === 'table'), [fields]);
+  const itemsField = useMemo(() => fields.find((f) => f.component === 'table') || null, [fields]);
   const { schema: childSchema } = useDocTypeSchema(itemsField?.options || '');
-
-  const headerCandidates = useMemo(
-    () =>
-      fields.filter(
-        (f) => PICKABLE_COMPONENTS.has(f.component) && !SYSTEM_FIELDNAMES.has(f.fieldname) && !ALREADY_SHOWN_HEADER.has(f.fieldname)
-      ),
-    [fields]
-  );
-  const itemCandidates = useMemo(
-    () =>
-      (childSchema?.fields || []).filter(
-        (f) => PICKABLE_COMPONENTS.has(f.component) && !SYSTEM_FIELDNAMES.has(f.fieldname) && !ALREADY_SHOWN_ITEM.has(f.fieldname)
-      ),
-    [childSchema]
-  );
+  const designerReady = !itemsField || !!childSchema;
 
   const loadFormats = () => {
     frappe
@@ -88,14 +59,27 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
       });
   };
 
+  const loadLetterHeads = () => {
+    frappe
+      .getLetterHeads()
+      .then(setLetterHeads)
+      .catch(() => setLetterHeads([]));
+  };
+
   useEffect(() => {
     if (!open) return;
     loadFormats();
-    setTemplateName(`${doctype} Custom`);
+    loadLetterHeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, doctype]);
 
-  const pdfUrl = frappe.printPdfUrl(doctype, name, format || undefined, noLetterhead);
+  const pdfUrl = frappe.printPdfUrl(
+    doctype,
+    name,
+    format || undefined,
+    letterHead === '__none__',
+    letterHead && letterHead !== '__none__' ? letterHead : undefined
+  );
 
   // Frappe's own PDF endpoint returns `application/pdf` bytes on success,
   // but on any server-side failure (a missing/misconfigured PDF renderer,
@@ -147,62 +131,17 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, pdfUrl]);
+  }, [open, pdfUrl, previewNonce]);
 
-  const toggle = (set: Set<string>, setSet: (s: Set<string>) => void, fieldname: string) => {
-    const next = new Set(set);
-    if (next.has(fieldname)) next.delete(fieldname);
-    else next.add(fieldname);
-    setSet(next);
-  };
-
-  const saveTemplate = async () => {
-    const trimmedName = templateName.trim();
-    if (!trimmedName) {
-      setSaveError('Enter a name for the template');
-      return;
-    }
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const html = buildCustomPrintHtml({
-        itemsFieldname: itemsField?.fieldname || null,
-        headerFields: fields.filter((f) => headerPicks.has(f.fieldname)).map((f) => ({ fieldname: f.fieldname, label: f.label })),
-        itemFields: (childSchema?.fields || [])
-          .filter((f) => itemPicks.has(f.fieldname))
-          .map((f) => ({ fieldname: f.fieldname, label: f.label })),
-      });
-      await frappe.createDoc('Print Format', {
-        name: trimmedName,
-        doc_type: doctype,
-        print_format_type: 'Jinja',
-        // `custom_format: 1` is what actually makes Frappe's print engine
-        // render our `html` at all — without it, get_rendered_template
-        // (frappe/www/printview.py) ignores html/print_format_type
-        // entirely and silently falls back to the generic "Standard"
-        // layout, regardless of print_format_type. Confirmed live: the
-        // exact same saved format rendered as plain Standard output before
-        // this flag was added, and rendered this template correctly after.
-        custom_format: 1,
-        standard: 'No',
-        disabled: 0,
-        html,
-      });
-      setFormats((prev) => (prev.includes(trimmedName) ? prev : [...prev, trimmedName]));
-      setFormat(trimmedName);
-      setCustomizing(false);
-      setHeaderPicks(new Set());
-      setItemPicks(new Set());
-    } catch (e) {
-      setSaveError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setSaving(false);
-    }
+  const onTemplateSaved = (savedName: string) => {
+    setFormats((prev) => (prev.includes(savedName) ? prev : [...prev, savedName]));
+    setFormat(savedName);
+    setPreviewNonce((n) => n + 1);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={customizing ? 'max-w-7xl' : 'max-w-3xl'}>
         <DialogHeader>
           <DialogTitle>
             Print {doctype}: {name}
@@ -224,12 +163,24 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
               </SelectContent>
             </Select>
           )}
-          <Button
-            variant={noLetterhead ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setNoLetterhead((v) => !v)}
-          >
-            {noLetterhead ? 'Letterhead off' : 'Letterhead on'}
+          <Select value={letterHead || 'default'} onValueChange={(v) => setLetterHead(v === 'default' ? '' : v)}>
+            <SelectTrigger className="h-9 w-56" aria-label="Header and footer">
+              <SelectValue placeholder="Header & footer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default header &amp; footer</SelectItem>
+              {letterHeads.map((h) => (
+                <SelectItem key={h.name} value={h.name}>
+                  {h.name}
+                  {h.is_default ? ' (default)' : ''}
+                </SelectItem>
+              ))}
+              <SelectItem value="__none__">No header &amp; footer</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setManageHeadsOpen(true)}>
+            <PanelTop className="h-3.5 w-3.5" />
+            Global header &amp; footer
           </Button>
           <Button variant={customizing ? 'default' : 'outline'} size="sm" className="gap-1.5" onClick={() => setCustomizing((v) => !v)}>
             <Settings2 className="h-3.5 w-3.5" />
@@ -265,92 +216,51 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
           </div>
         </div>
 
-        {customizing && (
-          <div className="mb-3 space-y-3 rounded-md border bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">
-              Pick any extra fields to include, then save the combination as a new print format for {doctype} — it
-              stays available in the format list above for every future print, for anyone on this tenant.
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Additional header fields</p>
-                <div className="max-h-40 space-y-1 overflow-y-auto rounded border bg-background p-2">
-                  {headerCandidates.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No extra fields available</p>
-                  ) : (
-                    headerCandidates.map((f) => (
-                      <label key={f.fieldname} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={headerPicks.has(f.fieldname)}
-                          onChange={() => toggle(headerPicks, setHeaderPicks, f.fieldname)}
-                        />
-                        {f.label}
-                      </label>
-                    ))
-                  )}
+        <div className={customizing ? 'grid gap-3 lg:grid-cols-[440px_minmax(0,1fr)]' : ''}>
+          {customizing && (
+            <div style={{ height: '65vh' }} className="min-h-0">
+              {designerReady ? (
+                <PrintDesigner
+                  key={format}
+                  doctype={doctype}
+                  fields={fields}
+                  itemsField={itemsField}
+                  childFields={childSchema?.fields || []}
+                  formats={formats}
+                  initialFormat={format}
+                  onSaved={onTemplateSaved}
+                  onManageLetterHeads={() => setManageHeadsOpen(true)}
+                />
+              ) : (
+                <div className="flex h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading fields…
                 </div>
-              </div>
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Additional item columns {itemsField ? '' : '(no item table on this doctype)'}
-                </p>
-                <div className="max-h-40 space-y-1 overflow-y-auto rounded border bg-background p-2">
-                  {itemCandidates.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No extra fields available</p>
-                  ) : (
-                    itemCandidates.map((f) => (
-                      <label key={f.fieldname} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={itemPicks.has(f.fieldname)}
-                          onChange={() => toggle(itemPicks, setItemPicks, f.fieldname)}
-                        />
-                        {f.label}
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="Template name"
-                className="h-9 w-64"
-              />
-              <Button size="sm" onClick={saveTemplate} disabled={saving} className="gap-1.5">
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Save as Template
-              </Button>
-              {saveError && <p className="text-xs text-destructive">{saveError}</p>}
-            </div>
-          </div>
-        )}
-
-        <div className="overflow-hidden rounded-md border bg-muted/30" style={{ height: '65vh' }}>
-          {previewState === 'loading' ? (
-            <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Rendering print preview…
-            </div>
-          ) : previewState === 'error' ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-              <p className="text-sm font-medium text-destructive">Couldn't generate the PDF for this document</p>
-              <p className="max-w-xl whitespace-pre-wrap break-words text-xs text-muted-foreground">{previewError}</p>
-              <p className="text-xs text-muted-foreground">
-                This is usually a server-side PDF rendering problem, not a data issue — check the PDF generator on the
-                backend before assuming this document's data is wrong.
-              </p>
-            </div>
-          ) : (
-            // Native browser PDF viewer — no extra library needed. Points
-            // at the blob URL fetched above (not `pdfUrl` directly) so a
-            // failed generation never lands raw response bytes in the
-            // iframe.
-            <iframe key={previewObjectUrl} src={previewObjectUrl || undefined} title="Print preview" className="h-full w-full" />
           )}
+          <div className="overflow-hidden rounded-md border bg-muted/30" style={{ height: '65vh' }}>
+            {previewState === 'loading' ? (
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Rendering print preview…
+              </div>
+            ) : previewState === 'error' ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                <p className="text-sm font-medium text-destructive">Couldn't generate the PDF for this document</p>
+                <p className="max-w-xl whitespace-pre-wrap break-words text-xs text-muted-foreground">{previewError}</p>
+                <p className="text-xs text-muted-foreground">
+                  This is usually a server-side PDF rendering problem, not a data issue — check the PDF generator on the
+                  backend before assuming this document's data is wrong.
+                </p>
+              </div>
+            ) : (
+              // Native browser PDF viewer — no extra library needed. Points
+              // at the blob URL fetched above (not `pdfUrl` directly) so a
+              // failed generation never lands raw response bytes in the
+              // iframe.
+              <iframe key={previewObjectUrl} src={previewObjectUrl || undefined} title="Print preview" className="h-full w-full" />
+            )}
+          </div>
         </div>
 
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -358,6 +268,14 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
           Use your browser's own print button inside the preview above for a direct print dialog.
         </p>
       </DialogContent>
+      <LetterHeadDialog
+        open={manageHeadsOpen}
+        onOpenChange={setManageHeadsOpen}
+        onChanged={() => {
+          loadLetterHeads();
+          setPreviewNonce((n) => n + 1);
+        }}
+      />
     </Dialog>
   );
 }

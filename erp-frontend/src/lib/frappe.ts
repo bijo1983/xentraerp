@@ -38,7 +38,7 @@ class FrappeClient {
   }
 
   async getLoggedUser() {
-    const res = await this.http.get('/api/method/frappe.auth.get_logged_user');
+    const res = await this.http.get('/api/method/xentraerp.auth.get_logged_user');
     return res.data.message;
   }
 
@@ -100,27 +100,27 @@ class FrappeClient {
 
   // ── Report / Query ─────────────────────────────────────────────
   async getReport(reportName: string, filters?: Record<string, unknown>) {
-    return this.call('frappe.client.get_report', {
+    return this.call('xentraerp.client.get_report', {
       report_name: reportName,
       filters,
     });
   }
 
   async getCount(doctype: string, filters?: Record<string, unknown>) {
-    return this.call('frappe.client.get_count', { doctype, filters });
+    return this.call('xentraerp.client.get_count', { doctype, filters });
   }
 
   // ── Bulk actions ────────────────────────────────────────────────
   /** Updates a batch of documents in one request via Frappe's own bulk_update. Returns any per-doc failures. */
   async bulkUpdate(doctype: string, names: string[], changes: Record<string, unknown>) {
     const docs = names.map((docname) => ({ doctype, docname, ...changes }));
-    const result = await this.call('frappe.client.bulk_update', { docs: JSON.stringify(docs) });
+    const result = await this.call('xentraerp.client.bulk_update', { docs: JSON.stringify(docs) });
     return (result?.failed_docs || []) as Array<{ doc: Record<string, unknown>; exc: string }>;
   }
 
   /** Deletes a batch of documents via Frappe's own bulk-delete (the same endpoint Desk's list view uses). */
   async bulkDelete(doctype: string, names: string[]) {
-    return this.call('frappe.desk.reportview.delete_items', {
+    return this.call('xentraerp.desk.reportview.delete_items', {
       doctype,
       items: JSON.stringify(names),
     });
@@ -139,11 +139,22 @@ class FrappeClient {
     return (rows as Array<{ name: string }>).map((r) => r.name);
   }
 
-  printPdfUrl(doctype: string, name: string, format?: string, noLetterhead?: boolean) {
+  // Letter Heads (the tenant's global header/footer). `is_default` is the one
+  // every print uses unless a print picks another.
+  async getLetterHeads() {
+    const rows = await this.getList('Letter Head', {
+      fields: JSON.stringify(['name', 'is_default', 'disabled']),
+      limit_page_length: 0,
+    });
+    return (rows as Array<{ name: string; is_default: number; disabled: number }>).filter((r) => !r.disabled);
+  }
+
+  printPdfUrl(doctype: string, name: string, format?: string, noLetterhead?: boolean, letterHead?: string) {
     const params = new URLSearchParams({ doctype, name });
     if (format) params.set('format', format);
     if (noLetterhead) params.set('no_letterhead', '1');
-    return `/api/method/frappe.utils.print_format.download_pdf?${params.toString()}`;
+    else if (letterHead) params.set('letterhead', letterHead);
+    return `/api/method/xentraerp.utils.print_format.download_pdf?${params.toString()}`;
   }
 }
 

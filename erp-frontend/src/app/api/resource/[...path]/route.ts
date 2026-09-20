@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
 import { resolveTenant } from '@/lib/tenancy/registry';
+import { scrubErrorBody } from '@/lib/method-alias';
 
 function tenantSlug(req: NextRequest): string | undefined {
   return req.headers.get('x-xentra-tenant') || req.cookies.get('xentra_tenant')?.value || undefined;
@@ -34,7 +35,8 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
       const chunks: Buffer[] = [];
       proxyRes.on('data', (chunk) => chunks.push(chunk));
       proxyRes.on('end', () => {
-        const data = Buffer.concat(chunks);
+        let data = Buffer.concat(chunks);
+        if ((proxyRes.statusCode || 0) >= 400) data = scrubErrorBody(data, proxyRes.headers['content-type'] as string | undefined);
         const responseHeaders = new Headers();
         responseHeaders.set('Content-Type', (proxyRes.headers['content-type'] as string) || 'application/json');
         const setCookie = proxyRes.headers['set-cookie'];
