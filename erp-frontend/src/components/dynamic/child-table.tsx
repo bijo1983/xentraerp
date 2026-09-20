@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { LinkField } from '@/components/fields/link-field';
 import { AttachField } from '@/components/fields/attach-field';
 import { ItemPickerDialog, PickedItem } from './item-picker-dialog';
+import { lookupPrice } from '@/lib/item-prices';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { frappe } from '@/lib/frappe';
 import { SlidersHorizontal } from 'lucide-react';
@@ -116,12 +117,40 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
     updateRowFields(idx, patch);
   };
 
+  // Which rate a picked item should bring onto the line: the item's price
+  // from the document's own price list (Item Price records — see
+  // lib/item-prices.ts), falling back to the Item master's default. Sales
+  // documents read the selling price, purchase documents the purchase price;
+  // a purchase line must never inherit the *selling* rate, so its fallback
+  // is the last purchase rate instead.
+  const resolveRate = async (item: PickedItem & { last_purchase_rate?: number }): Promise<number | undefined> => {
+    const side = pickerContextFor(childDoctype);
+    if (side === 'sales') {
+      const list = parentDoc?.selling_price_list as string | undefined;
+      const price = await lookupPrice(item.item_code, 'selling', list, item.stock_uom);
+      return price ?? (item.standard_rate ? Number(item.standard_rate) : undefined);
+    }
+    if (side === 'purchase') {
+      const list = parentDoc?.buying_price_list as string | undefined;
+      const price = await lookupPrice(item.item_code, 'buying', list, item.stock_uom);
+      const last = Number(item.last_purchase_rate);
+      return price ?? (last > 0 ? last : undefined);
+    }
+    return item.standard_rate;
+  };
+
+  const applyItemPriced = async (idx: number, item: PickedItem & { last_purchase_rate?: number }) => {
+    const rate = await resolveRate(item);
+    applyItem(idx, { ...item, standard_rate: rate });
+  };
+
   const onItemCodeChanged = async (idx: number, code: string) => {
     updateRow(idx, 'item_code', code);
     if (!code) return;
     try {
       const item = await frappe.getDoc('Item', code);
-      applyItem(idx, {
+      await applyItemPriced(idx, {
+        last_purchase_rate: item.last_purchase_rate,
         item_code: item.name,
         item_name: item.item_name,
         description: item.description,
@@ -299,7 +328,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
           onOpenChange={(o) => !o && setPickerRow(null)}
           context={pickerContextFor(childDoctype)}
           onSelect={(item) => {
-            if (pickerRow !== null) applyItem(pickerRow, item);
+            if (pickerRow !== null) applyItemPriced(pickerRow, item);
             setPickerRow(null);
           }}
         />

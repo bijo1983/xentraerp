@@ -16,6 +16,7 @@ import { ChildTable } from './child-table';
 import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
 import { RecordSummary } from './record-summary';
+import { ItemPricePanel, useItemPrices } from './item-price-panel';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Printer, PanelRight, Plus, ChevronDown, Loader2 } from 'lucide-react';
 
@@ -189,6 +190,15 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Item only: standard selling / purchase price inputs, stored as Item Price
+  // records (see lib/item-prices.ts). Keyed on the `name` prop — not on the
+  // name a just-created record gets — so a failed price save right after
+  // creation doesn't reload the panel and wipe what the user typed.
+  const isItem = doctype === 'Item';
+  const [createdName, setCreatedName] = useState<string | null>(null);
+  const savedName = name || createdName || undefined;
+  const itemPrices = useItemPrices(isItem, name, doc.stock_uom as string | undefined);
+
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
   // never holds anything but schema defaults, and every field without a
@@ -334,19 +344,36 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       for (const key of Object.keys(payload)) {
         if (payload[key] === '__user') payload[key] = '';
       }
-      const url = name
-        ? `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`
+      // A new Item's price is saved as an Item Price by the panel below; a
+      // `standard_rate` on the insert payload would make ERPNext create its
+      // own (duplicate) Item Price as well.
+      if (isItem && !savedName) delete payload.standard_rate;
+      const url = savedName
+        ? `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(savedName)}`
         : `/api/resource/${encodeURIComponent(doctype)}`;
       const res = await fetch(url, {
-        method: name ? 'PUT' : 'POST',
+        method: savedName ? 'PUT' : 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.exception || data?.message || res.statusText);
-      onSave?.(data.data);
-      onSaved?.((data.data as Record<string, unknown>)?.name as string);
+      const savedDoc = data.data as Record<string, unknown>;
+      if (!savedName) setCreatedName(savedDoc?.name as string);
+      if (isItem) {
+        try {
+          await itemPrices.save(savedDoc?.name as string);
+        } catch (priceErr) {
+          // The Item itself is saved; only the price step failed. Stay on the
+          // form (a retry updates this same record — see `savedName`) instead
+          // of navigating away and losing the message.
+          setSaveError(`The item was saved, but its price wasn't: ${priceErr instanceof Error ? priceErr.message : String(priceErr)}`);
+          return;
+        }
+      }
+      onSave?.(savedDoc);
+      onSaved?.(savedDoc?.name as string);
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -422,7 +449,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   if (!schema) return null;
 
   const docstatus = Number(doc.docstatus ?? 0);
-  const tabs = buildTabs(schema.fields);
+  // On Item, the old "Standard Selling Rate" field (shown only while creating)
+  // is replaced by the price panel, which also covers the purchase price.
+  const tabs = buildTabs(isItem ? schema.fields.filter((f) => f.fieldname !== 'standard_rate') : schema.fields);
 
   // A tab whose fields include an unfilled required one gets flagged in the
   // tab bar — the user shouldn't have to visit every tab to discover which
@@ -560,6 +589,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
 
       {/* Active tab content */}
       <div className="p-5 space-y-6">
+        {isItem && activeTab === 0 && <ItemPricePanel state={itemPrices} />}
         {tabs[activeTab]?.sections
           .filter((section) => evalDependsOn(section.depends_on, doc))
           .map((section, si) => {
