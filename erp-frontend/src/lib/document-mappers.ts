@@ -12,6 +12,16 @@ export interface DocumentMapper {
   label: string;
   targetDoctype: string;
   method: string;
+  /**
+   * How to call `method`. Most of ERPNext's chaining actions are
+   * `get_mapped_doc`-based functions taking a single `source_name` kwarg
+   * (the default). Advance/against-document payments instead go through
+   * `payment_entry.get_payment_entry(dt, dn, ...)`, a different whitelisted
+   * helper that isn't a mapper at all — it needs the source doctype+name as
+   * two separate kwargs. Verified against this bench's installed erpnext
+   * source (erpnext/accounts/doctype/payment_entry/payment_entry.py).
+   */
+  paramStyle?: 'source_name' | 'dt_dn' | 'selected_items';
 }
 
 export const DOCUMENT_MAPPERS: Record<string, DocumentMapper[]> = {
@@ -28,9 +38,22 @@ export const DOCUMENT_MAPPERS: Record<string, DocumentMapper[]> = {
   'Sales Order': [
     { label: 'Delivery Note', targetDoctype: 'Delivery Note', method: 'erpnext.selling.doctype.sales_order.sales_order.make_delivery_note' },
     { label: 'Sales Invoice', targetDoctype: 'Sales Invoice', method: 'erpnext.selling.doctype.sales_order.sales_order.make_sales_invoice' },
+    { label: 'Material Request', targetDoctype: 'Material Request', method: 'erpnext.selling.doctype.sales_order.sales_order.make_material_request' },
+    { label: 'Payment (Advance)', targetDoctype: 'Payment Entry', method: 'erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry', paramStyle: 'dt_dn' },
+    // Drop-ship/procure-for-order flow — unlike the mappers above, this one
+    // (erpnext/selling/doctype/sales_order/sales_order.py) requires a
+    // `selected_items` list of {item_code} and silently returns nothing
+    // without it (see dynamic-form.tsx's createLinkedDocument, which builds
+    // it from the Sales Order's own Items table rather than adding a
+    // separate row-picker dialog).
+    { label: 'Purchase Order', targetDoctype: 'Purchase Order', method: 'erpnext.selling.doctype.sales_order.sales_order.make_purchase_order', paramStyle: 'selected_items' },
   ],
   'Delivery Note': [
     { label: 'Sales Invoice', targetDoctype: 'Sales Invoice', method: 'erpnext.stock.doctype.delivery_note.delivery_note.make_sales_invoice' },
+  ],
+  'Sales Invoice': [
+    { label: 'Payment Entry', targetDoctype: 'Payment Entry', method: 'erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry', paramStyle: 'dt_dn' },
+    { label: 'Credit Note (Return)', targetDoctype: 'Sales Invoice', method: 'erpnext.accounts.doctype.sales_invoice.sales_invoice.make_sales_return' },
   ],
   'Material Request': [
     { label: 'Purchase Order', targetDoctype: 'Purchase Order', method: 'erpnext.stock.doctype.material_request.material_request.make_purchase_order' },
@@ -39,8 +62,13 @@ export const DOCUMENT_MAPPERS: Record<string, DocumentMapper[]> = {
   'Purchase Order': [
     { label: 'Purchase Receipt', targetDoctype: 'Purchase Receipt', method: 'erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_receipt' },
     { label: 'Purchase Invoice', targetDoctype: 'Purchase Invoice', method: 'erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_invoice' },
+    { label: 'Payment (Advance)', targetDoctype: 'Payment Entry', method: 'erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry', paramStyle: 'dt_dn' },
   ],
   'Purchase Receipt': [
     { label: 'Purchase Invoice', targetDoctype: 'Purchase Invoice', method: 'erpnext.stock.doctype.purchase_receipt.purchase_receipt.make_purchase_invoice' },
+  ],
+  'Purchase Invoice': [
+    { label: 'Payment Entry', targetDoctype: 'Payment Entry', method: 'erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry', paramStyle: 'dt_dn' },
+    { label: 'Debit Note (Return)', targetDoctype: 'Purchase Invoice', method: 'erpnext.accounts.doctype.purchase_invoice.purchase_invoice.make_debit_note' },
   ],
 };

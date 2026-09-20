@@ -47,6 +47,9 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
   const [formats, setFormats] = useState<string[]>([]);
   const [format, setFormat] = useState<string>('');
   const [noLetterhead, setNoLetterhead] = useState(false);
+  const [previewState, setPreviewState] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
 
   const [customizing, setCustomizing] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -93,6 +96,58 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
   }, [open, doctype]);
 
   const pdfUrl = frappe.printPdfUrl(doctype, name, format || undefined, noLetterhead);
+
+  // Frappe's own PDF endpoint returns `application/pdf` bytes on success,
+  // but on any server-side failure (a missing/misconfigured PDF renderer,
+  // a Jinja error in the format, ...) it returns a normal `application/
+  // json` error body instead — same status-200-vs-500 handling as any other
+  // whitelisted method. Pointing an <iframe> straight at the URL couldn't
+  // tell the two apart: the browser just rendered whatever bytes came back,
+  // so a backend failure showed up as a wall of raw JSON/exception text
+  // inside the "print preview" with no indication anything had gone wrong.
+  // Fetching first lets us tell the difference and show a real error
+  // instead.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setPreviewState('loading');
+    setPreviewError(null);
+    fetch(pdfUrl, { credentials: 'include' })
+      .then(async (res) => {
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || !contentType.includes('pdf')) {
+          let message = `${res.status} ${res.statusText}`;
+          try {
+            const data = await res.json();
+            message = data?.exception || data?._server_messages || data?.message || message;
+          } catch {
+            /* not JSON either — fall back to the status line above */
+          }
+          if (!cancelled) {
+            setPreviewError(String(message));
+            setPreviewState('error');
+          }
+          return;
+        }
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreviewObjectUrl(objectUrl);
+        setPreviewState('ok');
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setPreviewError(String(e instanceof Error ? e.message : e));
+          setPreviewState('error');
+        }
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pdfUrl]);
 
   const toggle = (set: Set<string>, setSet: (s: Set<string>) => void, fieldname: string) => {
     const next = new Set(set);
@@ -181,17 +236,31 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
             Customize
           </Button>
           <div className="ml-auto flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5" asChild>
-              <a href={pdfUrl} target="_blank" rel="noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open in new tab
-              </a>
+            <Button variant="outline" size="sm" className="gap-1.5" disabled={previewState !== 'ok'} asChild={previewState === 'ok'}>
+              {previewState === 'ok' ? (
+                <a href={pdfUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open in new tab
+                </a>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open in new tab
+                </span>
+              )}
             </Button>
-            <Button size="sm" className="gap-1.5 shadow-elevation-xs" asChild>
-              <a href={pdfUrl} download={`${name}.pdf`}>
-                <Download className="h-3.5 w-3.5" />
-                Download
-              </a>
+            <Button size="sm" className="gap-1.5 shadow-elevation-xs" disabled={previewState !== 'ok'} asChild={previewState === 'ok'}>
+              {previewState === 'ok' ? (
+                <a href={pdfUrl} download={`${name}.pdf`}>
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </a>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </span>
+              )}
             </Button>
           </div>
         </div>
@@ -261,9 +330,27 @@ export function PrintPanel({ doctype, name, fields, open, onOpenChange }: Props)
         )}
 
         <div className="overflow-hidden rounded-md border bg-muted/30" style={{ height: '65vh' }}>
-          {/* Native browser PDF viewer — no extra library needed. Key on the
-              URL so switching format/letterhead reloads the preview. */}
-          <iframe key={pdfUrl} src={pdfUrl} title="Print preview" className="h-full w-full" />
+          {previewState === 'loading' ? (
+            <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Rendering print preview…
+            </div>
+          ) : previewState === 'error' ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+              <p className="text-sm font-medium text-destructive">Couldn't generate the PDF for this document</p>
+              <p className="max-w-xl whitespace-pre-wrap break-words text-xs text-muted-foreground">{previewError}</p>
+              <p className="text-xs text-muted-foreground">
+                This is usually a server-side PDF rendering problem, not a data issue — check the PDF generator on the
+                backend before assuming this document's data is wrong.
+              </p>
+            </div>
+          ) : (
+            // Native browser PDF viewer — no extra library needed. Points
+            // at the blob URL fetched above (not `pdfUrl` directly) so a
+            // failed generation never lands raw response bytes in the
+            // iframe.
+            <iframe key={previewObjectUrl} src={previewObjectUrl || undefined} title="Print preview" className="h-full w-full" />
+          )}
         </div>
 
         <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">

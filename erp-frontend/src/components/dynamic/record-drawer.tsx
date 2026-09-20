@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, MessageSquare, History, Link2, ChevronRight, ChevronDown, Send, Loader2 } from 'lucide-react';
+import { X, MessageSquare, History, Link2, ArrowUpRight, Send, Loader2 } from 'lucide-react';
 import { frappe } from '@/lib/frappe';
 import { formatDate, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useTenantCode, withTenant } from '@/lib/tenant';
+import { doctypeListRoute } from '@/lib/doctype-routes';
 
 interface Props {
   doctype: string;
@@ -83,8 +84,6 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
   const [links, setLinks] = useState<LinkDef[]>([]);
   const [linkCounts, setLinkCounts] = useState<Record<string, number>>({});
   const [linksLoading, setLinksLoading] = useState(false);
-  const [expandedLink, setExpandedLink] = useState<string | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Record<string, { name: string }[]>>({});
 
   const loadComments = async () => {
     setCommentsLoading(true);
@@ -207,21 +206,9 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
     }
   };
 
-  const toggleLinkExpand = async (linkDoctype: string, linkFieldname: string) => {
-    if (expandedLink === linkDoctype) {
-      setExpandedLink(null);
-      return;
-    }
-    setExpandedLink(linkDoctype);
-    if (!expandedRows[linkDoctype]) {
-      const rows = await frappe.getList(linkDoctype, {
-        fields: JSON.stringify(['name']),
-        filters: JSON.stringify([[linkFieldname, '=', name]]),
-        limit_page_length: 20,
-        order_by: 'modified desc',
-      });
-      setExpandedRows((prev) => ({ ...prev, [linkDoctype]: (Array.isArray(rows) ? rows : []) as { name: string }[] }));
-    }
+  const goToConnection = (linkDoctype: string, linkFieldname: string) => {
+    const qs = new URLSearchParams({ [linkFieldname]: name }).toString();
+    router.push(withTenant(`${doctypeListRoute(linkDoctype)}?${qs}`, tenantCode));
   };
 
   return (
@@ -337,7 +324,6 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
                 // get_open_count at all — treat as "may have rows",
                 // clickable either way, rather than always disabled at 0.
                 const clickable = l.unknownCount || count > 0;
-                const isOpen = expandedLink === l.link_doctype;
                 const showGroupHeader = i === 0 || links[i - 1].group !== l.group;
                 return (
                   <div key={l.link_doctype}>
@@ -347,36 +333,22 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
                       </p>
                     )}
                     <button
-                      onClick={() => toggleLinkExpand(l.link_doctype, l.link_fieldname)}
+                      onClick={() => goToConnection(l.link_doctype, l.link_fieldname)}
                       disabled={!clickable}
+                      title={clickable ? `View ${l.link_doctype} linked to this document` : undefined}
                       className={cn(
                         'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-smooth',
                         clickable ? 'hover:bg-accent/50' : 'opacity-50'
                       )}
                     >
                       <span className="flex items-center gap-1.5">
-                        {clickable ? (
-                          isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
-                        ) : (
-                          <span className="w-3.5" />
-                        )}
+                        {clickable && <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />}
                         {l.link_doctype}
                       </span>
-                      <span className="text-xs text-muted-foreground">{l.unknownCount ? '' : count}</span>
+                      <span className={cn('text-xs', count > 0 ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                        {l.unknownCount ? '' : count}
+                      </span>
                     </button>
-                    {isOpen && (
-                      <div className="ml-5 space-y-0.5 border-l pl-2">
-                        {(expandedRows[l.link_doctype] || []).map((r) => (
-                          <button
-                            key={r.name}
-                            onClick={() => router.push(withTenant(`/app/${encodeURIComponent(l.link_doctype)}/${encodeURIComponent(r.name)}`, tenantCode))}
-                            className="block w-full truncate rounded px-1.5 py-1 text-left text-xs text-primary hover:bg-accent/50 hover:underline"
-                          >
-                            {r.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 );
               })

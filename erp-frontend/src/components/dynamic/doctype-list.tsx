@@ -1,6 +1,6 @@
 'use client';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useReactTable, getCoreRowModel, flexRender, createColumnHelper } from '@tanstack/react-table';
 import {
   Search, X, Inbox, ChevronRight, ChevronLeft, ChevronsUpDown, ChevronUp, ChevronDown,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useFrappeList } from '@/hooks/use-frappe-list';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
+import { CompiledMeta } from '@/lib/meta-compiler';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
 import { toCsv, downloadTextFile } from '@/lib/csv';
 import { frappe } from '@/lib/frappe';
@@ -40,8 +41,12 @@ export interface FilterDef {
 interface Props {
   title: string;
   doctype: string;
-  fields: string[];
-  cols: ColDef[];
+  /** Explicit column/field set for a curated page. Omit both to auto-derive
+   * a reasonable set from the doctype's own meta (`in_list_view` fields) —
+   * used by the generic `/app/<doctype>` fallback list for doctypes with no
+   * hand-built page. */
+  fields?: string[];
+  cols?: ColDef[];
   newLabel?: string;
   /** Fieldname the free-text search box does a "like" match against. Defaults to the first column. */
   searchField?: string;
@@ -62,6 +67,39 @@ function normalizeOptions(options: FilterDef['options']) {
   return options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o));
 }
 
+function humanizeFieldname(fieldname: string) {
+  return fieldname.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const AUTO_COL_NON_COLUMNABLE = new Set(['table', 'hidden', 'tab_break', 'section_break', 'attach', 'readonly']);
+const AUTO_COL_HIDE = new Set(['owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx', 'naming_series', 'amended_from']);
+
+// Auto-derives a reasonable column set from a doctype's own meta — used by
+// the generic `/app/<doctype>` fallback list (any doctype without a
+// hand-curated page) so it isn't stuck with just a bare Name column.
+// Prefers the same `in_list_view` fields Frappe Desk's own list view shows;
+// falls back to the first few displayable fields for doctypes that mark
+// none. Deliberately never types a non-"name" field as `link` — that would
+// navigate within *this* doctype's records (see renderCellValue/goToRecord
+// below), which is wrong for a Link field pointing at a different doctype.
+function deriveAutoCols(schema: CompiledMeta | null): ColDef[] {
+  const nameCol: ColDef = { key: 'name', header: 'Name', type: 'link' };
+  if (!schema) return [nameCol];
+  const candidates = schema.fields.filter(
+    (f) => f.fieldname !== 'name' && !AUTO_COL_HIDE.has(f.fieldname) && !AUTO_COL_NON_COLUMNABLE.has(f.component)
+  );
+  const inListView = candidates.filter((f) => f.in_list_view);
+  const picked = (inListView.length ? inListView : candidates).slice(0, 5);
+  return [
+    nameCol,
+    ...picked.map((f) => ({
+      key: f.fieldname,
+      header: f.label,
+      type: f.fieldtype === 'Currency' ? ('currency' as const) : f.component === 'date' || f.component === 'datetime' ? ('date' as const) : undefined,
+    })),
+  ];
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const col = createColumnHelper<any>();
 const REPORT_GROUP_CAP = 1000;
@@ -69,8 +107,8 @@ const REPORT_GROUP_CAP = 1000;
 export function DoctypeList({
   title,
   doctype,
-  fields,
-  cols,
+  fields: fieldsProp,
+  cols: colsProp,
   newLabel,
   searchField,
   searchPlaceholder,
@@ -81,7 +119,21 @@ export function DoctypeList({
   kanbanAmountField,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const tenantCode = useTenantCode();
+  const searchParams = useSearchParams();
+
+  // Deep-link filters — e.g. a "Sales Invoice" connection under a Sales
+  // Order links here as `?sales_order=SAL-ORD-2026-00001` (see
+  // RecordDrawer's Connections tab and lib/doctype-routes.ts) so clicking
+  // through actually lands on the filtered list instead of the unfiltered
+  // one. Any query param is treated as an exact-match filter on that
+  // fieldname — generic on purpose, so this works for every doctype this
+  // component is used for without per-page wiring.
+  const urlFilters = useMemo<[string, string, string][]>(
+    () => Array.from(searchParams.entries()).map(([key, value]) => [key, '=', value]),
+    [searchParams]
+  );
 
   const [view, setView] = useState<ViewMode>('list');
   const [searchInput, setSearchInput] = useState('');
@@ -129,6 +181,8 @@ export function DoctypeList({
   }, [extraColKeys, doctype]);
 
   const { schema: fullSchema } = useDocTypeSchema(doctype);
+  const cols = useMemo(() => colsProp || deriveAutoCols(fullSchema), [colsProp, fullSchema]);
+  const fields = useMemo(() => fieldsProp || cols.map((c) => c.key), [fieldsProp, cols]);
   const baseColKeys = useMemo(() => new Set(cols.map((c) => c.key)), [cols]);
   const NON_COLUMNABLE = new Set(['table', 'hidden', 'tab_break', 'section_break', 'attach', 'readonly']);
   const AUTO_HIDE = new Set(['owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx']);
@@ -164,7 +218,7 @@ export function DoctypeList({
   };
 
   const activeFrappeFilters = useMemo(() => {
-    const f: [string, string, unknown][] = [];
+    const f: [string, string, unknown][] = [...urlFilters];
     if (search) f.push([effectiveSearchField, 'like', `%${search}%`]);
     for (const [key, value] of Object.entries(filterValues)) {
       if (value) f.push([key, '=', value]);
@@ -177,7 +231,14 @@ export function DoctypeList({
     }
     return f.length ? f : undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filterValues, columnFilters, allCols, effectiveSearchField]);
+  }, [urlFilters, search, filterValues, columnFilters, allCols, effectiveSearchField]);
+
+  // A human-readable strip for the deep-link filter(s) so it's obvious why
+  // the list looks narrower than expected when arriving from a Connections
+  // link, with a one-click way back to the unfiltered list.
+  const urlFilterSummary = urlFilters.length
+    ? urlFilters.map(([k, , v]) => `${humanizeFieldname(k)}: ${v}`).join(', ')
+    : null;
 
   const orderBy = sortField && sortDir ? `${sortField} ${sortDir}` : undefined;
 
@@ -395,6 +456,15 @@ export function DoctypeList({
           <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {total} record{total !== 1 ? 's' : ''}
+            {urlFilterSummary && (
+              <>
+                {' '}filtered by <span className="font-medium text-foreground">{urlFilterSummary}</span>
+                {' '}
+                <button className="text-primary hover:underline" onClick={() => router.push(pathname)}>
+                  (view all)
+                </button>
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">

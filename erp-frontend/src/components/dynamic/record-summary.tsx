@@ -53,6 +53,16 @@ export function RecordSummary({ fields, doc }: Props) {
     if (d) items.push({ label: 'Date', value: formatDate(d) });
   }
 
+  if (has('net_total') || has('base_net_total')) {
+    const v = has('net_total') ? num('net_total') : num('base_net_total');
+    if (v !== null) items.push({ label: 'Net Total', value: formatCurrency(v, currency) });
+  }
+
+  if (has('total_taxes_and_charges')) {
+    const v = num('total_taxes_and_charges');
+    if (v) items.push({ label: 'Tax / VAT', value: formatCurrency(v, currency) });
+  }
+
   const totalField = has('grand_total') ? 'grand_total' : has('rounded_total') ? 'rounded_total' : has('total') ? 'total' : null;
   if (totalField) {
     const v = num(totalField);

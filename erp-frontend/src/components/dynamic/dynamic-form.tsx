@@ -111,6 +111,16 @@ function buildTabs(fields: CompiledField[]): Tab[] {
 // Items, Taxes and Charges, Packing List, ...) — and fold every other
 // tab's sections into one trailing "More Details" tab. Nothing is removed,
 // it's just not a dedicated top-level tab anymore.
+// A hard cap on top-level tabs, independent of how many qualify as
+// "primary" below — doctypes with several child tables (Item: Attributes,
+// Item Tax, Reorder Levels, Item Defaults, Barcodes, ...) could otherwise
+// still produce more primary tabs than fit across a normal screen width,
+// forcing the same horizontal-scrolling tab bar this consolidation exists
+// to avoid. Keeping the count fixed regardless of doctype is what actually
+// makes "fits on screen" true everywhere, not just for doctypes with one
+// child table.
+const MAX_PRIMARY_TABS = 6;
+
 function consolidateTabs(rawTabs: Tab[]): Tab[] {
   const hasTable = (tab: Tab) => tab.sections.some((s) => s.fields.some((f) => f.component === 'table'));
 
@@ -121,12 +131,20 @@ function consolidateTabs(rawTabs: Tab[]): Tab[] {
     else secondary.push(tab);
   });
 
-  if (!secondary.length) return primary;
+  // Tabs authored earlier in the doctype are the ones actually used day to
+  // day (e.g. Items/Taxes before Packing List/Pricing Rules) — keep those,
+  // fold anything past the cap into "More Details" together with the
+  // already-secondary tabs instead of letting the tab bar overflow.
+  const visible = primary.slice(0, MAX_PRIMARY_TABS);
+  const overflowPrimary = primary.slice(MAX_PRIMARY_TABS);
+  const folded = [...secondary, ...overflowPrimary];
 
-  const moreSections: Section[] = secondary.flatMap((tab) =>
+  if (!folded.length) return visible;
+
+  const moreSections: Section[] = folded.flatMap((tab) =>
     tab.sections.map((section) => ({ ...section, label: section.label || tab.label }))
   );
-  return [...primary, { label: 'More Details', sections: moreSections }];
+  return [...visible, { label: 'More Details', sections: moreSections }];
 }
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
@@ -349,12 +367,25 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   // populated but unsaved target document, then opens a New form
   // pre-filled with it for the user to review before saving. Not a save
   // itself — nothing is created server-side until that New form is saved.
-  const createLinkedDocument = async (mapper: { targetDoctype: string; method: string }) => {
+  const createLinkedDocument = async (mapper: { targetDoctype: string; method: string; paramStyle?: 'source_name' | 'dt_dn' | 'selected_items' }) => {
     if (!name) return;
     setCreatingFrom(mapper.method);
     setCreateError(null);
     try {
-      const mapped = await frappe.call(mapper.method, { source_name: name });
+      let args: Record<string, unknown>;
+      if (mapper.paramStyle === 'dt_dn') {
+        args = { dt: doctype, dn: name };
+      } else if (mapper.paramStyle === 'selected_items') {
+        // No row-picker dialog here — send every line currently on the
+        // document, matching "select all" in Frappe Desk's own picker.
+        const rows = (doc.items as Record<string, unknown>[] | undefined) || [];
+        const items = rows.filter((r) => r.item_code).map((r) => ({ item_code: r.item_code }));
+        if (!items.length) throw new Error('This document has no items to create a Purchase Order from.');
+        args = { source_name: name, selected_items: JSON.stringify(items) };
+      } else {
+        args = { source_name: name };
+      }
+      const mapped = await frappe.call(mapper.method, args);
       const key = stashMappedDoc(mapped as Record<string, unknown>);
       router.push(withTenant(`/app/${encodeURIComponent(mapper.targetDoctype)}/new?from=${key}`, tenantCode));
     } catch (e) {
