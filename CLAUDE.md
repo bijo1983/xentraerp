@@ -569,6 +569,50 @@ error logs) will show it happening.
   designer UI itself has not been exercised in a browser** (none on this box).
   Old `lib/print-template.ts` (fixed field-picker) was removed.
 
+## POS app (deployed 2026-09-21) — Retail + F&B
+
+**Live at `https://pos.xentraerp.net`** (DNS in the DigitalOcean zone, Let's Encrypt cert, nginx site
+`pos.xentraerp.net` = `scripts/nginx-pos.xentraerp.net.conf`; static Vue build from
+`/home/xentraerp/pos-frontend/dist`, `/api/*` proxied to the same Next.js process on `:8083`). Rebuild with
+`cd pos-frontend && npm ci && npm run build` — no restart needed, nginx serves the new `dist` directly.
+
+- **Backend code is live-linked**: `bench/apps/custom_erp/custom_erp` is a symlink into
+  `/home/xentraerp/custom_erp_app`, so whatever is checked out there IS production. Never leave it on a
+  half-merged/dirty branch. After Python changes: `supervisorctl restart innovegic-bench-web:innovegic-bench-frappe-web`;
+  after DocType changes: `bench --site 197349.xentraerp.local migrate` (then `supervisorctl status`).
+  New DocTypes only exist on sites that were migrated (tenant `197349`; `demo.innovegicit.com` doesn't have
+  `custom_erp`; the control-plane site was not migrated — the POS Invoice validate hook would error there if a POS
+  Invoice were ever saved).
+- **Modules**: `custom_erp/api/pos.py` (PIN login, set_pin, profiles), `pos_core.py` (settings, business date,
+  shifts, multi-currency checkout, reports), `pos_fnb.py` (tables, orders, KOT, split/merge/close bill).
+  DocTypes: XentraERP POS PIN / POS Settings (Single) / POS Table / POS Order (+Item) / KOT (+Item) / POS Shift
+  (+Cash) / POS Tender.
+- **Mode**: `XentraERP POS Settings.pos_mode` = Retail | F&B, flipped by a System Manager (`set_pos_mode`, refuses to
+  leave F&B while table orders are open). F&B methods refuse to run in Retail. Also: `require_shift`, `pos_247`,
+  `previous_day_billing` + `previous_day_until` (sales after midnight until the cut-off post to the previous
+  business day; a table keeps the business date it was opened on).
+- **Checkout is server-side only** (`pos_core.post_invoice`): ERPNext refuses a POS Invoice with no payment row, so
+  "create draft then attach payment" (the original retail `charge()`) could never work. Payments can be split across
+  methods/currencies (rate from Currency Exchange only — never an online fetch); change only from cash; each leg is
+  written to XentraERP POS Tender, which drives per-currency shift cash-up and the end-of-day report.
+- **GOTCHA (bug found by live HTTP test, not by in-process tests)**: never use `frappe.set_user()` to elevate inside a
+  request — it overwrites `session.sid` and wipes the form dict, which logged the cashier out after every bill.
+  `pos_core._elevated()` swaps only `session.user`. ERPNext's `set_missing_values` checks the *session user's* read
+  access to the Customer, which a cashier role lacks — hence the elevation, done after the cashier's own checks.
+- **Stock items need stock**: ERPNext refuses to POS-sell a stock item with no stock in the register's warehouse
+  ("not available under warehouse …"). The tenant's sample items (Blue Pen, Cola) are stock items with none.
+- **Security**: PIN = 6-8 digits, HMAC-SHA256 keyed with the site encryption key; lockout is per client IP
+  (8 wrong / 15 min) — this only works because the Next proxies forward nginx's `X-Real-IP` as `X-Forwarded-For`
+  (Frappe trusts the first XFF entry, so never forward a client-supplied one). A PIN session carries that user's full
+  roles across the API, so cashier users should hold a restricted role.
+- **Module gate**: `common_site_config.json` has `control_plane_host = erp.badmintonbooking.com`; `pin_login` asks the
+  control plane whether the tenant's `enabled_modules` includes `pos`. It fails OPEN (and logs) if the control plane is
+  unreachable, by design. `pos` is in tenant 197349's list.
+- Not built: cash pay-in/pay-out/drops, cash-only float transfers between shifts, per-tender refunds UI, printing a KOT
+  to a kitchen printer (KOTs show on the kitchen screen), customer-specific pricing rules at the POS.
+- Tests: `scripts/pos-checks/` (see README there). The UI screens were type-checked and built, and every API they call
+  is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
+
 ## Incident log
 
 - **2026-09-13, ~11:33 AM**: entire `innovegic-bench` supervisor group (Redis

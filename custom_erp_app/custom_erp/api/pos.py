@@ -12,19 +12,33 @@ never across tenants.
 """
 
 import hashlib
+import hmac
 import os
 
 import frappe
 from frappe.utils import cint
 
-PIN_MIN_LENGTH = 4
+PIN_MIN_LENGTH = 6
+PIN_MAX_LENGTH = 8
 MAX_FAILED_ATTEMPTS = 8
 LOCKOUT_MINUTES = 15
 POS_MODULE_CODE = "pos"
 
 
 def _hash_pin(pin: str) -> str:
-	return hashlib.sha256(pin.encode()).hexdigest()
+	"""Keyed hash (HMAC-SHA256) with this site's own encryption key. A PIN has
+	only 10^6 possible values, so a plain unsalted hash would let anyone who
+	obtains the table reverse every PIN instantly; keying it with a per-site
+	secret that isn't stored in the table means a database leak alone doesn't
+	give them that."""
+	from frappe.utils.password import get_encryption_key
+
+	return hmac.new(get_encryption_key().encode(), pin.encode(), hashlib.sha256).hexdigest()
+
+
+def _validate_pin_format(pin: str):
+	if not pin.isdigit() or not (PIN_MIN_LENGTH <= len(pin) <= PIN_MAX_LENGTH):
+		frappe.throw(f"PIN must be {PIN_MIN_LENGTH}-{PIN_MAX_LENGTH} digits (numbers only).")
 
 
 def _tenant_has_module(module_code: str) -> bool:
@@ -118,8 +132,7 @@ def pin_login(pin: str):
 	_check_not_locked_out()
 
 	pin = (pin or "").strip()
-	if not pin or len(pin) < PIN_MIN_LENGTH:
-		frappe.throw(f"Enter your {PIN_MIN_LENGTH}-digit (or longer) PIN.")
+	_validate_pin_format(pin)
 
 	pin_hash = _hash_pin(pin)
 	matches = frappe.get_all(
@@ -173,8 +186,7 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None):
 	_require_system_manager()
 
 	pin = (pin or "").strip()
-	if not pin or len(pin) < PIN_MIN_LENGTH:
-		frappe.throw(f"PIN must be at least {PIN_MIN_LENGTH} digits.")
+	_validate_pin_format(pin)
 	if not frappe.db.exists("User", user):
 		frappe.throw(f"No such user: {user}")
 

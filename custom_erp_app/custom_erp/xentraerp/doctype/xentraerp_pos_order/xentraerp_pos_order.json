@@ -1,0 +1,159 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "pos_table",
+  "pos_profile",
+  "status",
+  "guests",
+  "column_break_1",
+  "customer",
+  "waiter",
+  "total",
+  "invoice",
+  "business_date",
+  "merged_tables",
+  "bill_closed",
+  "bill_closed_at",
+  "merged_into",
+  "items_section",
+  "items"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_table",
+   "fieldtype": "Link",
+   "label": "Table",
+   "options": "XentraERP POS Table",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nBilled\nCancelled\nMerged",
+   "default": "Open",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "guests",
+   "fieldtype": "Int",
+   "label": "Guests",
+   "default": "1"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break",
+   "label": "Column Break 1"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "waiter",
+   "fieldtype": "Link",
+   "label": "Waiter",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "total",
+   "fieldtype": "Currency",
+   "label": "Total",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "invoice",
+   "fieldtype": "Link",
+   "label": "POS Invoice",
+   "options": "POS Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "XentraERP POS Order Item"
+  },
+  {
+   "fieldname": "business_date",
+   "fieldtype": "Date",
+   "label": "Business Date",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "merged_tables",
+   "fieldtype": "Small Text",
+   "label": "Merged Tables",
+   "read_only": 1,
+   "description": "Comma-separated tables joined to this order."
+  },
+  {
+   "fieldname": "bill_closed",
+   "fieldtype": "Check",
+   "label": "Bill Closed",
+   "read_only": 1,
+   "description": "Check printed; items locked until paid or re-opened."
+  },
+  {
+   "fieldname": "bill_closed_at",
+   "fieldtype": "Datetime",
+   "label": "Bill Closed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "merged_into",
+   "fieldtype": "Link",
+   "label": "Merged Into",
+   "options": "XentraERP POS Order",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Order",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "POSORD-.#####",
+ "naming_rule": "Expression (old style)"
+}

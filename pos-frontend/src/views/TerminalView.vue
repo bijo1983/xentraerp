@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePrinterStore } from '@/stores/printer'
 import { api } from '@/lib/api'
+import { usePosStore } from '@/stores/pos'
+import PayDialog from '@/components/PayDialog.vue'
 import type { ReceiptData } from '@/lib/receipt'
 
 interface Item {
@@ -23,6 +25,7 @@ interface CartLine {
 
 const router = useRouter()
 const auth = useAuthStore()
+const pos = usePosStore()
 const profile = computed(() => auth.posProfile!)
 
 const items = ref<Item[]>([])
@@ -41,7 +44,8 @@ const search = ref('')
 const activeGroup = ref('all')
 
 const cart = ref<Record<string, CartLine>>({})
-const selectedPayment = ref('')
+const paying = ref(false)
+const payDue = ref(0)
 const charging = ref(false)
 const chargeError = ref<string | null>(null)
 const lastInvoice = ref<string | null>(null)
@@ -51,7 +55,6 @@ const printerSettingsOpen = ref(false)
 const printer = usePrinterStore()
 
 onMounted(async () => {
-  selectedPayment.value = profile.value.payment_methods[0] || ''
   printer.tryReconnect()
   try {
     items.value = await api.getList<Item>('Item', {
@@ -140,52 +143,51 @@ function clearCart() {
   lastInvoice.value = null
 }
 
-// Frappe's REST create doesn't submit, and — more importantly — doesn't
-// know the final grand_total until the server actually computes taxes
-// against whatever the POS Profile's tax template configures. Sending a
-// client-guessed payment amount up front risks mismatching that and
-// tripping ERPNext's own payment-reconciliation check. So: create the
-// Draft with just line items, read back the server's own grand_total,
-// attach a payment for exactly that amount, then submit. Not yet tested
-// against a real tenant's tax/payment configuration — the first real
-// charge should be watched closely.
+// Checkout is one server call: the server prices the lines from the register's
+// price list, applies tax and rounding, converts each payment (any currency the
+// organization has a rate for), works out change, posts and submits the POS
+// Invoice, and rings it against the open shift. Nothing is committed unless the
+// whole sale goes through. Step 1 asks the server what the sale comes to, so the
+// payment dialog shows the tax-inclusive amount due.
+const lineArgs = () => JSON.stringify(cartLines.value.map((l) => ({ item_code: l.item_code, qty: l.qty })))
+
 async function charge() {
-  if (!cartLines.value.length || !selectedPayment.value) return
+  if (!cartLines.value.length) return
   chargeError.value = null
   charging.value = true
   try {
-    const draft = await api.createDoc<{ name: string; grand_total: number }>('POS Invoice', {
-      company: profile.value.company,
-      pos_profile: profile.value.name,
-      currency: profile.value.currency,
-      customer: profile.value.customer || undefined,
-      is_pos: 1,
-      items: cartLines.value.map((l) => ({ item_code: l.item_code, qty: l.qty, rate: l.rate })),
-    })
+    const t = await api.call<{ due: number }>('custom_erp.api.pos_core.retail_estimate', { pos_profile: profile.value.name, items: lineArgs() })
+    payDue.value = t.due
+    paying.value = true
+  } catch (err) {
+    chargeError.value = err instanceof Error ? err.message : 'Could not price this sale'
+  } finally {
+    charging.value = false
+  }
+}
 
-    // payments is a child table, not a plain column — frappe.client.set_value
-    // delegates to a database field update and can't persist it. A real
-    // document update goes through the doc's own set()/append() machinery
-    // and does.
-    const paid = await api.updateDoc<{ name: string }>('POS Invoice', draft.name, {
-      payments: [{ mode_of_payment: selectedPayment.value, amount: draft.grand_total }],
-    })
-
-    const submitted = await api.call<{ name: string }>('frappe.client.submit', {
-      doc: JSON.stringify({ ...paid, doctype: 'POS Invoice', name: draft.name }),
-    })
-
-    lastInvoice.value = submitted?.name || draft.name
+async function pay(payments: { mode_of_payment: string; currency: string; tendered: number }[]) {
+  chargeError.value = null
+  charging.value = true
+  try {
+    const r = await api.call<{
+      invoice: string
+      total: number
+      change: number
+      payments: { mode_of_payment: string; currency: string; tendered: number }[]
+    }>('custom_erp.api.pos_core.retail_checkout', { pos_profile: profile.value.name, items: lineArgs(), payments: JSON.stringify(payments) })
+    paying.value = false
+    lastInvoice.value = r.invoice
     lastReceipt.value = {
       orgName: auth.orgName || profile.value.company,
       posProfile: profile.value.name,
-      invoiceName: lastInvoice.value,
+      invoiceName: r.invoice,
       cashier: auth.user?.full_name || '',
       timestamp: new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
       currency: profile.value.currency,
       lines: cartLines.value.map((l) => ({ name: l.item_name, qty: l.qty, rate: l.rate, amount: l.rate * l.qty })),
-      total: draft.grand_total,
-      paymentMethod: selectedPayment.value,
+      total: r.total,
+      paymentMethod: r.payments.map((p) => `${p.mode_of_payment} ${p.tendered} ${p.currency}`).join(' + ') + (r.change ? ` (change ${r.change})` : ''),
     }
     cart.value = {}
     await printLastReceipt()
@@ -228,6 +230,9 @@ async function signOut() {
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="printerSettingsOpen = !printerSettingsOpen">
           🖨️ Printer
         </button>
+        <button v-if="pos.isFnb" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/floor')">Tables</button>
+        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/shift')">Shift</button>
+        <button v-if="pos.canAdmin" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/admin')">Settings</button>
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="switchRegister">
           Switch register
         </button>
@@ -323,20 +328,6 @@ async function signOut() {
         </p>
       </div>
 
-      <div class="pay-methods">
-        <button
-          v-for="m in profile.payment_methods"
-          :key="m"
-          :class="{ sel: selectedPayment === m }"
-          @click="selectedPayment = m"
-        >
-          {{ m }}
-        </button>
-        <p v-if="profile.payment_methods.length === 0" style="grid-column: 1 / -1; font-size: 12px; color: var(--text-faint)">
-          No payment methods configured on this register.
-        </p>
-      </div>
-
       <p v-if="chargeError" class="error-box" style="margin: 0 20px 12px">{{ chargeError }}</p>
       <p v-if="lastInvoice" style="margin: 0 20px 12px; color: var(--success); font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px">
         <span>Sale complete — {{ lastInvoice }}</span>
@@ -345,12 +336,23 @@ async function signOut() {
 
       <button
         class="charge-btn"
-        :disabled="charging || cartLines.length === 0 || !selectedPayment"
+        :disabled="charging || cartLines.length === 0"
         @click="charge"
       >
-        <span>{{ charging ? 'Charging…' : 'Charge' }}</span>
+        <span>{{ charging ? 'Working…' : 'Charge' }}</span>
         <span class="r tabular">{{ money(subtotal) }}</span>
       </button>
     </div>
+    <PayDialog
+      v-if="paying"
+      :pos-profile="profile.name"
+      :currency="profile.currency"
+      :due="payDue"
+      :methods="profile.payment_methods"
+      :busy="charging"
+      :error="chargeError"
+      @pay="pay"
+      @cancel="paying = false"
+    />
   </div>
 </template>

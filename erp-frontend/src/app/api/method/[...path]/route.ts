@@ -26,6 +26,12 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
     'Content-Type': contentType,
     Accept: 'application/json',
     Host: host,
+    // The real client, as nginx saw it. Sent to the backend as the request's
+    // origin so per-visitor protections (e.g. the POS PIN lockout) key on the
+    // visitor, not on this proxy's loopback address. Taken from X-Real-IP,
+    // which nginx always overwrites, never from a client-suppliable
+    // X-Forwarded-For.
+    ...(req.headers.get('x-real-ip') ? { 'X-Forwarded-For': req.headers.get('x-real-ip') as string } : {}),
     ...(cookie ? { Cookie: cookie } : {}),
     ...(body && body.length ? { 'Content-Length': body.length } : {}),
   };

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { api } from '@/lib/api'
+import { usePosStore } from '@/stores/pos'
 
 interface POSUser {
   name: string
@@ -113,6 +114,7 @@ export const useAuthStore = defineStore('auth', {
       this.orgName = null
       this.restrictedProfile = null
       this.posProfile = null
+      usePosStore().reset()
     },
   },
 })

@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "pos_mode",
+  "hours_section",
+  "require_shift",
+  "pos_247",
+  "previous_day_billing",
+  "previous_day_until"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_mode",
+   "fieldtype": "Select",
+   "label": "POS Mode",
+   "options": "Retail\nF&B",
+   "default": "Retail",
+   "reqd": 1,
+   "description": "Retail: quick counter sales. F&B: table management and kitchen order tickets (KOT). Switch with the toggle in the POS app (System Manager)."
+  },
+  {
+   "fieldname": "hours_section",
+   "fieldtype": "Section Break",
+   "label": "Operating hours & shifts"
+  },
+  {
+   "fieldname": "require_shift",
+   "fieldtype": "Check",
+   "label": "Require an open shift to bill",
+   "default": "1",
+   "description": "Cashiers must open a shift (with their opening cash) before they can bill."
+  },
+  {
+   "fieldname": "pos_247",
+   "fieldtype": "Check",
+   "label": "24/7 operation",
+   "description": "Shifts may run across midnight and hand over without a day-end close. The business day still rolls over at the cut-off below."
+  },
+  {
+   "fieldname": "previous_day_billing",
+   "fieldtype": "Check",
+   "label": "Continue billing on the previous day after midnight",
+   "description": "Sales rung up after midnight, until the time below, are posted to the previous business day (late-night trade / a bill opened before midnight)."
+  },
+  {
+   "fieldname": "previous_day_until",
+   "fieldtype": "Time",
+   "label": "...until",
+   "default": "05:00:00"
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "issingle": 1
+}

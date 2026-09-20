@@ -47,7 +47,7 @@ async function submitPin() {
   loading.value = true
   try {
     await auth.pinLogin(pin.value)
-    router.push(auth.posProfile ? '/terminal' : '/registers')
+    router.push('/registers')
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Incorrect PIN'
     pin.value = ''
@@ -109,7 +109,7 @@ async function submitPin() {
           <button type="button" @click="digit('0')">0</button>
           <button type="button" class="aux" @click="backspace">⌫</button>
         </div>
-        <button type="button" class="btn btn-primary" :disabled="loading || pin.length < 4" @click="submitPin">
+        <button type="button" class="btn btn-primary" :disabled="loading || pin.length < 6" @click="submitPin">
           {{ loading ? 'Signing in…' : 'Sign In' }}
         </button>
       </div>

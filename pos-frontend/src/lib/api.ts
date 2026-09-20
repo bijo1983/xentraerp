@@ -50,7 +50,7 @@ async function getList<T = Record<string, unknown>>(
 }
 
 async function getLoggedUser(): Promise<string> {
-  return call<string>('frappe.auth.get_logged_user')
+  return call<string>('xentraerp.auth.get_logged_user')
 }
 
 async function getDoc<T = Record<string, unknown>>(doctype: string, name: string): Promise<T> {

@@ -3,9 +3,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore, type POSProfileSummary } from '@/stores/auth'
 import { api } from '@/lib/api'
+import { usePosStore } from '@/stores/pos'
 
 const router = useRouter()
 const auth = useAuthStore()
+const pos = usePosStore()
 const profiles = ref<POSProfileSummary[]>([])
 const loadingProfiles = ref(true)
 
@@ -31,7 +33,8 @@ onMounted(async () => {
 
 function select(profile: POSProfileSummary) {
   auth.posProfile = profile
-  router.push('/terminal')
+  // The route guard sends the cashier to open a shift first if one is required.
+  router.push(pos.isFnb ? '/floor' : '/terminal')
 }
 
 async function signOut() {
@@ -50,7 +53,11 @@ async function signOut() {
           <div class="name">{{ auth.user?.full_name }}</div>
         </div>
       </div>
-      <button class="btn btn-ghost" style="padding: 9px 16px" @click="signOut">Sign Out</button>
+      <div class="row">
+        <span class="pill" :class="pos.isFnb ? 'ok' : ''">{{ pos.mode }} mode</span>
+        <button v-if="pos.canAdmin" class="btn btn-ghost" style="padding: 9px 16px" @click="router.push('/admin')">Settings &amp; reports</button>
+        <button class="btn btn-ghost" style="padding: 9px 16px" @click="signOut">Sign Out</button>
+      </div>
     </div>
 
     <h2>Select a register</h2>
