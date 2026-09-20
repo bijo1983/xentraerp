@@ -144,7 +144,20 @@ function consolidateTabs(rawTabs: Tab[]): Tab[] {
   const moreSections: Section[] = folded.flatMap((tab) =>
     tab.sections.map((section) => ({ ...section, label: section.label || tab.label }))
   );
-  return [...visible, { label: 'More Details', sections: moreSections }];
+
+  // Attach the folded content to the tab holding the main child table
+  // (Items, for every real sales/purchase transaction) instead of a
+  // separate "More Details" tab — Currency/Totals/Discount/Accounting
+  // Dimensions read naturally right below the line items, the same place
+  // Frappe Desk itself surfaces running totals, rather than one more tab
+  // to hunt through. Falls back to a trailing "More Details" tab only
+  // when no visible tab has a table at all (a pure master doctype with
+  // nothing to attach this to).
+  const targetIdx = visible.findIndex(hasTable);
+  if (targetIdx === -1) {
+    return [...visible, { label: 'More Details', sections: moreSections }];
+  }
+  return visible.map((tab, i) => (i === targetIdx ? { ...tab, sections: [...tab.sections, ...moreSections] } : tab));
 }
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
@@ -426,6 +439,90 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     <div className="flex items-start gap-4">
     <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
       <RecordSummary fields={schema.fields} doc={doc} />
+
+      {/* Toolbar — primary actions live at the top so Save/Submit/Print
+          are always reachable without scrolling down through a
+          potentially long tab first, matching where a user actually
+          looks for them on first opening a record. */}
+      <div className="flex flex-wrap items-center gap-2 border-b bg-background px-5 py-3">
+        {docstatus === 0 && (
+          <Button onClick={handleSave} disabled={saving || !!transitioning}>
+            {saving ? 'Saving…' : name ? 'Update' : 'Save'}
+          </Button>
+        )}
+        {schema.is_submittable && name && docstatus === 0 && (
+          <Button onClick={() => runTransition('submit')} disabled={saving || !!transitioning}>
+            {transitioning === 'submit' ? 'Submitting…' : 'Submit'}
+          </Button>
+        )}
+        {schema.is_submittable && name && docstatus === 1 && (
+          <Button
+            variant="outline"
+            className="text-destructive hover:text-destructive"
+            onClick={() => runTransition('cancel')}
+            disabled={!!transitioning}
+          >
+            {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
+          </Button>
+        )}
+        {name && DOCUMENT_MAPPERS[doctype]?.length > 0 && (!schema.is_submittable || docstatus === 1) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-1.5" disabled={!!creatingFrom}>
+                {creatingFrom ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Create
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {DOCUMENT_MAPPERS[doctype].map((m) => (
+                <DropdownMenuItem key={m.method} onSelect={() => createLinkedDocument(m)}>
+                  {m.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {name && (
+          <Button variant="outline" className="gap-1.5" onClick={() => setPrintOpen(true)}>
+            <Printer className="h-3.5 w-3.5" />
+            Print
+          </Button>
+        )}
+        {name && !drawerOpen && (
+          <Button variant="outline" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
+            <PanelRight className="h-3.5 w-3.5" />
+            Show Comments &amp; Activity
+          </Button>
+        )}
+        <div className="ml-auto flex gap-2">
+          {(onCancel || onClose) && (
+            <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving || !!transitioning}>
+              Close
+            </Button>
+          )}
+        </div>
+      </div>
+      {(saveError || transitionError || createError) && (
+        <div className="space-y-2 border-b bg-background px-5 py-3">
+          {saveError && (
+            <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+              {saveError}
+            </p>
+          )}
+          {transitionError && (
+            <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+              {transitionError}
+            </p>
+          )}
+          {createError && (
+            <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+              {createError}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Tab bar */}
       <div className="flex gap-1 overflow-x-auto border-b bg-muted/30 px-2 pt-2">
         {tabs.map((tab, i) => (
@@ -490,80 +587,6 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
               </div>
             );
           })}
-
-        {saveError && (
-          <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-            {saveError}
-          </p>
-        )}
-        {transitionError && (
-          <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-            {transitionError}
-          </p>
-        )}
-        {createError && (
-          <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-            {createError}
-          </p>
-        )}
-
-        <div className="flex gap-2 pt-2">
-          {docstatus === 0 && (
-            <Button onClick={handleSave} disabled={saving || !!transitioning}>
-              {saving ? 'Saving…' : name ? 'Update' : 'Save'}
-            </Button>
-          )}
-          {schema.is_submittable && name && docstatus === 0 && (
-            <Button onClick={() => runTransition('submit')} disabled={saving || !!transitioning}>
-              {transitioning === 'submit' ? 'Submitting…' : 'Submit'}
-            </Button>
-          )}
-          {schema.is_submittable && name && docstatus === 1 && (
-            <Button
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={() => runTransition('cancel')}
-              disabled={!!transitioning}
-            >
-              {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
-            </Button>
-          )}
-          {name && DOCUMENT_MAPPERS[doctype]?.length > 0 && (!schema.is_submittable || docstatus === 1) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-1.5" disabled={!!creatingFrom}>
-                  {creatingFrom ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                  Create
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {DOCUMENT_MAPPERS[doctype].map((m) => (
-                  <DropdownMenuItem key={m.method} onSelect={() => createLinkedDocument(m)}>
-                    {m.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {name && (
-            <Button variant="outline" className="gap-1.5" onClick={() => setPrintOpen(true)}>
-              <Printer className="h-3.5 w-3.5" />
-              Print
-            </Button>
-          )}
-          {name && !drawerOpen && (
-            <Button variant="outline" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
-              <PanelRight className="h-3.5 w-3.5" />
-              Show Comments &amp; Activity
-            </Button>
-          )}
-          {(onCancel || onClose) && (
-            <Button variant="outline" onClick={onCancel ?? onClose} disabled={saving || !!transitioning}>
-              Close
-            </Button>
-          )}
-        </div>
       </div>
       {name && <PrintPanel doctype={doctype} name={name} fields={schema.fields} open={printOpen} onOpenChange={setPrintOpen} />}
     </div>

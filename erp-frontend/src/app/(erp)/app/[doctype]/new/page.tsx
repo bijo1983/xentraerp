@@ -16,7 +16,7 @@ export default function NewDocPage() {
   const [initialDoc] = useState<Record<string, unknown> | undefined>(() => (fromKey ? popMappedDoc(fromKey) || undefined : undefined));
 
   return (
-    <div className="p-6 w-full max-w-7xl mx-auto">
+    <div className="w-full">
       <h1 className="text-2xl font-semibold mb-6">New {decodeURIComponent(doctype)}</h1>
       <DynamicForm
         doctype={decodeURIComponent(doctype)}
