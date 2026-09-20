@@ -813,3 +813,40 @@ h3,
 @media (max-width: 900px) { .order-shell { grid-template-columns: 1fr; height: auto; } }
 .sel-line { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }
 .sel-line input[type='number'] { width: 70px; }
+
+/* ---- floor plan, order type tiles, guests panel, notes (added) ---------- */
+.floor-shell { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+@media (max-width: 960px) { .floor-shell { grid-template-columns: 1fr; } }
+.guests-panel { border-right: 1px solid var(--border-soft); padding: 16px; background: var(--surface); }
+.gtabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.gtab { flex: 1; text-align: center; padding: 8px 6px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 13px; }
+.gtab.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.gtab .n { display: inline-block; margin-left: 4px; min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; }
+.gcard { display: flex; gap: 10px; align-items: stretch; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 12px; padding: 10px; margin-bottom: 8px; cursor: pointer; text-align: left; width: 100%; color: var(--text); font: inherit; }
+.gcard .gtime { min-width: 64px; border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; font-weight: 600; padding: 6px; }
+.gtime.Booked { background: rgba(20, 130, 110, 0.18); color: #4fd1b5; }
+.gtime.Seated, .gtime.Open { background: rgba(232, 98, 42, 0.18); color: #ff9a6b; }
+.gtime.Free { background: rgba(120, 140, 255, 0.15); color: #9fb0ff; }
+.gcard .gmeta { font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.plan-wrap { padding: 20px 26px; }
+.legend { display: flex; gap: 18px; font-size: 13px; color: var(--text-muted); margin: 6px 0 14px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.plan { display: flex; flex-wrap: wrap; gap: 46px 52px; padding: 34px 30px; background: var(--surface); border-radius: var(--radius-md); min-height: 320px; align-content: flex-start; }
+.plan-item { background: transparent; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit; text-align: center; }
+.plan-item.sel .plan-box { outline: 2px solid var(--accent); outline-offset: 8px; border-radius: 16px; }
+.plan-item:disabled { opacity: 0.35; cursor: not-allowed; }
+.plan-box { position: relative; }
+.plan-table { position: absolute; inset: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px solid transparent; }
+.plan-table.Available { background: rgba(120, 140, 255, 0.14); color: #b7c3ff; border-color: rgba(120, 140, 255, 0.35); }
+.plan-table.Reserved { background: rgba(20, 130, 110, 0.22); color: #6fe0c8; border-color: rgba(20, 160, 130, 0.5); }
+.plan-table.Occupied { background: rgba(232, 98, 42, 0.2); color: #ffab85; border-color: rgba(232, 98, 42, 0.55); }
+.plan-table .pn { font-weight: 700; font-size: 13px; } .plan-table .pg { font-size: 12px; margin-top: 2px; }
+.chair { position: absolute; border-radius: 5px; border: 1.5px solid var(--text-faint); background: transparent; }
+.chair.Reserved.filled { background: #14826e; border-color: #14826e; }
+.chair.Occupied.filled { background: #e8622a; border-color: #e8622a; }
+.type-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.type-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 12px; border-radius: 16px; border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; }
+.type-tile:hover { border-color: var(--accent); background: var(--accent-soft); }
+.type-tile .ic { font-size: 34px; } .type-tile b { font-size: 17px; }
+.note-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.line .note-tag { display: inline-block; margin-top: 3px; font-size: 12px; color: var(--warning); cursor: pointer; }

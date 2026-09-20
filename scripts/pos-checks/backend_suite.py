@@ -6,6 +6,16 @@ frappe.connect()
 frappe.set_user("Administrator")
 frappe.db.commit = lambda *a, **k: None  # nothing persists: everything below is rolled back at the end
 
+def quarantine():
+    """The tenant is in real use. Inside this (never-committed, rolled-back) transaction, clear the live POS
+    state so the checks start from an empty tenant. Nothing here can reach the real rows: commit is disabled
+    above and the run always ends in rollback."""
+    for t in ("XentraERP KOT Item","XentraERP KOT","XentraERP POS Order Item","XentraERP POS Order","XentraERP POS Table","XentraERP POS Shift Cash",
+              "XentraERP POS Shift","XentraERP POS Tender","XentraERP POS Reservation","XentraERP POS Hidden Item","XentraERP POS Location Profile","XentraERP POS Location"):
+        frappe.db.sql(f"delete from `tab{t}`")
+    frappe.db.sql("delete from tabSingles where doctype='XentraERP POS Settings'")
+quarantine()
+
 from custom_erp.api import pos, pos_fnb as fnb, pos_core as core
 from frappe.utils import add_days, getdate, nowdate, flt
 
@@ -62,6 +72,7 @@ try:
     # Cashier PIN records go through the real set_pin (manager action)
     pos.set_pin(cashier, "482913")
     pos.set_pin(other, "735120")
+    core.save_pos_settings(auto_kot=0)   # these checks drive the manual Send-to-kitchen path
     check("fixtures created", True)
 
     # ------------------------------------------------------------ PIN hardening
@@ -78,7 +89,7 @@ try:
     pos.set_pin(cashier, "482913")
     check("re-setting the same user's own PIN is allowed", True)
     as_user(cashier)
-    expect_error("cashier cannot set PINs", lambda: pos.set_pin(other, "999999"), "not permitted")
+    expect_error("cashier cannot set PINs", lambda: pos.set_pin(other, "999999"), "can't do this")
     as_user("Administrator")
 
     # ---------------------------------------------------------------- mode/perms

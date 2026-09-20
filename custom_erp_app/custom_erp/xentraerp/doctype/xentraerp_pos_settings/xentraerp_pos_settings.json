@@ -7,6 +7,8 @@
  "field_order": [
   "pos_mode",
   "checkout_document",
+  "auto_kot",
+  "item_notes_prompt",
   "hours_section",
   "require_shift",
   "pos_247",
@@ -60,6 +62,20 @@
    "options": "POS Invoice\nDraft Invoice + Receipt",
    "default": "POS Invoice",
    "description": "POS Invoice: one submitted POS Invoice with the payments inside it. Draft Invoice + Receipt: checkout creates a Draft Sales Invoice; when payment is finalized it is submitted and a receipt (Payment Entry) is created against it with the chosen mode of payment."
+  },
+  {
+   "fieldname": "auto_kot",
+   "fieldtype": "Check",
+   "label": "Send to kitchen automatically on save",
+   "default": "1",
+   "description": "Saving an order creates the kitchen ticket (KOT) for what's new \u2014 no separate Send to kitchen step. The kitchen screen shows it at once and a kitchen printer prints it."
+  },
+  {
+   "fieldname": "item_notes_prompt",
+   "fieldtype": "Check",
+   "label": "Ask for a note when an item is added",
+   "default": "1",
+   "description": "Shows suggested notes for the dish (well done, crunchy, no onions, ...) plus free text. Suggestions come from Claude when an Anthropic API key is configured, otherwise from a built-in list."
   }
  ],
  "links": [],

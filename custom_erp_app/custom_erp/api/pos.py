@@ -181,11 +181,12 @@ def _require_system_manager():
 
 
 @frappe.whitelist()
-def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: int = 1):
-	"""Admin action: set or replace a cashier's PIN on this tenant's site. Also gives
-	them the least-privilege POS Cashier role (unless assign_role=0), so their
-	screens can read items and prices."""
-	_require_system_manager()
+def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: int = 1, pos_role: str | None = None):
+	"""Set or replace someone's PIN on this tenant's site (administrator; a supervisor
+	for waiters, cashiers and kitchen staff). Also gives them a POS role so their
+	screens can read items and prices: `pos_role`, else the role they already hold,
+	else Cashier — unless assign_role=0 or they are an administrator."""
+	_require_staff_admin(user, pos_role)
 
 	pin = (pin or "").strip()
 	_validate_pin_format(pin)
@@ -226,7 +227,8 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 		)
 		doc.insert(ignore_permissions=True)
 	if cint(assign_role) and not _is_system_manager_user(user):
-		_give_pos_role(user)
+		held = next((r for r in POS_ROLES if r in frappe.get_roles(user)), None)
+		_give_pos_role(user, pos_role or held or POS_ROLE)
 	frappe.db.commit()
 	return {"success": True}
 
@@ -290,44 +292,63 @@ def list_pos_profiles():
 
 # ---------------------------------------------------------- staff & roles
 
-POS_ROLE = "POS Cashier"
-# What a cashier's own screens read directly over the REST API (the item grid,
-# prices, payment modes, the register). Everything that changes data goes
-# through the server-side POS methods, which do their own checks — so this role
-# is read-only on purpose.
+from custom_erp.api import pos_core as core  # noqa: E402  (after the module's own helpers, which pos_core doesn't import)
+
+POS_ROLES = ("POS Waiter", "POS Cashier", "POS Supervisor", "POS Kitchen")
+POS_ROLE = "POS Cashier"  # kept for callers that predate the four roles
+# What the POS screens read directly over the REST API (item grid, prices, payment modes,
+# the register). Everything that changes data goes through the server-side POS methods,
+# which check the role themselves — so these roles are read-only on purpose.
 POS_ROLE_READS = ("Item", "Item Price", "Item Group", "POS Profile", "Mode of Payment", "Customer", "Price List", "Currency")
 
 
-def ensure_pos_role() -> str:
-	"""Create the least-privilege "POS Cashier" role (and its read permissions)
-	the first time it is needed."""
+def ensure_pos_role(role: str = POS_ROLE) -> str:
+	"""Create a POS role (and its read permissions) the first time it is needed."""
 	from frappe.permissions import add_permission
 
-	if not frappe.db.exists("Role", POS_ROLE):
-		frappe.get_doc({"doctype": "Role", "role_name": POS_ROLE, "desk_access": 0}).insert(ignore_permissions=True)
+	if role not in POS_ROLES:
+		frappe.throw(f"Unknown POS role: {role}")
+	if not frappe.db.exists("Role", role):
+		frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 0}).insert(ignore_permissions=True)
 	for doctype in POS_ROLE_READS:
-		if frappe.db.exists("DocType", doctype) and not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": POS_ROLE, "permlevel": 0}):
-			add_permission(doctype, POS_ROLE, 0)
-	return POS_ROLE
+		if frappe.db.exists("DocType", doctype) and not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0}):
+			add_permission(doctype, role, 0)
+	return role
 
 
-def _give_pos_role(user: str):
-	ensure_pos_role()
+def _give_pos_role(user: str, role: str):
+	"""A person holds exactly one POS role: this replaces any other."""
+	ensure_pos_role(role)
 	doc = frappe.get_doc("User", user)
-	if POS_ROLE not in [r.role for r in doc.roles]:
-		doc.append("roles", {"role": POS_ROLE})
-		doc.save(ignore_permissions=True)
+	keep = [r for r in doc.roles if r.role not in POS_ROLES]
+	if role in [r.role for r in doc.roles] and len(keep) == len(doc.roles) - 1:
+		return
+	doc.set("roles", [{"role": r.role} for r in keep] + [{"role": role}])
+	doc.save(ignore_permissions=True)
+
+
+def _require_staff_admin(target: str | None = None, new_role: str | None = None):
+	"""Administrators manage everyone. Supervisors manage waiters, cashiers and kitchen
+	staff — not supervisors or administrators, and can't hand out the Supervisor role."""
+	core.require_cap("staff")
+	if core.pos_level() == "admin":
+		return
+	if new_role == "POS Supervisor":
+		frappe.throw("Only an administrator can give the Supervisor role.", frappe.PermissionError)
+	if target and core.pos_level(target) in ("supervisor", "admin"):
+		frappe.throw("Only an administrator can change a supervisor's or administrator's PIN.", frappe.PermissionError)
 
 
 @frappe.whitelist()
 def list_pos_users():
-	"""Administrator: everyone who could work the tills, and whether they have a PIN."""
-	_require_system_manager()
+	"""Everyone who could work the tills: their POS role and whether they have a PIN."""
+	core.require_cap("staff")
 	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "active"])}
 	out = []
 	for u in frappe.get_all("User", filters={"enabled": 1, "name": ["not in", ["Guest", "Administrator"]]}, fields=["name", "full_name"], order_by="full_name asc"):
 		roles = frappe.get_roles(u.name)
 		p = pins.get(u.name)
+		level = core.pos_level(u.name)
 		out.append(
 			{
 				"user": u.name,
@@ -335,7 +356,10 @@ def list_pos_users():
 				"has_pin": bool(p),
 				"active": bool(p and p.active),
 				"pos_profile": p.pos_profile if p else None,
-				"is_cashier_role": POS_ROLE in roles,
+				"pos_role": next((r for r in POS_ROLES if r in roles), None),
+				"level": level,
+				"role_label": core.LEVEL_LABEL.get(level or "", ""),
+				"is_cashier_role": "POS Cashier" in roles,
 				"is_admin": "System Manager" in roles,
 			}
 		)
@@ -343,10 +367,10 @@ def list_pos_users():
 
 
 @frappe.whitelist()
-def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | None = None):
-	"""Administrator: add a staff member who works the tills — a login-less user
-	(PIN only) with the POS Cashier role and a PIN, optionally locked to one register."""
-	_require_system_manager()
+def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | None = None, pos_role: str = "POS Waiter"):
+	"""Add a staff member who works the tills: a PIN-only user with one POS role
+	(Waiter by default — the least privilege), optionally locked to one register."""
+	_require_staff_admin(None, pos_role)
 	email = (email or "").strip().lower()
 	full_name = (full_name or "").strip()
 	if "@" not in email or not full_name:
@@ -354,20 +378,31 @@ def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | Non
 	if frappe.db.exists("User", email):
 		frappe.throw(f"{email} already exists — set a PIN for that user instead.")
 	_validate_pin_format((pin or "").strip())
-	ensure_pos_role()
+	ensure_pos_role(pos_role)
 	frappe.get_doc(
-		{"doctype": "User", "email": email, "first_name": full_name, "send_welcome_email": 0, "enabled": 1, "roles": [{"role": POS_ROLE}]}
+		{"doctype": "User", "email": email, "first_name": full_name, "send_welcome_email": 0, "enabled": 1, "roles": [{"role": pos_role}]}
 	).insert(ignore_permissions=True)
 	set_pin(email, pin, pos_profile, 0)
-	return {"user": email}
+	return {"user": email, "pos_role": pos_role}
 
 
 @frappe.whitelist()
 def set_pin_active(user: str, active: int = 1):
-	"""Administrator: switch a cashier's PIN off (e.g. they left) or back on."""
-	_require_system_manager()
+	"""Switch a person's PIN off (e.g. they left) or back on."""
+	_require_staff_admin(user)
 	if not frappe.db.exists("XentraERP POS PIN", user):
 		frappe.throw("That user has no PIN.")
 	frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
 	frappe.db.commit()
 	return {"success": True}
+
+
+@frappe.whitelist()
+def set_pos_role(user: str, pos_role: str):
+	"""Change someone's POS role (Waiter / Cashier / Supervisor / Kitchen)."""
+	_require_staff_admin(user, pos_role)
+	if "System Manager" in frappe.get_roles(user):
+		frappe.throw("An administrator's access comes from their administrator role.")
+	_give_pos_role(user, pos_role)
+	frappe.db.commit()
+	return {"user": user, "pos_role": pos_role}

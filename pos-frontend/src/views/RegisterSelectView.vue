@@ -34,7 +34,7 @@ onMounted(async () => {
 function select(profile: POSProfileSummary) {
   auth.posProfile = profile
   // The route guard sends the cashier to open a shift first if one is required.
-  router.push(pos.isFnb ? '/floor' : '/terminal')
+  router.push(pos.settings?.level === 'kitchen' ? '/kitchen' : pos.isFnb ? '/floor' : '/terminal')
 }
 
 async function signOut() {
@@ -55,7 +55,8 @@ async function signOut() {
       </div>
       <div class="row">
         <span class="pill" :class="pos.isFnb ? 'ok' : ''">{{ pos.mode }} mode</span>
-        <button v-if="pos.canAdmin" class="btn btn-ghost" style="padding: 9px 16px" @click="router.push('/admin')">Settings &amp; reports</button>
+        <span class="pill">{{ pos.roleLabel }}</span>
+        <button v-if="pos.canManage" class="btn btn-ghost" style="padding: 9px 16px" @click="router.push('/admin')">Settings &amp; reports</button>
         <button class="btn btn-ghost" style="padding: 9px 16px" @click="signOut">Sign Out</button>
       </div>
     </div>

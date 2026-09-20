@@ -3,6 +3,16 @@ import frappe
 frappe.init(site="197349.xentraerp.local", sites_path=".")
 frappe.connect(); frappe.set_user("Administrator")
 frappe.db.commit = lambda *a, **k: None   # everything is rolled back at the end
+
+def quarantine():
+    """The tenant is in real use. Inside this (never-committed, rolled-back) transaction, clear the live POS
+    state so the checks start from an empty tenant. Nothing here can reach the real rows: commit is disabled
+    above and the run always ends in rollback."""
+    for t in ("XentraERP KOT Item","XentraERP KOT","XentraERP POS Order Item","XentraERP POS Order","XentraERP POS Table","XentraERP POS Shift Cash",
+              "XentraERP POS Shift","XentraERP POS Tender","XentraERP POS Reservation","XentraERP POS Hidden Item","XentraERP POS Location Profile","XentraERP POS Location"):
+        frappe.db.sql(f"delete from `tab{t}`")
+    frappe.db.sql("delete from tabSingles where doctype='XentraERP POS Settings'")
+quarantine()
 from custom_erp.api import pos, pos_fnb as fnb, pos_core as core
 from frappe.utils import add_days, getdate, nowdate, flt
 
@@ -35,6 +45,7 @@ try:
     for it in ("Blue Pen", "Cola"): frappe.db.set_value("Item", it, "is_stock_item", 0)
     pos.set_pin(cash1, "482913"); pos.set_pin(cash2, "735120")
     fnb.set_pos_mode("F&B")
+    core.save_pos_settings(auto_kot=0)
     check("fixtures", True)
 
     print("== locations: setup, validation, permissions")

@@ -1,116 +1,138 @@
-import json, sys, requests
-B = "https://pos.xentraerp.net"
-S_DIR = "/home/xentraerp/scripts/pos-checks"
+import json, requests, datetime
+B = "https://pos.xentraerp.net"; P = "custom_erp.api."
 OK, BAD = [], []
-def check(name, cond, detail=""):
-    (OK if cond else BAD).append(name); print(("  PASS " if cond else "  FAIL ") + name + (f"  [{detail}]" if not cond and detail else ""))
+def check(n, c, d=""): (OK if c else BAD).append(n); print(("  PASS " if c else "  FAIL ") + n + (f"  [{d}]" if d and not c else ""))
 def sess():
     s = requests.Session(); s.cookies.set("xentra_tenant", "197349", domain="pos.xentraerp.net"); return s
-def call(s, method, **args):
-    r = s.post(f"{B}/api/method/{method}", json=args, headers={"Accept": "application/json"}, timeout=60)
+def call(s, m, **a):
+    r = s.post(f"{B}/api/method/{m}", json=a, headers={"Accept": "application/json"}, timeout=90)
     try: j = r.json()
     except Exception: j = {}
     return r.status_code, j
 def msg(j):
     try: return json.loads(json.loads(j["_server_messages"])[0])["message"]
-    except Exception: return str(j)[:150]
-P = "custom_erp.api."
+    except Exception: return str(j)[:160]
+def login(pin):
+    s = sess(); c, j = call(s, P + "pos.pin_login", pin=pin); return s, c, j
+def still_in(s, who): c, j = call(s, "xentraerp.auth.get_logged_user"); return c == 200 and j.get("message") == who
 
-print("== the site"); s0 = requests.Session()
-r = s0.get(B + "/"); check("index served over HTTPS", r.status_code == 200 and 'id="app"' in r.text)
-check("SPA deep link /floor works (fallback to index)", s0.get(B + "/floor").status_code == 200 and 'id="app"' in s0.get(B + "/order/POSORD-00001").text)
-asset = [l for l in r.text.split('"') if l.startswith("/assets/") and l.endswith(".js")][0]
-ra = s0.get(B + asset); check("hashed asset cached hard", ra.status_code == 200 and "immutable" in ra.headers.get("cache-control", ""))
+print("== the site")
+s0 = requests.Session(); r = s0.get(B + "/")
+check("index over HTTPS", r.status_code == 200 and 'id="app"' in r.text)
+check("SPA deep links work", s0.get(B + "/floor").status_code == 200 and s0.get(B + "/order/POSORD-00001").status_code == 200)
 check("HTTP redirects to HTTPS", requests.get("http://pos.xentraerp.net/", allow_redirects=False).status_code == 301)
-lk = requests.Session(); rlk = lk.post(B + "/api/method/" + P + "signup.tenant_lookup", json={"tenant_code": "197349"}); check("tenant lookup (control plane, no tenant cookie) works", rlk.status_code == 200 and "organization_name" in rlk.text, rlk.text[:120])
 
-print("== PIN login through the proxy")
-cash, mgr = sess(), sess()
-code, j = call(cash, P + "pos.pin_login", pin="246810"); check("cashier PIN login", code == 200 and j["message"]["user"]["name"] == "zz.e2e.cashier@example.com", (code, msg(j)))
-code, j = call(mgr, P + "pos.pin_login", pin="135790"); check("manager PIN login", code == 200 and "System Manager" in j["message"]["user"]["roles"], (code, msg(j)))
-check("session cookie issued", "sid" in cash.cookies.get_dict() and cash.cookies.get_dict()["sid"] != "Guest")
-code, j = call(cash, "xentraerp.auth.get_logged_user"); check("aliased method name reaches the backend", code == 200 and j["message"] == "zz.e2e.cashier@example.com", (code, j))
-code, j = call(sess(), P + "pos.pin_login", pin="000000"); check("wrong PIN refused", code >= 400 and "Incorrect PIN" in msg(j), msg(j))
+print("== sign in, one person per role")
+W, cw, jw = login("246810"); C, cc, jc = login("357911"); S_, cs, js = login("468022"); K, ck, jk = login("579133"); M, cm, jm = login("680244")
+check("all five sign in with their PINs", all(x == 200 for x in (cw, cc, cs, ck, cm)), (cw, cc, cs, ck, cm))
+def st(s): c, j = call(s, P + "pos_core.get_pos_settings"); return j.get("message", {})
+sw, sc, ss, sk, sm = st(W), st(C), st(S_), st(K), st(M)
+check("each sees their own role", (sw["level"], sc["level"], ss["level"], sk["level"], sm["level"]) == ("waiter", "cashier", "supervisor", "kitchen", "admin"), (sw.get("level"), sc.get("level"), ss.get("level"), sk.get("level"), sm.get("level")))
+check("capabilities follow the role", "bill" not in sw["caps"] and "bill" in sc["caps"] and "tables" in ss["caps"] and "tables" not in sc["caps"] and sk["caps"] == ["kot", "view"] and "settings" in sm["caps"], (sw["caps"], sk["caps"]))
+orig = {k: sm[k] for k in ("pos_mode", "checkout_document", "auto_kot", "item_notes_prompt")}
+print("   (tenant settings before this run:", orig, ")")
+if orig["pos_mode"] != "F&B":
+    c, j = call(M, P + "pos_core.set_pos_mode", mode="F&B"); check("admin switches to F&B", c == 200, msg(j))
 
-print("== mode toggle: only a tenant admin")
-code, j = call(cash, P + "pos_core.get_pos_settings"); check("cashier sees Retail mode, no switch", code == 200 and j["message"]["pos_mode"] == "Retail" and j["message"]["can_switch"] is False, j)
-code, j = call(cash, P + "pos_core.set_pos_mode", mode="F&B"); check("cashier cannot switch mode (403)", code == 403, (code, msg(j)))
-code, j = call(cash, P + "pos_fnb.list_tables"); check("Retail: table service refused", code >= 400 and "Retail mode" in msg(j), msg(j))
-code, j = call(mgr, P + "pos_core.set_pos_mode", mode="F&B"); check("admin switches to F&B", code == 200 and j["message"]["pos_mode"] == "F&B", (code, msg(j)))
-code, j = call(cash, P + "pos_core.get_pos_settings"); check("cashier now sees F&B", j["message"]["pos_mode"] == "F&B")
+print("== supervisors run the room; waiters can't")
+c, j = call(W, P + "pos_fnb.save_table", table_name="ZZE1", zone="ZZ Zone", seats=4); check("waiter can't add a table (403)", c == 403 and "can't do this" in msg(j), msg(j))
+check("…and stays signed in after a refusal", still_in(W, "zz.e2e.waiter@example.com"))
+for t, seats in (("ZZE1", 4), ("ZZE2", 2), ("ZZE3", 6)):
+    c, j = call(S_, P + "pos_fnb.save_table", table_name=t, zone="ZZ Zone", seats=seats)
+check("supervisor adds tables", c == 200, msg(j))
+c, j = call(W, P + "pos_fnb.list_tables", pos_profile="ZZ E2E Register"); names = {t["name"] for t in j["message"]}; check("waiter sees them on the floor (and the real table too)", {"ZZE1", "ZZE2", "ZZE3"} <= names, sorted(names))
 
-print("== F&B flow")
-code, j = call(mgr, P + "pos_fnb.save_table", table_name="ZZE1", zone="Main", seats=4); check("admin adds a table", code == 200, msg(j))
-code, j = call(cash, P + "pos_fnb.save_table", table_name="ZZE9"); check("cashier cannot add tables (403)", code == 403)
-code, j = call(cash, P + "pos_fnb.list_tables"); tab = [t for t in j["message"] if t["name"] == "ZZE1"][0]; check("table listed, Available", tab["status"] == "Available")
-code, j = call(cash, P + "pos_fnb.open_order", table="ZZE1", pos_profile="ZZ E2E Register", guests=3); oid = j["message"]["name"]; check("seat the table", code == 200 and oid.startswith("POSORD-"), msg(j))
-code, j = call(cash, P + "pos_fnb.set_order_items", order=oid, items=json.dumps([{"item_code": "Blue Pen", "qty": 2, "note": "test"}])); check("add items, server prices them", code == 200 and j["message"]["total"] == 10.0, msg(j))
-code, j = call(cash, P + "pos_fnb.send_kot", order=oid); kot = j["message"]["kot"]; check("send to kitchen creates a KOT", code == 200 and kot.startswith("KOT-"), msg(j))
-code, j = call(cash, P + "pos_fnb.list_kots"); check("kitchen sees the ticket", any(k["name"] == kot and k["status"] == "New" for k in j["message"]))
-for st in ("Preparing", "Ready", "Served"):
-    code, j = call(cash, P + "pos_fnb.set_kot_status", kot=kot, status=st); check(f"KOT -> {st}", code == 200 and j["message"]["status"] == st, msg(j))
-code, j = call(cash, P + "pos_fnb.close_bill", order=oid); check("close bill returns what is owed", code == 200 and j["message"]["totals"]["due"] == 10.0, msg(j))
-code, j = call(cash, "xentraerp.auth.get_logged_user"); check("cashier is STILL logged in after close bill (session not clobbered)", code == 200 and j["message"] == "zz.e2e.cashier@example.com", (code, j))
-code, j = call(cash, P + "pos_fnb.set_order_items", order=oid, items="[]"); check("closed bill is locked", code >= 400 and "bill is closed" in msg(j), msg(j))
-code, j = call(cash, P + "pos_fnb.bill_order", order=oid, payment_method="Cash"); check("billing without an open shift is refused with a clear message", code == 417 and "shift" in msg(j).lower(), msg(j))
-code, j = call(cash, P + "pos_core.list_checkout_currencies", pos_profile="ZZ E2E Register"); check("checkout currencies listed", code == 200 and j["message"][0]["base"] is True, msg(j))
-code, j = call(cash, "xentraerp.auth.get_logged_user"); check("cashier still logged in after a refused bill", code == 200 and j["message"] == "zz.e2e.cashier@example.com", (code, j))
-code, j = call(cash, P + "pos_fnb.cancel_order", order=oid); check("cashier can't cancel after sending to kitchen (clear message)", code >= 400 and "manager" in msg(j).lower(), msg(j))
-code, j = call(mgr, P + "pos_fnb.cancel_order", order=oid); check("manager cancels the order", code == 200, msg(j))
+print("== dine in: saving sends the KOT")
+c, j = call(W, P + "pos_fnb.open_order", table="ZZE1", pos_profile="ZZ E2E Register", guests=3, order_type="Dine In"); o1 = j["message"]["name"]; check("waiter opens a dine-in order", c == 200 and j["message"]["order_type"] == "Dine In", msg(j))
+c, j = call(W, P + "pos_fnb.set_order_items", order=o1, items=json.dumps([{"item_code": "Blue Pen", "qty": 2, "note": "well done, crunchy"}, {"item_code": "Cola", "qty": 1, "note": "no ice"}]))
+kot = (j.get("message") or {}).get("kot") or {}
+check("saving the order files the KOT — no button", c == 200 and kot.get("kot", "").startswith("KOT-") and len(kot.get("items", [])) == 2, msg(j))
+check("the note travels to the kitchen", any(i["note"] == "well done, crunchy" for i in kot.get("items", [])), kot.get("items"))
+c, j = call(K, P + "pos_fnb.list_kots", pos_profile="ZZ E2E Register"); mine = [k for k in j.get("message", []) if k["name"] == kot.get("kot")]
+check("the kitchen board shows it immediately, with the type", c == 200 and mine and mine[0]["order_type"] == "Dine In" and mine[0]["table"] == "ZZE1", msg(j))
+for stt in ("Preparing", "Ready", "Served"):
+    c, j = call(K, P + "pos_fnb.set_kot_status", kot=kot["kot"], status=stt); check(f"kitchen marks it {stt}", c == 200 and j["message"]["status"] == stt, msg(j))
+c, j = call(K, P + "pos_fnb.open_order", table="ZZE2", pos_profile="ZZ E2E Register"); check("kitchen staff can't take orders (403)", c == 403, msg(j))
+c, j = call(W, P + "pos_fnb.set_order_items", order=o1, items=json.dumps([{"item_code": "Blue Pen", "qty": 1, "note": "well done, crunchy"}, {"item_code": "Cola", "qty": 1, "note": "no ice"}]))
+check("waiter can't reduce what's saved", c >= 400 and "can add items but not reduce" in msg(j), msg(j))
+c, j = call(W, P + "pos_fnb.set_order_items", order=o1, items=json.dumps([{"item_code": "Blue Pen", "qty": 3, "note": "well done, crunchy"}, {"item_code": "Cola", "qty": 1, "note": "no ice"}]))
+check("…but can add more (only the extra goes to the kitchen)", c == 200 and j["message"]["kot"] and j["message"]["kot"]["items"][0]["qty"] == 1, msg(j))
+for name, m, a in (("close the bill", "pos_fnb.close_bill", {"order": o1}), ("take payment", "pos_fnb.bill_order", {"order": o1, "payment_method": "Cash"}), ("cancel an order with items", "pos_fnb.cancel_order", {"order": o1}),
+                   ("open a shift", "pos_core.open_shift", {"pos_profile": "ZZ E2E Register"}), ("see the day-end report", "pos_core.end_of_day_report", {}), ("list staff", "pos.list_pos_users", {})):
+    c, j = call(W, P + m, **a); check(f"waiter can't {name} (403)", c == 403 and "can't do this" in msg(j) or (name.startswith("cancel") and c >= 400), (c, msg(j)))
+check("…still signed in after all those refusals", still_in(W, "zz.e2e.waiter@example.com"))
 
-print("== registers, cashier access, staff and locations")
-code, j = call(cash, P + "pos.list_pos_profiles"); reg = [r for r in j.get("message", []) if r["name"] == "ZZ E2E Register"]
-check("register list works (was a reserved-word SQL bug)", code == 200 and reg and reg[0]["payment_methods"] == ["Cash"], msg(j))
-ri = cash.get(B + "/api/resource/Item", params={"fields": json.dumps(["name", "item_name"]), "limit_page_length": 5}, headers={"Accept": "application/json"})
-check("a cashier can read the item grid (POS Cashier role)", ri.status_code == 200 and len(ri.json().get("data", [])) > 0, ri.text[:150])
-rw = cash.post(B + "/api/resource/Item", json={"item_code": "ZZ-HACK", "item_name": "x", "item_group": "Products", "stock_uom": "Nos"}, headers={"Accept": "application/json"})
-check("…but cannot create items", rw.status_code in (403, 417) and "ZZ-HACK" not in rw.text.replace("permission", ""), rw.status_code)
-code, j = call(cash, P + "pos.list_pos_users"); check("cashier cannot list staff (403)", code == 403)
-code, j = call(mgr, P + "pos.create_pos_user", email="zz.e2e.staff@example.com", full_name="ZZ E2E Staff", pin="864209", pos_profile="ZZ E2E Register"); check("admin creates a staff member with a PIN", code == 200, msg(j))
-staff = sess(); code, j = call(staff, P + "pos.pin_login", pin="864209"); check("the new staff member signs in with their PIN", code == 200 and j["message"]["pos_profile"] == "ZZ E2E Register" and "POS Cashier" in j["message"]["user"]["roles"], msg(j))
-code, j = call(mgr, P + "pos.list_pos_users"); check("admin sees staff with PIN status", code == 200 and any(u["user"] == "zz.e2e.staff@example.com" and u["active"] for u in j["message"]))
-code, j = call(mgr, P + "pos.set_pin_active", user="zz.e2e.staff@example.com", active=0); check("admin switches a PIN off", code == 200)
-code, j = call(sess(), P + "pos.pin_login", pin="864209"); check("…and that PIN no longer signs in", code >= 400 and "Incorrect PIN" in msg(j), msg(j))
-code, j = call(mgr, P + "pos_core.save_location", location_code="zze", location_name="ZZ E2E Site", cost_center="Main - JC", warehouse="Stores - JC", profiles=json.dumps(["ZZ E2E Register"])); check("admin defines a location for the register", code == 200 and j["message"]["code"] == "ZZE", msg(j))
-code, j = call(cash, P + "pos.list_pos_profiles"); reg = [r for r in j["message"] if r["name"] == "ZZ E2E Register"][0]; check("the register now shows its location", reg["location"] == "ZZE" and reg["location_name"] == "ZZ E2E Site", reg)
-code, j = call(cash, P + "pos_core.save_location", location_code="ZZX", location_name="x"); check("cashier cannot define locations (403)", code == 403)
-code, j = call(mgr, P + "pos_fnb.save_table", table_name="ZZE2", zone="Main", seats=2, location="ZZE"); check("admin puts a table in the location", code == 200, msg(j))
-code, j = call(mgr, P + "pos_fnb.save_table", table_name="ZZE3", zone="Elsewhere", seats=2, location="ZZE")
-code, j = call(cash, P + "pos_fnb.list_tables", pos_profile="ZZ E2E Register"); check("the register's floor shows its location's tables", code == 200 and {"ZZE2", "ZZE3"} <= {t["name"] for t in j["message"]}, msg(j))
+print("== cashier: modify + bill; supervisor: void")
+c, j = call(C, P + "pos_fnb.close_bill", order=o1); check("cashier closes the bill", c == 200 and j["message"]["order"]["bill_closed"] == 1, msg(j))
+check("…and is still signed in (session intact after billing logic)", still_in(C, "zz.e2e.cashier@example.com"))
+c, j = call(C, P + "pos_fnb.reopen_bill", order=o1); check("cashier can't re-open another person's check", c >= 400 and "only the waiter" in msg(j).lower(), msg(j))
+c, j = call(C, P + "pos_fnb.cancel_order", order=o1); check("cashier can't cancel food already in the kitchen", c >= 400 and "manager" in msg(j).lower(), msg(j))
+c, j = call(C, P + "pos_fnb.save_table", table_name="ZZE9"); check("cashier can't add a table (403)", c == 403)
+c, j = call(C, P + "pos_core.end_of_day_report"); check("cashier can't see the day-end report (403)", c == 403)
+c, j = call(S_, P + "pos_fnb.reopen_bill", order=o1); check("supervisor re-opens it", c == 200 and j["message"]["bill_closed"] == 0, msg(j))
+c, j = call(S_, P + "pos_fnb.cancel_order", order=o1); check("supervisor voids the order (food already sent)", c == 200, msg(j))
+c, j = call(S_, P + "pos_core.end_of_day_report"); check("supervisor sees the day-end report", c == 200 and "gross_sales" in j["message"], msg(j))
+c, j = call(C, P + "pos_core.open_shift", pos_profile="ZZ E2E Register", opening_cash=json.dumps({"BHD": 10})); check("cashier opens a shift", c == 200 and j["message"]["status"] == "Open", msg(j))
 
-print("== draft invoice lifecycle over HTTP")
-code, j = call(mgr, P + "pos_core.save_pos_settings", checkout_document="Draft Invoice + Receipt"); check("admin switches checkout to Draft Invoice + Receipt", code == 200 and j["message"]["checkout_document"] == "Draft Invoice + Receipt", msg(j))
-code, j = call(cash, P + "pos_core.get_pos_settings"); check("cashier's app sees the new checkout mode", j["message"]["checkout_document"] == "Draft Invoice + Receipt")
-code, j = call(cash, P + "pos_fnb.open_order", table="ZZE2", pos_profile="ZZ E2E Register", guests=2); o2 = j["message"]["name"]
-check("order is stamped with the location", code == 200 and j["message"]["location"] == "ZZE", msg(j))
-call(cash, P + "pos_fnb.set_order_items", order=o2, items=json.dumps([{"item_code": "Blue Pen", "qty": 2}]))
-code, j = call(cash, P + "pos_fnb.close_bill", order=o2); dinv = j["message"]["totals"].get("invoice", "")
-check("closing the check creates a Draft Sales Invoice numbered with the location code", code == 200 and dinv.startswith("ZZE-INV-"), (code, msg(j), dinv))
-import subprocess
-def probe(n):
-    r = subprocess.run(["/home/frappe/innovegic-bench/env/bin/python", S_DIR + "/e2e_probe.py", n], cwd="/home/frappe/innovegic-bench/sites", capture_output=True, text=True)
-    return json.loads([l for l in r.stdout.splitlines() if l.startswith("{")][-1])
-pr = probe(dinv)
-check("it really is a Draft (docstatus 0) with the location's cost center", pr["exists"] and pr["docstatus"] == 0 and pr["cost_center"] == "Main - JC", pr)
-code, j = call(cash, "xentraerp.auth.get_logged_user"); check("cashier still logged in after creating a draft", code == 200 and j["message"] == "zz.e2e.cashier@example.com")
-code, j = call(cash, P + "pos_fnb.reopen_bill", order=o2); check("re-opening the check", code == 200, msg(j))
-check("…discards the draft invoice", probe(dinv)["exists"] is False)
-code, j = call(cash, P + "pos_core.list_open_balances", pos_profile="ZZ E2E Register"); check("pending balances endpoint answers (nothing pending)", code == 200 and j["message"] == [], msg(j))
-code, j = call(cash, P + "pos_core.settle_invoice", invoice="NOPE-1", payments=json.dumps([{"mode_of_payment": "Cash", "tendered": 1}])); check("settling a non-POS invoice is refused", code >= 400 and "isn't a POS invoice" in msg(j), msg(j))
-code, j = call(cash, P + "pos_core.retail_checkout", pos_profile="ZZ E2E Register", items=json.dumps([{"item_code": "Blue Pen", "qty": 1}]), payments=json.dumps([{"mode_of_payment": "Cash", "tendered": 1}]), allow_partial=1); check("part payment without a shift gets the shift message", code == 417 and "shift" in msg(j).lower(), msg(j))
-call(mgr, P + "pos_fnb.cancel_order", order=o2)
-code, j = call(mgr, P + "pos_core.save_pos_settings", checkout_document="POS Invoice"); check("admin switches back to POS Invoice", code == 200 and j["message"]["checkout_document"] == "POS Invoice")
-code, j = call(cash, P + "pos_core.retail_checkout", pos_profile="ZZ E2E Register", items=json.dumps([{"item_code": "Blue Pen", "qty": 1}]), payments=json.dumps([{"mode_of_payment": "Cash", "tendered": 1}]), allow_partial=1); check("part payment is refused in POS Invoice mode", code >= 400 and ("Draft Invoice" in msg(j) or "shift" in msg(j).lower()), msg(j))
-code, j = call(mgr, P + "pos_fnb.delete_table", table="ZZE2"); call(mgr, P + "pos_fnb.delete_table", table="ZZE3")
+print("== take away")
+c, j = call(W, P + "pos_fnb.open_order", table=None, pos_profile="ZZ E2E Register", order_type="Take Away", guest_name="ZZ Sara", guest_phone="39112233"); t1 = j["message"]
+check("take-away order: no table, a token, the customer's name", c == 200 and t1["table"] is None and t1["order_type"] == "Take Away" and t1["token"] and t1["guest_name"] == "ZZ Sara", msg(j))
+c, j = call(W, P + "pos_fnb.set_order_items", order=t1["name"], items=json.dumps([{"item_code": "Blue Pen", "qty": 1, "note": "deep fried"}])); tk = j["message"]["kot"]
+check("its KOT says Take Away with the token", c == 200 and tk["order_type"] == "Take Away" and tk["token"] == t1["token"], msg(j))
+c, j = call(W, P + "pos_fnb.list_open_orders", pos_profile="ZZ E2E Register"); check("open take-away orders can be found again", c == 200 and any(o["name"] == t1["name"] for o in j["message"]), msg(j))
+c, j = call(K, P + "pos_fnb.list_kots"); check("the kitchen shows it as a take-away", any(k["name"] == tk["kot"] and k["order_type"] == "Take Away" and k["token"] == t1["token"] for k in j["message"]))
+c, j = call(C, P + "pos_fnb.transfer_table", order=t1["name"], to_table="ZZE2"); check("a take-away order has no table to move", c >= 400 and "no table to move" in msg(j), msg(j))
+c, j = call(W, P + "pos_fnb.open_order", table=None, pos_profile="ZZ E2E Register", order_type="Dine In"); check("dine-in needs a table", c >= 400 and "choose a table" in msg(j).lower(), msg(j))
+call(S_, P + "pos_fnb.cancel_order", order=t1["name"])
 
-print("== reports and admin")
-code, j = call(cash, P + "pos_core.end_of_day_report"); check("cashier cannot run end-of-day (403)", code == 403)
-code, j = call(mgr, P + "pos_core.end_of_day_report"); check("admin runs end-of-day", code == 200 and "gross_sales" in j["message"] and "fnb" in j["message"], msg(j))
-code, j = call(mgr, P + "pos_core.save_pos_settings", pos_247=1); check("admin saves 24/7", code == 200 and j["message"]["pos_247"] == 1, msg(j))
-code, j = call(mgr, P + "pos_core.save_pos_settings", pos_247=0)
+print("== reservations")
+tmr = str(datetime.date.today() + datetime.timedelta(days=1))
+c, j = call(W, P + "pos_fnb.save_reservation", guest_name="ZZ Guest", party_size=4, reservation_date=tmr, reservation_time="20:00", phone="39000111", tables=json.dumps(["ZZE1"]), pos_profile="ZZ E2E Register"); b = j.get("message", {})
+check("waiter books a table", c == 200 and b.get("status") == "Booked" and b.get("meal") == "Dinner", msg(j))
+c, j = call(W, P + "pos_fnb.save_reservation", guest_name="ZZ Other", party_size=2, reservation_date=tmr, reservation_time="20:30", tables=json.dumps(["ZZE1"]), pos_profile="ZZ E2E Register"); check("the same table can't be double-booked", c >= 400 and "already booked for ZZ Guest" in msg(j), msg(j))
+c, j = call(W, P + "pos_fnb.save_reservation", guest_name="ZZ Big", party_size=9, reservation_date=tmr, reservation_time="13:00", tables=json.dumps(["ZZE2"]), pos_profile="ZZ E2E Register"); check("a party too big for its table is refused", c >= 400 and "seat 2" in msg(j), msg(j))
+c, j = call(W, P + "pos_fnb.list_reservations", date=tmr, pos_profile="ZZ E2E Register"); check("the day's bookings list", c == 200 and any(x["name"] == b.get("name") for x in j["message"]), msg(j))
+c, j = call(W, P + "pos_fnb.seat_reservation", name=b["name"], pos_profile="ZZ E2E Register"); so = j.get("message", {})
+check("waiter seats the party: order opened for the party size, booking Seated", c == 200 and so["order"]["guests"] == 4 and so["reservation"]["status"] == "Seated", msg(j))
+call(S_, P + "pos_fnb.cancel_order", order=so["order"]["name"])
+c, j = call(W, P + "pos_fnb.list_reservations", date=tmr, pos_profile="ZZ E2E Register"); check("cancelling the order cancels the booking", [x for x in j["message"] if x["name"] == b["name"]][0]["status"] == "Cancelled")
+
+print("== menu management and item notes")
+c, j = call(W, P + "pos_core.save_menu_item", item_name="ZZ E2E Dish", item_group="Products", rate=4.25); check("waiter can't add a menu item (403)", c == 403)
+c, j = call(S_, P + "pos_core.save_menu_item", item_name="ZZ E2E Dish", item_group="Products", rate=4.25, pos_profile="ZZ E2E Register"); check("supervisor adds a dish with a price", c == 200 and j["message"]["rate"] == 4.25, msg(j))
+c, j = call(W, P + "pos_core.list_menu", pos_profile="ZZ E2E Register"); row = [i for i in j["message"] if i["item_code"] == "ZZ E2E Dish"]; check("it's on the waiter's menu at that price", c == 200 and row and row[0]["rate"] == 4.25, msg(j))
+c, j = call(S_, P + "pos_core.set_item_hidden", item_code="ZZ E2E Dish", hidden=1); check("supervisor hides it", c == 200)
+c, j = call(W, P + "pos_core.list_menu", pos_profile="ZZ E2E Register"); check("…gone from the waiter's menu", not [i for i in j["message"] if i["item_code"] == "ZZ E2E Dish"])
+c, j = call(W, P + "pos_core.list_menu", pos_profile="ZZ E2E Register", include_hidden=1); check("waiter can't ask for hidden items", c == 403)
+c, j = call(S_, P + "pos_core.set_item_hidden", item_code="ZZ E2E Dish", hidden=0)
+c, j = call(W, P + "pos_core.get_item_notes", item_code="ZZ E2E Dish"); n = j.get("message", {})
+check("a waiter gets suggested notes for the dish", c == 200 and len(n.get("notes", [])) >= 3 and n.get("source") in ("Standard", "AI"), msg(j))
+print("   (note source:", n.get("source"), "| AI key configured:", n.get("ai_enabled"), "| suggestions:", n.get("notes"), ")")
+c, j = call(W, P + "pos_core.set_item_notes", item_code="ZZ E2E Dish", notes=json.dumps(["x"])); check("waiter can't rewrite a dish's notes (403)", c == 403)
+c, j = call(S_, P + "pos_core.set_item_notes", item_code="ZZ E2E Dish", notes=json.dumps(["Extra crispy", "No garlic", "Well done"])); check("supervisor writes them", c == 200 and j["message"]["source"] == "Manual", msg(j))
+c, j = call(W, P + "pos_core.get_item_notes", item_code="ZZ E2E Dish"); check("waiters then see the supervisor's notes", j["message"]["notes"] == ["Extra crispy", "No garlic", "Well done"] and j["message"]["source"] == "Manual", msg(j))
+
+print("== settings: administrator only")
+c, j = call(S_, P + "pos_core.save_pos_settings", auto_kot=0); check("supervisor can't change POS settings (403)", c == 403 and "administrator" in msg(j).lower() or c == 403, msg(j))
+c, j = call(M, P + "pos_core.save_pos_settings", auto_kot=0); check("administrator turns auto-KOT off", c == 200 and j["message"]["auto_kot"] == 0, msg(j))
+c, j = call(W, P + "pos_fnb.open_order", table="ZZE3", pos_profile="ZZ E2E Register", guests=2); o3 = j["message"]["name"]
+c, j = call(W, P + "pos_fnb.set_order_items", order=o3, items=json.dumps([{"item_code": "Blue Pen", "qty": 1}])); check("with it off, saving sends nothing", c == 200 and j["message"]["kot"] is None, msg(j))
+c, j = call(W, P + "pos_fnb.send_kot", order=o3); check("…the manual Send to kitchen still works", c == 200 and j["message"]["kot"].startswith("KOT-"), msg(j))
+call(S_, P + "pos_fnb.cancel_order", order=o3)
+c, j = call(M, P + "pos_core.save_pos_settings", auto_kot=orig["auto_kot"], item_notes_prompt=orig["item_notes_prompt"], checkout_document=orig["checkout_document"]); check("settings restored", c == 200 and j["message"]["auto_kot"] == orig["auto_kot"], msg(j))
+
+print("== staff and roles")
+c, j = call(S_, P + "pos.create_pos_user", email="zz.e2e.newwaiter@example.com", full_name="ZZ E2E New", pin="791355", pos_profile="ZZ E2E Register", pos_role="POS Waiter"); check("supervisor adds a waiter", c == 200, msg(j))
+nw, cn, jn = login("791355"); check("…who signs in with their PIN as a waiter", cn == 200 and jn["message"]["user"]["roles"].count("POS Waiter") == 1 and jn["message"]["pos_profile"] == "ZZ E2E Register", msg(jn))
+c, j = call(S_, P + "pos.create_pos_user", email="zz.e2e.newsup@example.com", full_name="ZZ E2E Sup", pin="802466", pos_role="POS Supervisor"); check("supervisor can't create a supervisor", c == 403 and "administrator" in msg(j).lower(), msg(j))
+c, j = call(W, P + "pos.list_pos_users"); check("waiter can't list staff (403)", c == 403)
+c, j = call(S_, P + "pos.list_pos_users"); check("supervisor lists the team with roles", c == 200 and any(u["user"] == "zz.e2e.newwaiter@example.com" and u["level"] == "waiter" for u in j["message"]))
+c, j = call(S_, P + "pos.set_pos_role", user="zz.e2e.newwaiter@example.com", pos_role="POS Cashier"); check("supervisor promotes them to cashier", c == 200 and j["message"]["pos_role"] == "POS Cashier", msg(j))
+c, j = call(S_, P + "pos.set_pin_active", user="zz.e2e.newwaiter@example.com", active=0)
+w2, c2, j2 = login("791355"); check("a switched-off PIN can't sign in", c2 >= 400, c2)
 
 print("== restore")
-code, j = call(mgr, P + "pos_fnb.delete_table", table="ZZE1")
-code, j = call(mgr, P + "pos_core.set_pos_mode", mode="Retail"); check("admin switches back to Retail", code == 200 and j["message"]["pos_mode"] == "Retail", msg(j))
-for s in (cash, mgr): call(s, "logout")
-print(f"\nE2E RESULT: {len(OK)} passed, {len(BAD)} failed"); [print("  FAILED:", b) for b in BAD]
+if orig["pos_mode"] != "F&B":
+    c, j = call(M, P + "pos_core.set_pos_mode", mode=orig["pos_mode"]); check("mode restored", c == 200, msg(j))
+for s_ in (W, C, S_, K, M): call(s_, "logout")
+print(f"\nE2E RESULT: {len(OK)} passed, {len(BAD)} failed"); [print("  FAILED:", b_) for b_ in BAD]

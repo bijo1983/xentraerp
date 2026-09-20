@@ -46,8 +46,15 @@ router.beforeEach(async (to) => {
     }
   }
   if (to.name === 'login' && auth.user) {
-    return { name: auth.posProfile ? 'shift' : 'registers' }
+    return { name: 'registers' }
   }
+  // Kitchen staff only ever see the kitchen board.
+  if (pos.settings?.level === 'kitchen' && !['kitchen', 'registers', 'login'].includes(String(to.name))) {
+    return auth.posProfile ? { name: 'kitchen' } : { name: 'registers' }
+  }
+  // Counter sales and the shift drawer are for people who bill; waiters take orders on the floor.
+  if (to.name === 'terminal' && !pos.can('bill')) return { name: pos.isFnb ? 'floor' : 'registers' }
+  if (to.name === 'shift' && !pos.can('shift')) return { name: pos.isFnb ? 'floor' : 'registers' }
   if (SELLING.has(String(to.name)) || to.name === 'shift') {
     if (!auth.posProfile) return { name: 'registers' }
   }
@@ -57,7 +64,7 @@ router.beforeEach(async (to) => {
   if ((to.name === 'floor' || to.name === 'order' || to.name === 'kitchen') && !pos.isFnb) {
     return { name: 'terminal' }
   }
-  if (to.name === 'admin' && !pos.canAdmin) {
+  if (to.name === 'admin' && !pos.canManage) {
     return { name: 'registers' }
   }
   return true

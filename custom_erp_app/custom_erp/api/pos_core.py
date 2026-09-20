@@ -22,9 +22,10 @@ Three ideas everything here hangs on:
 
 import json
 from contextlib import contextmanager
+from datetime import timedelta
 
 import frappe
-from frappe.utils import add_days, cint, flt, get_time, getdate, now_datetime
+from frappe.utils import add_days, cint, flt, get_datetime, get_time, getdate, now_datetime
 
 SETTINGS = "XentraERP POS Settings"
 MODES = ("Retail", "F&B")
@@ -36,6 +37,55 @@ CHECKOUT_DOCS = ("POS Invoice", "Draft Invoice + Receipt")
 
 def is_manager() -> bool:
 	return "System Manager" in frappe.get_roles()
+
+
+# ------------------------------------------------------------ roles & rights
+# Four POS roles besides the administrator (System Manager). Each grants a set of
+# capabilities; the server checks them on every call, so hiding a button in the
+# app is only a convenience — a waiter calling the API directly is refused too.
+POS_ROLES = {"POS Kitchen": "kitchen", "POS Waiter": "waiter", "POS Cashier": "cashier", "POS Supervisor": "supervisor"}
+_WAITER = {"view", "kot", "order", "reserve"}
+_CASHIER = _WAITER | {"modify", "bill", "shift"}
+_SUPERVISOR = _CASHIER | {"supervise", "tables", "menu", "reports", "staff"}
+CAPS = {
+	"kitchen": {"view", "kot"},
+	"waiter": _WAITER,
+	"cashier": _CASHIER,
+	"supervisor": _SUPERVISOR,
+	"admin": _SUPERVISOR | {"settings"},
+}
+LEVEL_LABEL = {"kitchen": "Kitchen", "waiter": "Waiter", "cashier": "Cashier", "supervisor": "Supervisor", "admin": "Administrator"}
+_CAP_NEEDS = {
+	"modify": "a cashier", "bill": "a cashier", "shift": "a cashier", "supervise": "a supervisor or administrator",
+	"tables": "a supervisor or administrator", "menu": "a supervisor or administrator", "reports": "a supervisor or administrator",
+	"staff": "a supervisor or administrator", "settings": "an administrator", "order": "a waiter or above", "reserve": "a waiter or above", "kot": "kitchen or floor staff",
+}
+
+
+def pos_level(user: str | None = None) -> str | None:
+	"""The user's POS level: admin (System Manager) > supervisor > cashier > waiter >
+	kitchen. Someone with an active PIN but no POS role is treated as a waiter (least
+	privilege). None = no POS access."""
+	user = user or frappe.session.user
+	roles = frappe.get_roles(user)
+	if "System Manager" in roles:
+		return "admin"
+	for role, level in (("POS Supervisor", "supervisor"), ("POS Cashier", "cashier"), ("POS Waiter", "waiter"), ("POS Kitchen", "kitchen")):
+		if role in roles:
+			return level
+	return "waiter" if frappe.db.exists("XentraERP POS PIN", {"user": user, "active": 1}) else None
+
+
+def has_cap(cap: str) -> bool:
+	return cap in CAPS.get(pos_level() or "", set())
+
+
+def require_cap(cap: str):
+	"""Refuse unless the signed-in POS user's role grants `cap`."""
+	require_pos_user()
+	if not has_cap(cap):
+		level = LEVEL_LABEL.get(pos_level() or "", "your role")
+		frappe.throw(f"{level} accounts can't do this — it needs {_CAP_NEEDS.get(cap, 'a higher role')}.", frappe.PermissionError)
 
 
 def require_pos_user():
@@ -68,6 +118,9 @@ def settings() -> dict:
 		# A never-saved Single has no rows: "require shift" then defaults on.
 		"require_shift": cint(raw.get("require_shift", 1)) if raw else 1,
 		"pos_247": cint(raw.get("pos_247")),
+		# Saving an order sends its kitchen ticket automatically (a fresh Single defaults to on).
+		"auto_kot": cint(raw.get("auto_kot", 1)) if raw else 1,
+		"item_notes_prompt": cint(raw.get("item_notes_prompt", 1)) if raw else 1,
 		"previous_day_billing": cint(raw.get("previous_day_billing")),
 		"previous_day_until": str(until),
 	}
@@ -96,6 +149,9 @@ def get_pos_settings():
 	return {
 		**s,
 		"can_switch": is_manager(),
+		"role": LEVEL_LABEL.get(pos_level() or "", ""),
+		"level": pos_level(),
+		"caps": sorted(CAPS.get(pos_level() or "", set())),
 		"business_date": str(business_date()),
 		"shift": _shift_payload(shift) if shift else None,
 	}
@@ -125,7 +181,7 @@ def set_pos_mode(mode: str):
 
 
 @frappe.whitelist()
-def save_pos_settings(require_shift=None, pos_247=None, previous_day_billing=None, previous_day_until=None, checkout_document=None):
+def save_pos_settings(require_shift=None, pos_247=None, previous_day_billing=None, previous_day_until=None, checkout_document=None, auto_kot=None, item_notes_prompt=None):
 	"""Tenant admin: operating-hours behaviour and what a checkout produces."""
 	require_manager()
 	updates = {}
@@ -133,7 +189,7 @@ def save_pos_settings(require_shift=None, pos_247=None, previous_day_billing=Non
 		if checkout_document not in CHECKOUT_DOCS:
 			frappe.throw(f"Checkout document must be one of: {', '.join(CHECKOUT_DOCS)}")
 		updates["checkout_document"] = checkout_document
-	for key, val in (("require_shift", require_shift), ("pos_247", pos_247), ("previous_day_billing", previous_day_billing)):
+	for key, val in (("require_shift", require_shift), ("pos_247", pos_247), ("previous_day_billing", previous_day_billing), ("auto_kot", auto_kot), ("item_notes_prompt", item_notes_prompt)):
 		if val is not None:
 			updates[key] = cint(bool(cint(val)))
 	if previous_day_until is not None:
@@ -398,7 +454,7 @@ def _shift_payload(shift) -> dict:
 
 @frappe.whitelist()
 def current_shift(pos_profile: str | None = None):
-	require_pos_user()
+	require_cap("shift")
 	shift = _open_shift_of(frappe.session.user, pos_profile)
 	return _shift_payload(shift) if shift else None
 
@@ -407,7 +463,7 @@ def current_shift(pos_profile: str | None = None):
 def open_shift(pos_profile: str, opening_cash=None):
 	"""Start a shift on a register with the cash already in the drawer,
 	per currency: {"BHD": 50, "USD": 20}."""
-	require_pos_user()
+	require_cap("shift")
 	profile = get_profile(pos_profile)
 	user = frappe.session.user
 	if _open_shift_of(user):
@@ -469,9 +525,9 @@ def _shift_sales(shift_name: str) -> tuple:
 def shift_report(shift: str):
 	"""Live totals for a shift (also what the closing screen shows). Open
 	shifts show the expected drawer; the cashier only sees their own."""
-	require_pos_user()
+	require_cap("shift")
 	doc = frappe.get_doc("XentraERP POS Shift", shift)
-	if doc.cashier != frappe.session.user and not is_manager():
+	if doc.cashier != frappe.session.user and not has_cap("supervise"):
 		frappe.throw("Not permitted", frappe.PermissionError)
 	taken = _cash_taken(doc.name)
 	cash = []
@@ -501,12 +557,12 @@ def shift_report(shift: str):
 def close_shift(shift: str, counted=None, notes: str | None = None):
 	"""Count the drawer per currency and close: {"BHD": 152.5, "USD": 20}.
 	Every currency the shift handled must be counted."""
-	require_pos_user()
+	require_cap("shift")
 	doc = frappe.get_doc("XentraERP POS Shift", shift)
 	if doc.status != "Open":
 		frappe.throw("This shift is already closed.")
-	if doc.cashier != frappe.session.user and not is_manager():
-		frappe.throw("Only the cashier who opened this shift (or an administrator) can close it.", frappe.PermissionError)
+	if doc.cashier != frappe.session.user and not has_cap("supervise"):
+		frappe.throw("Only the cashier who opened this shift (or a supervisor or administrator) can close it.", frappe.PermissionError)
 	if not settings()["pos_247"]:
 		open_orders = frappe.db.count("XentraERP POS Order", {"status": ["in", ["Open", "Part Paid"]], "pos_profile": doc.pos_profile})
 		if open_orders:
@@ -954,7 +1010,7 @@ def settle_invoice(invoice: str, payments, allow_partial: int = 0):
 	"""Finish billing a part-paid invoice: take (more of) the balance. One receipt
 	per payment leg is created against the same invoice; when the balance reaches
 	zero it becomes Paid. Change is given only from cash."""
-	require_pos_user()
+	require_cap("bill")
 	if not draft_mode():
 		frappe.throw("Balances are only kept open when checkout is set to Draft Invoice + Receipt.")
 	inv = _pos_sales_invoice(invoice)
@@ -983,7 +1039,7 @@ def settle_invoice(invoice: str, payments, allow_partial: int = 0):
 @frappe.whitelist()
 def list_open_balances(pos_profile: str | None = None):
 	"""Part-paid POS invoices with a balance still to collect, newest last."""
-	require_pos_user()
+	require_cap("bill")
 	names = frappe.db.sql_list("select distinct invoice from `tabXentraERP POS Tender` where invoice_doctype='Sales Invoice'")
 	if not names:
 		return []
@@ -1044,7 +1100,7 @@ def _retail_lines(profile, items) -> list:
 @frappe.whitelist()
 def retail_estimate(pos_profile: str, items):
 	"""What a counter sale comes to including tax and rounding (nothing saved)."""
-	require_pos_user()
+	require_cap("bill")
 	profile = get_profile(pos_profile)
 	return estimate_totals(profile, _retail_lines(profile, items))
 
@@ -1055,13 +1111,262 @@ def retail_checkout(pos_profile: str, items, payments, customer: str | None = No
 	unless the POS Profile allows rate changes. With checkout = Draft Invoice +
 	Receipt, `allow_partial=1` takes what was paid and leaves the balance open
 	(Partly Paid) to be collected later with settle_invoice."""
-	require_pos_user()
+	require_cap("bill")
 	profile = get_profile(pos_profile)
 	if cint(allow_partial) and not draft_mode():
 		frappe.throw("Part payment needs checkout set to Draft Invoice + Receipt.")
 	result = post_invoice(profile, _retail_lines(profile, items), payments, customer=customer, allow_partial=cint(allow_partial))
 	frappe.db.commit()
 	return result
+
+
+# ------------------------------------------------------------ item notes
+# "Well done", "crunchy", "no onions"... suggested for the dish being ordered. When an
+# Anthropic API key is configured (site config `anthropic_api_key` or the
+# ANTHROPIC_API_KEY environment variable) Claude proposes them for the specific item; the
+# answer is cached per item, so the AI is asked once per dish, not on every tap. Without a
+# key — or if the call fails — a built-in list keyed on the kind of dish is used, so the
+# feature always works. A supervisor can also write a dish's notes by hand.
+
+NOTE_MODEL = "claude-haiku-4-5-20251001"
+NOTES = "XentraERP POS Item Note"
+AI_RETRY = timedelta(hours=6)  # after a failed AI call, don't try again for this long
+
+_RULES = (
+	(("steak", "beef", "burger", "lamb", "kebab", "grill", "ribs"), ["Rare", "Medium rare", "Medium", "Medium well", "Well done", "No salt", "Sauce on the side"]),
+	(("chicken", "wings", "tikka", "shawarma"), ["Grilled", "Deep fried", "Crispy", "Well done", "Less spicy", "Extra spicy", "No skin"]),
+	(("fish", "prawn", "shrimp", "seafood", "salmon", "calamari", "squid"), ["Grilled", "Deep fried", "Lightly seasoned", "Well done", "Lemon on the side", "No garlic"]),
+	(("fries", "chips", "potato", "nugget", "onion ring", "samosa", "spring roll", "falafel"), ["Extra crunchy", "Well done", "Less oil", "Extra salt", "No salt", "Sauce on the side"]),
+	(("pizza",), ["Thin crust", "Well done", "Extra cheese", "No onion", "Cut in 8"]),
+	(("pasta", "noodle", "spaghetti", "rice", "biryani"), ["Al dente", "Extra spicy", "Less spicy", "No garlic", "Extra sauce"]),
+	(("salad",), ["Dressing on the side", "No onions", "No croutons", "Extra dressing"]),
+	(("coffee", "tea", "latte", "cappuccino", "espresso", "mocha"), ["Extra hot", "Less sugar", "No sugar", "Extra shot", "Oat milk", "Decaf"]),
+	(("juice", "smoothie", "shake", "cola", "soda", "drink", "water", "lemonade", "mojito"), ["No ice", "Less ice", "Less sugar", "No sugar", "Extra ice"]),
+	(("soup",), ["Extra hot", "Less salt", "Spicy"]),
+	(("cake", "dessert", "ice cream", "pudding", "brownie"), ["Warm", "Extra topping", "No nuts"]),
+)
+_DEFAULT_NOTES = ["Well done", "Less spicy", "Extra spicy", "No onion", "Less salt", "No salt", "Extra sauce", "Sauce on the side"]
+
+
+def _rule_notes(item_name: str, group: str | None) -> list:
+	hay = f"{item_name} {group or ''}".lower()
+	for keys, notes in _RULES:
+		if any(k in hay for k in keys):
+			return notes[:8]
+	return _DEFAULT_NOTES[:8]
+
+
+def _clean_notes(raw) -> list:
+	out = []
+	for n in raw or []:
+		n = " ".join(str(n).split())[:30]
+		if n and n.lower() not in {o.lower() for o in out}:
+			out.append(n)
+	return out[:8]
+
+
+def _anthropic_key():
+	import os
+
+	return frappe.conf.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
+
+
+def _ai_notes(item_name: str, group: str | None):
+	"""Ask Claude for short kitchen-preference notes for this dish. Returns a list, or
+	None if there is no key or the call fails (the caller then falls back)."""
+	key = _anthropic_key()
+	if not key:
+		return None
+	import re
+
+	import requests
+
+	prompt = (
+		"You help a restaurant point-of-sale. For the menu item below, list up to 8 short notes a guest might "
+		"ask the kitchen for — cooking level, texture (e.g. crunchy), cooking method (e.g. deep fried, grilled), "
+		"spice level, ingredients to leave out, how it is served. Each note is under 25 characters and specific "
+		"to this item; do not include notes that make no sense for it (no 'well done' for a soft drink). "
+		f"Return ONLY a JSON array of strings.\n\nItem: {item_name}\nCategory: {group or 'unknown'}"
+	)
+	try:
+		r = requests.post(
+			"https://api.anthropic.com/v1/messages",
+			headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+			json={"model": NOTE_MODEL, "max_tokens": 250, "messages": [{"role": "user", "content": prompt}]},
+			timeout=6,
+		)
+		r.raise_for_status()
+		text = "".join(b.get("text", "") for b in r.json().get("content", []) if b.get("type") == "text")
+		m = re.search(r"\[.*\]", text, re.S)
+		notes = _clean_notes(json.loads(m.group(0))) if m else []
+		return notes or None
+	except Exception:
+		frappe.log_error(title="POS item-note suggestion (AI) failed")
+		return None
+
+
+@frappe.whitelist()
+def get_item_notes(item_code: str, refresh: int = 0):
+	"""Suggested notes for a dish: cached; from Claude when a key is set, else a built-in
+	list. `refresh=1` (supervisor) regenerates them."""
+	require_cap("view")
+	if not frappe.db.exists("Item", item_code):
+		frappe.throw("No such item.")
+	refresh = cint(refresh) and has_cap("menu")
+	row = frappe.get_doc(NOTES, item_code) if frappe.db.exists(NOTES, item_code) else None
+	have_key = bool(_anthropic_key())
+	if row and row.source == "Manual" and not refresh:
+		return {"item_code": item_code, "notes": _clean_notes((row.notes or "").split("\n")), "source": "Manual", "ai_enabled": have_key}
+	tried_recently = bool(row and row.ai_tried_at and now_datetime() - get_datetime(row.ai_tried_at) < AI_RETRY)
+	upgrade = have_key and (not row or (row.source == "Standard" and not tried_recently))
+	if row and not refresh and not upgrade:
+		return {"item_code": item_code, "notes": _clean_notes((row.notes or "").split("\n")), "source": row.source, "ai_enabled": have_key}
+	item = frappe.db.get_value("Item", item_code, ["item_name", "item_group"], as_dict=True)
+	notes = _ai_notes(item.item_name, item.item_group) if (have_key and (upgrade or refresh)) else None
+	source = "AI" if notes else "Standard"
+	if not notes:
+		# keep an earlier AI answer rather than replace it with the generic list
+		notes = _clean_notes((row.notes or "").split("\n")) if row and row.source == "AI" else _rule_notes(item.item_name, item.item_group)
+		source = "AI" if row and row.source == "AI" else "Standard"
+	values = {"notes": "\n".join(notes), "source": source, "ai_tried_at": now_datetime() if have_key else None}
+	if row:
+		row.update(values)
+		row.save(ignore_permissions=True)
+	else:
+		frappe.get_doc({"doctype": NOTES, "item_code": item_code, **values}).insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {"item_code": item_code, "notes": notes, "source": source, "ai_enabled": have_key}
+
+
+@frappe.whitelist()
+def set_item_notes(item_code: str, notes):
+	"""Supervisor: write the suggested notes for a dish by hand (kept until refreshed)."""
+	require_cap("menu")
+	if not frappe.db.exists("Item", item_code):
+		frappe.throw("No such item.")
+	if isinstance(notes, str):
+		notes = json.loads(notes) if notes.strip().startswith("[") else notes.split("\n")
+	clean = _clean_notes(notes)
+	values = {"notes": "\n".join(clean), "source": "Manual"}
+	if frappe.db.exists(NOTES, item_code):
+		doc = frappe.get_doc(NOTES, item_code)
+		doc.update(values)
+		doc.save(ignore_permissions=True)
+	else:
+		frappe.get_doc({"doctype": NOTES, "item_code": item_code, **values}).insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {"item_code": item_code, "notes": clean, "source": "Manual"}
+
+
+# ------------------------------------------------------------------ menu
+
+HIDDEN = "XentraERP POS Hidden Item"
+
+
+def _hidden_items(loc_code) -> set:
+	return {r.item_code for r in frappe.get_all(HIDDEN, fields=["item_code", "location"]) if not r.location or r.location == loc_code}
+
+
+def _selling_list(profile) -> str:
+	return (
+		(profile.selling_price_list if profile else None)
+		or frappe.db.get_single_value("Selling Settings", "selling_price_list")
+		or "Standard Selling"
+	)
+
+
+@frappe.whitelist()
+def list_menu(pos_profile: str | None = None, include_hidden: int = 0):
+	"""What can be sold on this register, with prices. Items a supervisor has hidden
+	for the location (or everywhere) are left out; `include_hidden=1` (supervisor)
+	returns them too, flagged, for the menu manager."""
+	require_cap("view")
+	profile = get_profile(pos_profile) if pos_profile else None
+	loc_code = location_code(location_of(pos_profile)) if pos_profile else None
+	hidden = _hidden_items(loc_code)
+	if cint(include_hidden):
+		require_cap("menu")
+	rates = {}
+	if profile:
+		for r in frappe.get_all(
+			"Item Price", filters={"price_list": _selling_list(profile), "selling": 1, "customer": ["is", "not set"]}, fields=["item_code", "price_list_rate"], order_by="modified asc"
+		):
+			rates[r.item_code] = flt(r.price_list_rate)
+	out = []
+	for i in frappe.get_all(
+		"Item", filters={"disabled": 0, "is_sales_item": 1}, fields=["name", "item_name", "item_group", "standard_rate", "is_stock_item"],
+		order_by="item_group asc, item_name asc", limit_page_length=2000,
+	):
+		is_hidden = i.name in hidden
+		if is_hidden and not cint(include_hidden):
+			continue
+		out.append({"item_code": i.name, "item_name": i.item_name, "item_group": i.item_group, "rate": rates.get(i.name, flt(i.standard_rate)),
+		            "hidden": is_hidden, "is_stock_item": cint(i.is_stock_item)})
+	return out
+
+
+@frappe.whitelist()
+def list_item_groups():
+	require_cap("view")
+	return frappe.get_all("Item Group", filters={"is_group": 0}, pluck="name", order_by="name asc")
+
+
+@frappe.whitelist()
+def set_item_hidden(item_code: str, hidden: int = 1, location: str | None = None):
+	"""Supervisor: hide a dish from the POS menu (only the POS — the item stays in ERPNext),
+	at one location or everywhere; or show it again."""
+	require_cap("menu")
+	if not frappe.db.exists("Item", item_code):
+		frappe.throw("No such item.")
+	location = (location or "").strip() or None
+	if location and not frappe.db.exists("XentraERP POS Location", location):
+		frappe.throw(f"No such location: {location}")
+	existing = frappe.db.get_value(HIDDEN, {"item_code": item_code, "location": location or ["is", "not set"]})
+	if cint(hidden) and not existing:
+		frappe.get_doc({"doctype": HIDDEN, "item_code": item_code, "location": location}).insert(ignore_permissions=True)
+	elif not cint(hidden) and existing:
+		frappe.delete_doc(HIDDEN, existing, ignore_permissions=True)
+	frappe.db.commit()
+	return {"item_code": item_code, "hidden": bool(cint(hidden))}
+
+
+@frappe.whitelist()
+def save_menu_item(item_name: str, item_group: str, rate: float, pos_profile: str | None = None, item_code: str | None = None, is_stock_item: int = 0):
+	"""Supervisor: add a dish to the menu, or change an existing one's name, group and
+	price. The price is stored as an Item Price on the register's selling price list."""
+	require_cap("menu")
+	item_name = (item_name or "").strip()
+	if not item_name or len(item_name) > 140:
+		frappe.throw("Give the item a name (up to 140 characters).")
+	if not frappe.db.exists("Item Group", item_group):
+		frappe.throw(f"No such item group: {item_group}")
+	rate = flt(rate)
+	if rate < 0:
+		frappe.throw("The price can't be negative.")
+	profile = get_profile(pos_profile) if pos_profile else None
+	with _elevated():
+		if item_code:
+			if not frappe.db.exists("Item", item_code):
+				frappe.throw("No such item.")
+			doc = frappe.get_doc("Item", item_code)
+			doc.item_name, doc.item_group = item_name, item_group
+			doc.save(ignore_permissions=True)
+		else:
+			if frappe.db.exists("Item", item_name):
+				frappe.throw(f"An item called '{item_name}' already exists.")
+			doc = frappe.get_doc(
+				{"doctype": "Item", "item_code": item_name, "item_name": item_name, "item_group": item_group, "stock_uom": "Nos",
+				 "is_stock_item": cint(bool(cint(is_stock_item))), "is_sales_item": 1, "is_purchase_item": 0}
+			)
+			doc.insert(ignore_permissions=True)
+		price_list = _selling_list(profile)
+		row = frappe.db.get_value("Item Price", {"item_code": doc.name, "price_list": price_list, "customer": ["is", "not set"]})
+		if row:
+			frappe.db.set_value("Item Price", row, "price_list_rate", rate)
+		else:
+			frappe.get_doc({"doctype": "Item Price", "item_code": doc.name, "price_list": price_list, "price_list_rate": rate}).insert(ignore_permissions=True)
+	frappe.db.commit()
+	return {"item_code": doc.name, "item_name": doc.item_name, "item_group": doc.item_group, "rate": rate, "hidden": False}
 
 
 # --------------------------------------------------------------- reports
@@ -1072,7 +1377,7 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 	"""Administrator: everything traded on one business day, optionally for one
 	location. Covers both checkout documents (POS Invoices and Sales Invoices +
 	receipts) and shows part-paid balances that are still to be collected."""
-	require_manager()
+	require_cap("reports")
 	bd = str(getdate(date)) if date else str(business_date())
 	company_ccy = frappe.db.get_value("Company", frappe.db.get_single_value("Global Defaults", "default_company"), "default_currency")
 	loc_sql, loc_args = (" and location=%s", (location,)) if location else ("", ())

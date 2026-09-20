@@ -272,7 +272,7 @@ async function signOut() {
         <button v-if="pos.draftMode" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="openBalances">Pending balances</button>
         <button v-if="pos.isFnb" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/floor')">Tables</button>
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/shift')">Shift</button>
-        <button v-if="pos.canAdmin" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/admin')">Settings</button>
+        <button v-if="pos.canManage" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/admin')">Settings</button>
         <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="switchRegister">
           Switch register
         </button>

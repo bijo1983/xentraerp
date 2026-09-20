@@ -631,9 +631,35 @@ error logs) will show it happening.
   the DB but not in memory can't be submitted ("Value cannot be changed for Created By"); ERPNext regenerates Payment
   Entry remarks unless `custom_remarks=1`; a POS-created invoice built under the elevated scope must be re-owned to the
   cashier (done) or reports attribute sales to Administrator.
+- **THE TENANT IS IN REAL USE (seen 2026-09-20)**: real staff user `pos1@jjc.com`, table `A1`, an open order, an open
+  shift, mode F&B. Never run a script that deletes "all tables/orders", never `set_pos_mode` back to Retail without
+  checking, and keep tests inside rolled-back transactions (see `scripts/pos-checks/README.md`).
+- **Roles & rights** (`pos_core.CAPS`, enforced server-side by `require_cap`, mirrored in the app by `pos.can(cap)`):
+  Waiter (view, kot, order, reserve — add items only, can't reduce/remove, close/pay/cancel-with-items/split/merge/move) ·
+  Cashier (+ modify, bill, shift; closes bills, takes payment) · Supervisor (+ supervise=void/re-open others'/close others'
+  shifts, tables, menu, reports, staff for waiter/cashier/kitchen) · Kitchen (kot only) · Administrator (System Manager:
+  everything incl. mode, settings, locations, currencies). One POS role per person (`set_pos_role`); a PIN with no POS role
+  is a Waiter. Refusals say "<Role> accounts can't do this — it needs …" (HTTP 403).
+- **Order flow**: every order starts Dine In (table) or Take Away (no table, token `001…` per business day/location,
+  optional name/phone). **Saving the order files the KOT automatically** (`auto_kot`, default on; `set_order_items`
+  returns `kot`); the order screen is a local cart with an explicit Save. The KOT shows on the kitchen board at once; a
+  kitchen printer prints it via per-DEVICE switches (localStorage): "Auto-print new tickets here" on the kitchen screen
+  and "KOT printer" on the ordering terminal (Bluetooth ESC/POS, or browser print through a hidden iframe — silent only
+  with Chrome `--kiosk-printing`). A server can't reach a LAN printer, which is why printing is device-side.
+- **Item notes**: on adding a dish the app asks "any special request?" (`item_notes_prompt`) with suggested chips + free
+  text; the note prints on the KOT. Suggestions: `pos_core.get_item_notes` — Claude (`claude-haiku-4-5`) when
+  `anthropic_api_key` is set in site config (or `ANTHROPIC_API_KEY`), else a built-in list by dish type; cached per item
+  (`XentraERP POS Item Note`), AI retried at most every 6h after a failure, supervisors can hand-edit or regenerate.
+  **No API key is configured yet**, so today every dish gets the built-in list (source "Standard").
+- **Reservations** (`XentraERP POS Reservation`): book (conflict check ±90 min per table, capacity check), edit, cancel,
+  no-show, seat (opens the order for the party, merges tables for a big party). A table shows Reserved from 2h before to
+  30min after a Booked time; billing an order completes its booking, cancelling it cancels the booking. Floor screen
+  follows `pos-frontend/design-references/manage-tables-reference.png`.
+- **Menu**: `list_menu` (server-priced, hides items hidden for the location — `XentraERP POS Hidden Item`, POS-only),
+  `save_menu_item` (new dishes are non-stock, priced as Item Price), `set_item_hidden`.
 - Not built: cash pay-in/pay-out/drops, cash-only float transfers between shifts, per-tender refunds UI, printing a KOT
   to a kitchen printer (KOTs show on the kitchen screen), customer-specific pricing rules at the POS.
-- Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), all rolled back, plus `e2e_http.py` (64, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after). The UI screens were type-checked and built, and every API they call
+- Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), `roles_takeaway_reservations_suite.py` (118), all rolled back, plus `e2e_http.py` (71, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after — it only removes ZZ rows). The UI screens were type-checked and built, and every API they call
   is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
 
 ## Incident log

@@ -7,6 +7,10 @@
  "field_order": [
   "pos_table",
   "pos_profile",
+  "order_type",
+  "token",
+  "guest_name",
+  "guest_phone",
   "location",
   "status",
   "guests",
@@ -31,7 +35,7 @@
    "fieldtype": "Link",
    "label": "Table",
    "options": "XentraERP POS Table",
-   "reqd": 1,
+   "reqd": 0,
    "in_list_view": 1,
    "in_standard_filter": 1
   },
@@ -154,6 +158,33 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "order_type",
+   "fieldtype": "Select",
+   "label": "Order Type",
+   "options": "Dine In\nTake Away",
+   "default": "Dine In",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "token",
+   "fieldtype": "Data",
+   "label": "Token",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "Take-away ticket number, restarts each business day per location."
+  },
+  {
+   "fieldname": "guest_name",
+   "fieldtype": "Data",
+   "label": "Guest / Customer Name"
+  },
+  {
+   "fieldname": "guest_phone",
+   "fieldtype": "Data",
+   "label": "Phone"
   }
  ],
  "links": [],

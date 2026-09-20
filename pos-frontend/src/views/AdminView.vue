@@ -5,6 +5,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePosStore, type PosMode } from '@/stores/pos'
+import { useAuthStore } from '@/stores/auth'
 import { api } from '@/lib/api'
 
 interface Table {
@@ -39,11 +40,18 @@ const CORE = 'custom_erp.api.pos_core.'
 const FNB = 'custom_erp.api.pos_fnb.'
 const router = useRouter()
 const pos = usePosStore()
+const auth = useAuthStore()
 
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const busy = ref(false)
-const tab = ref<'mode' | 'hours' | 'staff' | 'locations' | 'rates' | 'tables' | 'eod'>('mode')
+type Tab = 'mode' | 'hours' | 'staff' | 'menu' | 'locations' | 'rates' | 'tables' | 'eod'
+const tab = ref<Tab>('mode')
+// Each tab needs a capability of the signed-in role (the server enforces the same rules).
+const tabOk = computed<Record<Tab, boolean>>(() => ({
+  mode: pos.can('settings'), hours: pos.can('settings'), locations: pos.can('settings'), rates: pos.can('settings'),
+  staff: pos.can('staff'), menu: pos.can('menu'), tables: pos.can('tables') && pos.isFnb, eod: pos.can('reports'),
+}))
 
 async function run(fn: () => Promise<unknown>, ok?: string) {
   busy.value = true
@@ -68,8 +76,10 @@ const switchMode = (m: PosMode) => run(() => pos.setMode(m), `Switched to ${m} m
 const cutoff = ref('05:00')
 onMounted(() => {
   cutoff.value = (pos.settings?.previous_day_until || '05:00:00').slice(0, 5)
-  loadTables()
-  loadLocations()
+  const first = (Object.keys(tabOk.value) as Tab[]).find((t) => tabOk.value[t])
+  if (first && !tabOk.value[tab.value]) openTab(first)
+  if (pos.can('tables')) loadTables()
+  if (pos.can('settings')) loadLocations()
 })
 const toggle = (key: 'require_shift' | 'pos_247' | 'previous_day_billing') =>
   run(() => pos.saveSettings({ [key]: s.value?.[key] ? 0 : 1 }), 'Saved')
@@ -109,16 +119,27 @@ const removeTable = (t: Table) =>
     await loadTables()
   })
 
+function openTab(t: Tab) {
+  tab.value = t
+  if (t === 'staff') loadStaff()
+  else if (t === 'locations') loadLocations()
+  else if (t === 'tables') loadTables()
+  else if (t === 'menu') loadMenu()
+}
+
 // --- checkout document
 const setCheckout = (v: 'POS Invoice' | 'Draft Invoice + Receipt') => run(() => pos.saveSettings({ checkout_document: v }), 'Saved')
 
 // --- staff & PINs
-interface Staff { user: string; full_name: string; has_pin: boolean; active: boolean; pos_profile: string | null; is_cashier_role: boolean; is_admin: boolean }
+interface Staff { user: string; full_name: string; has_pin: boolean; active: boolean; pos_profile: string | null; pos_role: string | null; level: string | null; role_label: string; is_cashier_role: boolean; is_admin: boolean }
 interface Register { name: string; location?: string | null; location_name?: string | null }
 const PIN = 'custom_erp.api.pos.'
 const staff = ref<Staff[]>([])
 const registers = ref<Register[]>([])
-const ns = ref({ email: '', name: '', pin: '', profile: '' })
+const ROLES = [{ v: 'POS Waiter', l: 'Waiter — orders only' }, { v: 'POS Cashier', l: 'Cashier — modify, bill, close' }, { v: 'POS Supervisor', l: 'Supervisor — tables, menu, void, reports' }, { v: 'POS Kitchen', l: 'Kitchen — board only' }]
+// A supervisor manages waiters, cashiers and kitchen staff; only an administrator creates supervisors.
+const assignable = computed(() => (pos.settings?.level === 'admin' ? ROLES : ROLES.filter((r) => r.v !== 'POS Supervisor')))
+const ns = ref({ email: '', name: '', pin: '', profile: '', role: 'POS Waiter' })
 const pinFor = ref<Record<string, string>>({})
 async function loadStaff() {
   try {
@@ -129,8 +150,8 @@ async function loadStaff() {
 }
 const addStaff = () =>
   run(async () => {
-    await api.call(PIN + 'create_pos_user', { email: ns.value.email, full_name: ns.value.name, pin: ns.value.pin, pos_profile: ns.value.profile || undefined })
-    ns.value = { email: '', name: '', pin: '', profile: ns.value.profile }
+    await api.call(PIN + 'create_pos_user', { email: ns.value.email, full_name: ns.value.name, pin: ns.value.pin, pos_profile: ns.value.profile || undefined, pos_role: ns.value.role })
+    ns.value = { email: '', name: '', pin: '', profile: ns.value.profile, role: ns.value.role }
     await loadStaff()
   }, 'Staff member added — they can sign in to the POS with their PIN')
 const savePin = (u: Staff) =>
@@ -139,7 +160,54 @@ const savePin = (u: Staff) =>
     pinFor.value[u.user] = ''
     await loadStaff()
   }, `PIN saved for ${u.full_name}`)
+const changeRole = (u: Staff, role: string) => run(async () => { await api.call(PIN + 'set_pos_role', { user: u.user, pos_role: role }); await loadStaff() }, `${u.full_name} is now ${role.replace('POS ', '')}`)
+const canEditStaff = (u: Staff) => pos.settings?.level === 'admin' || !['admin', 'supervisor'].includes(u.level || '')
 const togglePin = (u: Staff) => run(async () => { await api.call(PIN + 'set_pin_active', { user: u.user, active: u.active ? 0 : 1 }); await loadStaff() })
+
+// --- menu
+interface MenuRow { item_code: string; item_name: string; item_group: string; rate: number; hidden: boolean; is_stock_item: number }
+const menuRows = ref<MenuRow[]>([])
+const itemGroups = ref<string[]>([])
+const menuSearch = ref('')
+const nm = ref({ name: '', group: '', price: '' })
+const priceEdit = ref<Record<string, string>>({})
+const notesFor = ref<MenuRow | null>(null)
+const notesText = ref('')
+const notesSource = ref('')
+const menuShown = computed(() => menuRows.value.filter((m) => !menuSearch.value || m.item_name.toLowerCase().includes(menuSearch.value.toLowerCase())))
+async function loadMenu() {
+  try {
+    ;[menuRows.value, itemGroups.value] = await Promise.all([
+      api.call<MenuRow[]>(CORE + 'list_menu', { pos_profile: auth.posProfile?.name, include_hidden: 1 }),
+      api.call<string[]>(CORE + 'list_item_groups'),
+    ])
+    if (!nm.value.group && itemGroups.value.length) nm.value.group = itemGroups.value[0]
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  }
+}
+const toggleHidden = (m: MenuRow) => run(async () => { await api.call(CORE + 'set_item_hidden', { item_code: m.item_code, hidden: m.hidden ? 0 : 1 }); await loadMenu() }, m.hidden ? `${m.item_name} is back on the menu` : `${m.item_name} is hidden from the POS`)
+const addMenuItem = () =>
+  run(async () => {
+    await api.call(CORE + 'save_menu_item', { item_name: nm.value.name, item_group: nm.value.group, rate: Number(nm.value.price) || 0, pos_profile: auth.posProfile?.name })
+    nm.value = { name: '', group: nm.value.group, price: '' }
+    await loadMenu()
+  }, 'Dish added to the menu')
+const savePrice = (m: MenuRow) =>
+  run(async () => {
+    await api.call(CORE + 'save_menu_item', { item_name: m.item_name, item_group: m.item_group, rate: Number(priceEdit.value[m.item_code]), pos_profile: auth.posProfile?.name, item_code: m.item_code })
+    priceEdit.value[m.item_code] = ''
+    await loadMenu()
+  }, `Price updated for ${m.item_name}`)
+async function openNotes(m: MenuRow, refresh = false) {
+  notesFor.value = m
+  await run(async () => {
+    const r = await api.call<{ notes: string[]; source: string }>(CORE + 'get_item_notes', { item_code: m.item_code, refresh: refresh ? 1 : 0 })
+    notesText.value = r.notes.join('\n')
+    notesSource.value = r.source
+  })
+}
+const saveNotes = () => run(async () => { if (notesFor.value) { await api.call(CORE + 'set_item_notes', { item_code: notesFor.value.item_code, notes: JSON.stringify(notesText.value.split('\n')) }); notesSource.value = 'Manual' } }, 'Notes saved')
 
 // --- locations
 interface Loc { code: string; name: string; cost_center: string | null; warehouse: string | null; disabled: number; profiles: string[] }
@@ -186,13 +254,14 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
     </div>
 
     <div class="seg" style="margin-bottom: 16px">
-      <button :class="{ on: tab === 'mode' }" @click="tab = 'mode'">Mode</button>
-      <button :class="{ on: tab === 'hours' }" @click="tab = 'hours'">Hours &amp; shifts</button>
-      <button :class="{ on: tab === 'staff' }" @click="tab = 'staff'; loadStaff()">Staff &amp; PINs</button>
-      <button :class="{ on: tab === 'locations' }" @click="tab = 'locations'; loadLocations()">Locations</button>
-      <button :class="{ on: tab === 'rates' }" @click="tab = 'rates'">Currencies</button>
-      <button v-if="pos.isFnb" :class="{ on: tab === 'tables' }" @click="tab = 'tables'; loadTables()">Tables</button>
-      <button :class="{ on: tab === 'eod' }" @click="tab = 'eod'">End of day</button>
+      <button v-if="tabOk.mode" :class="{ on: tab === 'mode' }" @click="openTab('mode')">Mode</button>
+      <button v-if="tabOk.hours" :class="{ on: tab === 'hours' }" @click="openTab('hours')">Hours &amp; kitchen</button>
+      <button v-if="tabOk.staff" :class="{ on: tab === 'staff' }" @click="openTab('staff')">Staff &amp; PINs</button>
+      <button v-if="tabOk.menu" :class="{ on: tab === 'menu' }" @click="openTab('menu')">Menu</button>
+      <button v-if="tabOk.tables" :class="{ on: tab === 'tables' }" @click="openTab('tables')">Tables</button>
+      <button v-if="tabOk.locations" :class="{ on: tab === 'locations' }" @click="openTab('locations')">Locations</button>
+      <button v-if="tabOk.rates" :class="{ on: tab === 'rates' }" @click="openTab('rates')">Currencies</button>
+      <button v-if="tabOk.eod" :class="{ on: tab === 'eod' }" @click="openTab('eod')">End of day</button>
     </div>
     <p v-if="error" class="error-box">{{ error }}</p>
     <p v-if="notice" style="color: var(--success)">{{ notice }}</p>
@@ -222,6 +291,12 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
       </p>
     </div>
     <div v-if="tab === 'hours'" class="card">
+      <h4>Kitchen &amp; order notes</h4>
+      <label class="row"><input type="checkbox" :checked="!!s?.auto_kot" @change="run(() => pos.saveSettings({ auto_kot: s?.auto_kot ? 0 : 1 }), 'Saved')" /> Saving an order sends it to the kitchen automatically (no separate Send to kitchen step)</label>
+      <label class="row" style="margin-top: 8px"><input type="checkbox" :checked="!!s?.item_notes_prompt" @change="run(() => pos.saveSettings({ item_notes_prompt: s?.item_notes_prompt ? 0 : 1 }), 'Saved')" /> Ask for a note when an item is added — suggestions like <i>well done, crunchy, deep fried</i> plus free text</label>
+      <p style="color: var(--text-muted)">The kitchen board shows each ticket the moment the order is saved. To also print it, tick <b>Auto-print new tickets here</b> on the kitchen screen of the device next to the printer, or <b>KOT printer</b> on the ordering terminal. Note suggestions come from Claude when the server has an Anthropic API key (site config <code>anthropic_api_key</code>); otherwise a built-in list for the kind of dish is used.</p>
+    </div>
+    <div v-if="tab === 'hours'" class="card">
       <h4>Operating hours</h4>
       <label class="row"><input type="checkbox" :checked="!!s?.require_shift" @change="toggle('require_shift')" /> Cashiers must open a shift (with opening cash) before billing</label>
       <label class="row" style="margin-top: 8px"><input type="checkbox" :checked="!!s?.pos_247" @change="toggle('pos_247')" /> 24/7 operation — shifts may run across midnight; no day-end close is required</label>
@@ -235,30 +310,79 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
 
     <div v-if="tab === 'staff'">
       <div class="card">
-        <h4>Add a cashier or waiter</h4>
-        <p style="color: var(--text-muted); margin-top: 0">They sign in to the POS with an organization code and a PIN (6-8 digits) — no password. They get the read-only <b>POS Cashier</b> role, so they can ring up sales but can't change items, prices or accounts.</p>
+        <h4>Add a team member</h4>
+        <p style="color: var(--text-muted); margin-top: 0">They sign in to the POS with the organization code and a PIN (6-8 digits) — no password. Their <b>role</b> decides what they can do:
+          <b>Waiter</b> takes orders (adds items, sends to the kitchen) but can't reduce items, close bills or take payment · <b>Cashier</b> also modifies orders, closes the bill and takes payment · <b>Supervisor</b> also manages tables and the menu, voids and sees reports · <b>Kitchen</b> only sees the kitchen board.</p>
         <div class="row">
           <input v-model="ns.email" class="fld" placeholder="Email" type="email" />
           <input v-model="ns.name" class="fld" placeholder="Full name" />
-          <input v-model="ns.pin" class="fld tabular" placeholder="PIN" inputmode="numeric" maxlength="8" style="width: 110px" />
+          <input v-model="ns.pin" class="fld tabular" placeholder="PIN" inputmode="numeric" maxlength="8" style="width: 100px" />
+          <select v-model="ns.role" class="fld"><option v-for="r in assignable" :key="r.v" :value="r.v">{{ r.l }}</option></select>
           <select v-model="ns.profile" class="fld"><option value="">Any register</option><option v-for="r in registers" :key="r.name" :value="r.name">{{ r.name }}{{ r.location_name ? ` · ${r.location_name}` : '' }}</option></select>
           <button class="btn btn-primary mini" :disabled="busy || !ns.email || !ns.name || ns.pin.length < 6" @click="addStaff">Add</button>
         </div>
       </div>
       <div class="card">
-        <h4>Staff</h4>
+        <h4>Team</h4>
         <table class="simple-table">
-          <thead><tr><th>Person</th><th>PIN</th><th>Register</th><th>Set / reset PIN</th><th /></tr></thead>
+          <thead><tr><th>Person</th><th>Role</th><th>PIN</th><th>Register</th><th>Set / reset PIN</th><th /></tr></thead>
           <tbody>
             <tr v-for="u in staff" :key="u.user">
-              <td>{{ u.full_name }}<div class="sub2">{{ u.user }}<span v-if="u.is_admin"> · administrator</span><span v-else-if="u.is_cashier_role"> · POS Cashier</span></div></td>
+              <td>{{ u.full_name }}<div class="sub2">{{ u.user }}</div></td>
+              <td>
+                <span v-if="u.is_admin" class="pill ok">Administrator</span>
+                <select v-else-if="canEditStaff(u)" class="fld" :value="u.pos_role || ''" @change="changeRole(u, ($event.target as HTMLSelectElement).value)">
+                  <option v-if="!u.pos_role" value="" disabled>{{ u.has_pin ? 'Waiter (default)' : '—' }}</option>
+                  <option v-for="r in assignable" :key="r.v" :value="r.v">{{ r.l.split(' — ')[0] }}</option>
+                </select>
+                <span v-else class="pill">{{ u.role_label }}</span>
+              </td>
               <td><span class="pill" :class="!u.has_pin ? '' : u.active ? 'ok' : 'bad'">{{ !u.has_pin ? 'none' : u.active ? 'active' : 'off' }}</span></td>
               <td>{{ u.pos_profile || (u.has_pin ? 'any' : '—') }}</td>
-              <td><div class="row"><input v-model="pinFor[u.user]" class="fld tabular" placeholder="new PIN" inputmode="numeric" maxlength="8" style="width: 100px" /><button class="btn btn-primary mini" :disabled="busy || (pinFor[u.user] || '').length < 6" @click="savePin(u)">Save</button></div></td>
-              <td class="num"><button v-if="u.has_pin" class="btn btn-ghost mini" @click="togglePin(u)">{{ u.active ? 'Switch off' : 'Switch on' }}</button></td>
+              <td><div v-if="canEditStaff(u)" class="row"><input v-model="pinFor[u.user]" class="fld tabular" placeholder="new PIN" inputmode="numeric" maxlength="8" style="width: 100px" /><button class="btn btn-primary mini" :disabled="busy || (pinFor[u.user] || '').length < 6" @click="savePin(u)">Save</button></div></td>
+              <td class="num"><button v-if="u.has_pin && canEditStaff(u)" class="btn btn-ghost mini" @click="togglePin(u)">{{ u.active ? 'Switch off' : 'Switch on' }}</button></td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div v-if="tab === 'menu'">
+      <div class="card">
+        <h4>Add a dish</h4>
+        <div class="row">
+          <input v-model="nm.name" class="fld" placeholder="Name (Grilled Chicken)" />
+          <select v-model="nm.group" class="fld"><option v-for="g in itemGroups" :key="g" :value="g">{{ g }}</option></select>
+          <input v-model="nm.price" class="fld tabular" style="width: 110px" type="number" min="0" step="any" placeholder="Price" />
+          <button class="btn btn-primary mini" :disabled="busy || !nm.name || !nm.group" @click="addMenuItem">Add to menu</button>
+        </div>
+      </div>
+      <div class="card">
+        <h4>Menu</h4>
+        <p style="color: var(--text-muted); margin-top: 0">Hiding a dish removes it from every POS screen only — it stays in the back office. New dishes are non-stock items priced on this register's selling price list.</p>
+        <input v-model="menuSearch" class="fld" style="width: 100%; margin-bottom: 10px" placeholder="Search the menu" />
+        <table class="simple-table">
+          <thead><tr><th>Dish</th><th>Group</th><th class="num">Price</th><th>Change price</th><th /></tr></thead>
+          <tbody>
+            <tr v-for="m in menuShown" :key="m.item_code" :style="m.hidden ? 'opacity:.5' : ''">
+              <td>{{ m.item_name }} <span v-if="m.hidden" class="pill bad">hidden</span></td><td>{{ m.item_group }}</td><td class="num tabular">{{ m.rate.toFixed(3) }}</td>
+              <td><div class="row"><input v-model="priceEdit[m.item_code]" class="fld tabular" style="width: 90px" type="number" min="0" step="any" placeholder="new" /><button class="btn btn-ghost mini" :disabled="busy || !priceEdit[m.item_code]" @click="savePrice(m)">Set</button></div></td>
+              <td class="num"><button class="btn btn-ghost mini" @click="openNotes(m)">Notes</button><button class="btn btn-ghost mini" @click="toggleHidden(m)">{{ m.hidden ? 'Show' : 'Hide' }}</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="notesFor" class="modal-back" @click.self="notesFor = null">
+        <div class="modal" style="width: 460px">
+          <h3 style="margin: 0 0 4px">Notes for {{ notesFor.item_name }}</h3>
+          <p class="sub2" style="margin: 0 0 8px">Suggested when the dish is ordered — one per line. Source: <b>{{ notesSource }}</b></p>
+          <textarea v-model="notesText" class="fld" style="width: 100%; height: 170px; resize: vertical" />
+          <div class="row" style="margin-top: 12px">
+            <button class="btn btn-ghost" :disabled="busy" @click="openNotes(notesFor, true)">✨ Regenerate with AI</button>
+            <button class="btn btn-primary" style="margin-left: auto" :disabled="busy" @click="saveNotes">Save</button>
+            <button class="btn btn-ghost" @click="notesFor = null">Close</button>
+          </div>
+        </div>
       </div>
     </div>
 
