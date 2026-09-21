@@ -123,7 +123,18 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
         </button>
       )}
       {open && typeof document !== 'undefined' && createPortal(
-        <ul style={dropdownStyle} className="max-h-60 overflow-y-auto rounded-md border border-border bg-card text-sm shadow-elevation-md">
+        <ul
+          // The list is portaled to <body>, outside any open modal (a Dialog, or the record drawer). A modal
+          // sets pointer-events:none on everything outside itself and treats a press outside as "dismiss",
+          // so without these the options showed but couldn't be clicked (or the whole popup closed).
+          style={{ ...dropdownStyle, pointerEvents: 'auto' }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          // Keep focus in the input while an option is pressed, so the modal's focus trap doesn't fight it.
+          onMouseDown={(e) => e.preventDefault()}
+          className="max-h-60 overflow-y-auto rounded-md border border-border bg-card text-sm shadow-elevation-md"
+        >
           {suggestions.length === 0 && query && (
             <li className="px-3 py-2 text-xs text-muted-foreground">No matching {target} found</li>
           )}
