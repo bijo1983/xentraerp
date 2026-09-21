@@ -32,6 +32,13 @@ const sections = [
     ],
   },
   {
+    title: 'Point of Sale',
+    items: [
+      { label: 'POS Locations', list: 'XentraERP POS Location', desc: 'Sites and the cost center each one posts to' },
+      { label: 'POS Registers', list: 'POS Profile', desc: 'Tills, payment modes and defaults' },
+    ],
+  },
+  {
     title: 'Accounting',
     items: [
       { label: 'Accounts Settings', single: 'Accounts Settings', desc: 'Accounting defaults' },

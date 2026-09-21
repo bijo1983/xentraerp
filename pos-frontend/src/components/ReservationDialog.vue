@@ -18,7 +18,7 @@ export interface Booking {
   order_status: string | null
   notes: string
 }
-interface TableChoice { name: string; seats: number; zone: string }
+interface TableChoice { name: string; seats: number; zone: string; status?: string }
 
 const props = defineProps<{ booking?: Booking | null; tables: TableChoice[]; date: string; busy?: boolean; error?: string | null }>()
 const emit = defineEmits<{
@@ -39,6 +39,28 @@ const meal = ref(b?.meal || '')
 const notes = ref(b?.notes || '')
 const held = ref<string[]>(b?.tables ? [...b.tables] : [])
 const editable = computed(() => !b || b.status === 'Booked')
+// A table someone is dining at can't seat this party now (only matters when seating).
+const busyTable = (name: string) => props.tables.find((x) => x.name === name)?.status === 'Occupied'
+// A booking made without holding a table (common: the table isn't known until they arrive)
+// would otherwise leave "Seat now" greyed out with no hint. Suggest the smallest free table
+// that fits the party — highlighted, and easy to change.
+const suggested = ref(false)
+if (b && b.status === 'Booked' && !held.value.length) {
+  const fit = props.tables
+    .filter((t) => t.status !== 'Occupied' && t.status !== 'Disabled' && t.seats >= b.party_size)
+    .sort((x, y) => x.seats - y.seats)[0]
+  if (fit) {
+    held.value = [fit.name]
+    suggested.value = true
+  }
+}
+const seatBlocked = computed(() => held.value.find(busyTable))
+const seatHint = computed(() => {
+  if (!b) return ''
+  if (!held.value.length) return 'Pick the table (or tables) to seat them at — then Seat now is enabled.'
+  if (seatBlocked.value) return `Table ${seatBlocked.value} is occupied — pick a free table, or settle the bill there first.`
+  return suggested.value ? `No table was held for this booking, so ${held.value.join(', ')} is suggested. Change it if you like.` : ''
+})
 const seatsHeld = computed(() => held.value.reduce((n, t) => n + (props.tables.find((x) => x.name === t)?.seats || 0), 0))
 
 function toggle(t: string) {
@@ -63,8 +85,9 @@ function toggle(t: string) {
       </div>
       <p class="sub2" style="margin: 8px 0 6px">Tables to hold <span v-if="held.length">— {{ seatsHeld }} seats for {{ party }} guests</span></p>
       <div class="row" style="margin-bottom: 8px">
-        <button v-for="t in tables" :key="t.name" class="cat-chip" :class="{ active: held.includes(t.name) }" :disabled="!editable && !held.includes(t.name)" @click="toggle(t.name)">{{ t.name }} <small>· {{ t.seats }}</small></button>
+        <button v-for="t in tables" :key="t.name" class="cat-chip" :class="{ active: held.includes(t.name) }" :disabled="!editable && !held.includes(t.name)" @click="toggle(t.name)">{{ t.name }} <small>· {{ t.seats }}{{ t.status === 'Occupied' ? ' · occupied' : '' }}</small></button>
       </div>
+      <p v-if="seatHint" class="sub2" style="margin: 0 0 8px" :style="{ color: !held.length || seatBlocked ? 'var(--danger)' : 'var(--text-muted)' }">{{ seatHint }}</p>
       <input v-model="notes" class="fld" style="width: 100%" placeholder="Notes (window seat, birthday…)" :disabled="!editable" />
       <p v-if="error" class="error-box" style="margin-top: 10px">{{ error }}</p>
       <div class="row" style="margin-top: 14px">
@@ -72,7 +95,7 @@ function toggle(t: string) {
         <template v-if="booking && booking.status === 'Booked'">
           <button class="btn btn-ghost" style="color: var(--danger)" :disabled="busy" @click="emit('cancelBooking', booking.name)">Cancel booking</button>
           <button class="btn btn-ghost" :disabled="busy" @click="emit('noShow', booking.name)">No show</button>
-          <button class="btn btn-primary" :disabled="busy || !held.length" @click="emit('seat', booking.name, held)">Seat now</button>
+          <button class="btn btn-primary" :disabled="busy || !held.length || !!seatBlocked" @click="emit('seat', booking.name, held)">Seat now</button>
         </template>
         <button v-if="editable" class="btn btn-primary" style="margin-left: auto" :disabled="busy || !guest" @click="emit('save', { name: booking?.name, guest, phone, party: Number(party) || 1, date, time, meal, tables: held, notes })">{{ booking ? 'Save changes' : 'Book' }}</button>
       </div>

@@ -10,6 +10,8 @@ Run from `/home/frappe/innovegic-bench/sites` with the bench Python (tenant `197
   - `backend_suite.py` — modes, tables, KOT, split/merge, shifts, multi-currency, previous-day billing, EOD, PIN rules
   - `locations_receipts_suite.py` — locations & numbering, Draft Invoice + Receipt, partial payment, location-scoped kitchen
   - `staff_suite.py` — POS Cashier role and staff/PIN management
+  - `access_location_suite.py` — the User form's POS access (role, register, PIN set/reset, on/off), a person's location scoping
+    (registers, shifts, orders, day-end report), location ↔ cost center rules, and Retail / F&B / both per location
   - `roles_takeaway_reservations_suite.py` — Waiter/Cashier/Supervisor/Kitchen rights, take-away, auto-KOT,
     reservations, menu management, item notes (incl. the AI path with the network call mocked)
 - `e2e_setup.py` → `e2e_http.py` → `e2e_cleanup.py` drive the same flows over real HTTPS with PIN logins, one person per

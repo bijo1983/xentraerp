@@ -17,6 +17,7 @@ import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
 import { RecordSummary } from './record-summary';
 import { ItemPricePanel, useItemPrices } from './item-price-panel';
+import { PosAccessPanel } from './pos-access-panel';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Printer, PanelRight, Plus, ChevronDown, Loader2 } from 'lucide-react';
 
@@ -590,6 +591,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       {/* Active tab content */}
       <div className="p-5 space-y-6">
         {isItem && activeTab === 0 && <ItemPricePanel state={itemPrices} />}
+        {doctype === 'User' && name && activeTab === 0 && <PosAccessPanel user={name} />}
         {tabs[activeTab]?.sections
           .filter((section) => evalDependsOn(section.depends_on, doc))
           .map((section, si) => {

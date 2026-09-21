@@ -237,7 +237,7 @@ async function run(fn: () => Promise<void>) {
         <span v-if="profile.location" class="pill">{{ profile.location_name || profile.location }}</span>
         <button class="btn btn-primary mini" @click="startOrder">+ New order</button>
         <button class="btn btn-ghost mini" @click="router.push('/kitchen')">Kitchen (KOT)</button>
-        <button v-if="pos.can('bill')" class="btn btn-ghost mini" @click="router.push('/terminal')">Quick sale</button>
+        <button v-if="pos.can('bill') && pos.hasRetail" class="btn btn-ghost mini" @click="router.push('/terminal')">Quick sale</button>
         <button v-if="pos.can('shift')" class="btn btn-ghost mini" @click="router.push('/shift')">Shift</button>
         <button v-if="pos.canManage" class="btn btn-ghost mini" @click="router.push('/admin')">Settings</button>
         <button class="btn btn-ghost mini" @click="router.push('/registers')">Registers</button>

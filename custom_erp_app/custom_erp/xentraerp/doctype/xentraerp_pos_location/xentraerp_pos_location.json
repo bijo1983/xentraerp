@@ -12,6 +12,9 @@
   "company",
   "cost_center",
   "warehouse",
+  "modes_section",
+  "enable_retail",
+  "enable_fnb",
   "profiles_section",
   "profiles"
  ],
@@ -47,7 +50,10 @@
    "fieldname": "company",
    "fieldtype": "Link",
    "label": "Company",
-   "options": "Company"
+   "options": "Company",
+   "read_only": 1,
+   "fetch_from": "cost_center.company",
+   "description": "Follows the cost center."
   },
   {
    "fieldname": "cost_center",
@@ -55,7 +61,8 @@
    "label": "Cost Center",
    "options": "Cost Center",
    "in_list_view": 1,
-   "description": "Applied to this location's invoices."
+   "description": "Everything sold at this location posts to this cost center, so each location's income, costs and reports stay separate.",
+   "reqd": 1
   },
   {
    "fieldname": "warehouse",
@@ -63,6 +70,25 @@
    "label": "Warehouse",
    "options": "Warehouse",
    "description": "Stock is issued from here (when the register updates stock)."
+  },
+  {
+   "fieldname": "modes_section",
+   "fieldtype": "Section Break",
+   "label": "POS modes at this location"
+  },
+  {
+   "fieldname": "enable_retail",
+   "fieldtype": "Check",
+   "label": "Retail (counter sales)",
+   "default": "1",
+   "description": "Quick counter sales with the checkout screen."
+  },
+  {
+   "fieldname": "enable_fnb",
+   "fieldtype": "Check",
+   "label": "F&B (table service)",
+   "default": "0",
+   "description": "Tables, kitchen tickets, reservations and split bills. Tick both to run counter sales and table service at the same location."
   },
   {
    "fieldname": "profiles_section",

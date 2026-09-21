@@ -89,7 +89,7 @@ try:
     pos.set_pin(cashier, "482913")
     check("re-setting the same user's own PIN is allowed", True)
     as_user(cashier)
-    expect_error("cashier cannot set PINs", lambda: pos.set_pin(other, "999999"), "can't do this")
+    expect_error("cashier cannot set PINs", lambda: pos.set_pin(other, "999999"), "administrator")
     as_user("Administrator")
 
     # ---------------------------------------------------------------- mode/perms

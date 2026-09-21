@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "user",
+  "location",
   "pos_profile",
   "column_break_1",
   "pin_hash",
@@ -22,6 +23,13 @@
    "options": "User",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Location",
+   "options": "XentraERP POS Location",
+   "description": "The site they work at. They can only use its registers and see its reports and shifts. Blank = every location."
   },
   {
    "fieldname": "pos_profile",

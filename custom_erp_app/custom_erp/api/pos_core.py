@@ -46,7 +46,7 @@ def is_manager() -> bool:
 POS_ROLES = {"POS Kitchen": "kitchen", "POS Waiter": "waiter", "POS Cashier": "cashier", "POS Supervisor": "supervisor"}
 _WAITER = {"view", "kot", "order", "reserve"}
 _CASHIER = _WAITER | {"modify", "bill", "shift"}
-_SUPERVISOR = _CASHIER | {"supervise", "tables", "menu", "reports", "staff"}
+_SUPERVISOR = _CASHIER | {"supervise", "tables", "menu", "reports"}
 CAPS = {
 	"kitchen": {"view", "kot"},
 	"waiter": _WAITER,
@@ -58,7 +58,7 @@ LEVEL_LABEL = {"kitchen": "Kitchen", "waiter": "Waiter", "cashier": "Cashier", "
 _CAP_NEEDS = {
 	"modify": "a cashier", "bill": "a cashier", "shift": "a cashier", "supervise": "a supervisor or administrator",
 	"tables": "a supervisor or administrator", "menu": "a supervisor or administrator", "reports": "a supervisor or administrator",
-	"staff": "a supervisor or administrator", "settings": "an administrator", "order": "a waiter or above", "reserve": "a waiter or above", "kot": "kitchen or floor staff",
+	"settings": "an administrator", "order": "a waiter or above", "reserve": "a waiter or above", "kot": "kitchen or floor staff",
 }
 
 
@@ -141,16 +141,24 @@ def business_date(now=None):
 
 
 @frappe.whitelist()
-def get_pos_settings():
+def get_pos_settings(pos_profile: str | None = None):
 	"""Everything the POS app needs right after login to pick its screens."""
 	require_pos_user()
 	s = settings()
 	shift = _open_shift_of(frappe.session.user)
+	modes = modes_for(pos_profile)
 	return {
 		**s,
+		# The kinds of POS running for the chosen register (its location's switches); `pos_mode` is
+		# the main one — F&B when table service is on — and `global_mode` the tenant-wide default
+		# that registers with no location follow.
+		"modes": modes,
+		"global_mode": s["pos_mode"],
+		"pos_mode": "F&B" if "F&B" in modes else "Retail",
 		"can_switch": is_manager(),
 		"role": LEVEL_LABEL.get(pos_level() or "", ""),
 		"level": pos_level(),
+		"location": user_location(),
 		"caps": sorted(CAPS.get(pos_level() or "", set())),
 		"business_date": str(business_date()),
 		"shift": _shift_payload(shift) if shift else None,
@@ -224,6 +232,7 @@ def rate_for(item_code: str, profile) -> float:
 def get_profile(pos_profile: str):
 	if not frappe.db.exists("POS Profile", {"name": pos_profile, "disabled": 0}):
 		frappe.throw(f"POS Profile '{pos_profile}' isn't available.")
+	enforce_user_location(pos_profile)
 	return frappe.get_doc("POS Profile", pos_profile)
 
 
@@ -250,6 +259,74 @@ def location_of(pos_profile: str):
 
 def location_code(loc) -> str | None:
 	return loc.location_code if loc else None
+
+
+def modes_for(pos_profile: str | None = None) -> list:
+	"""Which kinds of POS run for this register: "F&B" (table service) and/or "Retail"
+	(counter sales). A register at a location follows that location's two switches (both
+	can be on); one with no location follows the tenant-wide mode — where F&B has always
+	included quick counter sales. With no register to go by, it's the caller's own
+	location, else everything any location or the tenant-wide mode allows."""
+	loc = location_of(pos_profile) if pos_profile else None
+	if not loc and not pos_profile:
+		mine = user_location()
+		loc = frappe.get_doc("XentraERP POS Location", mine) if mine else None
+	if loc:
+		return [m for m, on in (("F&B", loc.enable_fnb), ("Retail", loc.enable_retail)) if on]
+	modes = ["F&B", "Retail"] if settings()["pos_mode"] == "F&B" else ["Retail"]
+	if not pos_profile:
+		for row in frappe.get_all("XentraERP POS Location", filters={"disabled": 0}, fields=["enable_fnb", "enable_retail"]):
+			for m, on in (("F&B", row.enable_fnb), ("Retail", row.enable_retail)):
+				if on and m not in modes:
+					modes.append(m)
+	return modes
+
+
+def require_mode(mode: str, pos_profile: str | None = None):
+	if mode in modes_for(pos_profile):
+		return
+	loc = location_of(pos_profile) if pos_profile else None
+	if loc:
+		frappe.throw(f"{'Table service' if mode == 'F&B' else 'Counter sales'} isn't enabled at location {loc.location_code}.")
+	if mode == "F&B":
+		frappe.throw("Table service isn't enabled — this organization's POS is in Retail mode.")
+	frappe.throw("Counter sales aren't enabled here.")
+
+
+def user_location(user: str | None = None) -> str | None:
+	"""The location this person works at, or None = every location. It is the location
+	set on their POS access; failing that, the location of the register their PIN is
+	locked to. Administrators are never tied to one location. Everything that varies by
+	site (registers, shifts, reports) follows this, so nobody has to pick it each time."""
+	user = user or frappe.session.user
+	if user == "Guest" or "System Manager" in frappe.get_roles(user):
+		return None
+	row = frappe.db.get_value("XentraERP POS PIN", {"user": user, "active": 1}, ["location", "pos_profile"], as_dict=True)
+	if not row:
+		return None
+	if row.location:
+		return row.location
+	return location_code(location_of(row.pos_profile)) if row.pos_profile else None
+
+
+def enforce_user_location(pos_profile: str, user: str | None = None):
+	"""Someone tied to a location can only use that location's registers."""
+	mine = user_location(user)
+	if not mine:
+		return
+	loc = location_of(pos_profile)
+	if not loc or loc.location_code != mine:
+		frappe.throw(
+			f"You work at location {mine} — register '{pos_profile}' belongs to {loc.location_code if loc else 'no location'}.",
+			frappe.PermissionError,
+		)
+
+
+def require_user_location(location: str | None):
+	"""Refuse a record (shift, order…) from a location other than the caller's own."""
+	mine = user_location()
+	if mine and location != mine:
+		frappe.throw(f"That belongs to location {location or '—'}; you work at {mine}.", frappe.PermissionError)
 
 
 def ensure_series(doctype: str, series: str):
@@ -281,18 +358,22 @@ def series_for(doctype: str, loc) -> str | None:
 def list_locations():
 	require_pos_user()
 	out = []
-	for l in frappe.get_all("XentraERP POS Location", fields=["name", "location_name", "company", "cost_center", "warehouse", "disabled"], order_by="name asc"):
+	for l in frappe.get_all("XentraERP POS Location", fields=["name", "location_name", "company", "cost_center", "warehouse", "disabled", "enable_retail", "enable_fnb"], order_by="name asc"):
 		out.append({
 			"code": l.name, "name": l.location_name, "company": l.company, "cost_center": l.cost_center, "warehouse": l.warehouse,
 			"disabled": cint(l.disabled),
+			"enable_retail": cint(l.enable_retail), "enable_fnb": cint(l.enable_fnb),
 			"profiles": frappe.get_all("XentraERP POS Location Profile", filters={"parent": l.name}, pluck="pos_profile"),
 		})
 	return out
 
 
 @frappe.whitelist()
-def save_location(location_code: str, location_name: str, cost_center: str | None = None, warehouse: str | None = None, profiles=None, disabled: int = 0):
-	"""Tenant admin: define (or update) a location and the registers that belong to it."""
+def save_location(location_code: str, location_name: str, cost_center: str | None = None, warehouse: str | None = None, profiles=None, disabled: int = 0, enable_retail=None, enable_fnb=None):
+	"""Tenant admin: define (or update) a location and the registers that belong to it, and which
+	kinds of POS run there: Retail (counter sales), F&B (table service), or both. Left out, an
+	existing location keeps its switches, and a new one starts as the tenant-wide mode was
+	(F&B mode has always included counter sales)."""
 	require_manager()
 	import re
 
@@ -312,13 +393,22 @@ def save_location(location_code: str, location_name: str, cost_center: str | Non
 		)
 		if other:
 			frappe.throw(f"'{pr}' already belongs to location {other[0][0]}. A register can serve only one location.")
+	if not cost_center:
+		frappe.throw("Choose the cost center this location posts to — it ties the location's sales and reports together.")
 	for field, dt in (("cost_center", "Cost Center"), ("warehouse", "Warehouse")):
 		val = {"cost_center": cost_center, "warehouse": warehouse}[field]
 		if val and not frappe.db.exists(dt, val):
 			frappe.throw(f"No such {dt.lower()}: {val}")
 	values = {"location_name": location_name.strip(), "cost_center": cost_center or None, "warehouse": warehouse or None,
 	          "disabled": cint(bool(cint(disabled))), "profiles": [{"pos_profile": pr} for pr in profiles]}
-	if frappe.db.exists("XentraERP POS Location", code):
+	exists = frappe.db.exists("XentraERP POS Location", code)
+	tenant_fnb = settings()["pos_mode"] == "F&B"
+	for field, given, fallback in (("enable_retail", enable_retail, 1), ("enable_fnb", enable_fnb, 1 if tenant_fnb else 0)):
+		if given is not None:
+			values[field] = cint(bool(cint(given)))
+		elif not exists:
+			values[field] = fallback
+	if exists:
 		doc = frappe.get_doc("XentraERP POS Location", code)
 		doc.update(values)
 		doc.save(ignore_permissions=True)
@@ -529,6 +619,7 @@ def shift_report(shift: str):
 	doc = frappe.get_doc("XentraERP POS Shift", shift)
 	if doc.cashier != frappe.session.user and not has_cap("supervise"):
 		frappe.throw("Not permitted", frappe.PermissionError)
+	require_user_location(doc.location)
 	taken = _cash_taken(doc.name)
 	cash = []
 	for c in doc.cash:
@@ -561,6 +652,7 @@ def close_shift(shift: str, counted=None, notes: str | None = None):
 	doc = frappe.get_doc("XentraERP POS Shift", shift)
 	if doc.status != "Open":
 		frappe.throw("This shift is already closed.")
+	require_user_location(doc.location)
 	if doc.cashier != frappe.session.user and not has_cap("supervise"):
 		frappe.throw("Only the cashier who opened this shift (or a supervisor or administrator) can close it.", frappe.PermissionError)
 	if not settings()["pos_247"]:
@@ -643,6 +735,7 @@ def enforce_register_restriction(pos_profile: str, user: str):
 	restriction = frappe.db.get_value("XentraERP POS PIN", {"user": user, "active": 1}, "pos_profile")
 	if restriction and pos_profile != restriction:
 		frappe.throw(f"Your PIN is restricted to the '{restriction}' register — you can't post against a different one.")
+	enforce_user_location(pos_profile, user)
 
 
 
@@ -1113,6 +1206,7 @@ def retail_checkout(pos_profile: str, items, payments, customer: str | None = No
 	(Partly Paid) to be collected later with settle_invoice."""
 	require_cap("bill")
 	profile = get_profile(pos_profile)
+	require_mode("Retail", pos_profile)
 	if cint(allow_partial) and not draft_mode():
 		frappe.throw("Part payment needs checkout set to Draft Invoice + Receipt.")
 	result = post_invoice(profile, _retail_lines(profile, items), payments, customer=customer, allow_partial=cint(allow_partial))
@@ -1378,6 +1472,8 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 	location. Covers both checkout documents (POS Invoices and Sales Invoices +
 	receipts) and shows part-paid balances that are still to be collected."""
 	require_cap("reports")
+	# Someone tied to a location always gets their own location's report.
+	location = user_location() or location
 	bd = str(getdate(date)) if date else str(business_date())
 	company_ccy = frappe.db.get_value("Company", frappe.db.get_single_value("Global Defaults", "default_company"), "default_currency")
 	loc_sql, loc_args = (" and location=%s", (location,)) if location else ("", ())
@@ -1410,9 +1506,9 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 		(bd, *loc_args), as_dict=True,
 	)
 	by_location = frappe.db.sql(
-		"""select coalesce(location, '') as location, count(distinct invoice) as invoices, sum(amount) as received
-		   from `tabXentraERP POS Tender` where business_date=%s group by location order by location""",
-		(bd,), as_dict=True,
+		f"""select coalesce(location, '') as location, count(distinct invoice) as invoices, sum(amount) as received
+		   from `tabXentraERP POS Tender` where business_date=%s{loc_sql} group by location order by location""",
+		(bd, *loc_args), as_dict=True,
 	)
 	cashiers = {}
 	for i in inv:
