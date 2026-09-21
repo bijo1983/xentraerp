@@ -102,11 +102,29 @@ error logs) will show it happening.
 - nginx listens on `:80`/`:443` and terminates TLS — mapping confirmed
   2026-09-14 by grepping `/etc/nginx/sites-available/` (the actual
   config files; `/etc/nginx/sites-enabled/*` are symlinks to these):
-  - `erp.badmintonbooking.com` (`sites-available/erp`) → `proxy_pass
-    http://localhost:8083` — this is the erp-frontend pm2 process. Single
-    `location /` block; the Next.js app itself proxies `/api/*` through to
-    the Frappe backend on `:8001` internally (see gunicorn note above),
-    nginx doesn't split that out.
+  - **`xentraerp.net` / `www.xentraerp.net`** (`sites-available/xentraerp.
+    net`, added 2026-09-20) → `proxy_pass http://localhost:8083` — this is
+    the erp-frontend pm2 process and the ONLY public hostname for the app.
+    Single `location /` block; the Next.js app itself proxies `/api/*`
+    through to the Frappe backend on `:8001` internally (see gunicorn note
+    above), nginx doesn't split that out. Let's Encrypt cert
+    `xentraerp.net` (webroot `/var/www/html`, expires 2026-12-19,
+    auto-renewed). **DNS**: the zone lives in DigitalOcean
+    (`doctl compute domain records list xentraerp.net`), with the
+    nameservers at the registrar (GoDaddy) pointed to
+    `ns1/2/3.digitalocean.com`. Do not move DNS back to GoDaddy's — its
+    hidden Websites + Marketing product injected two stray AWS A records
+    (`3.33.130.190`, `15.197.148.33`) that couldn't be removed from the
+    panel.
+  - `erp.badmintonbooking.com` — **removed from nginx 2026-09-20** (no
+    redirect, per user; sole user, still in development). Original config
+    backed up at `/root/erp.nginx.bak-1789898088`; its cert
+    (`/etc/letsencrypt/live/erp.badmintonbooking.com`) was left in place.
+    **Do NOT confuse with the Frappe *site* of the same name in
+    `sites/`** — that is the control-plane site, and
+    `ERP_BACKEND_HOST=erp.badmintonbooking.com` in `erp-frontend/.env.local`
+    is the internal Host header used to select it, not a public URL. Leave
+    both unchanged.
   - `badmintonbooking.com` / `www.badmintonbooking.com`
     (`sites-available/badmintonbooking.com`) — **unrelated app**, not
     erp-frontend: `location /api/` and `/health` → `:3001`
@@ -122,7 +140,8 @@ error logs) will show it happening.
 
 ## Known application facts
 
-- URL scheme for tenants: `https://erp.badmintonbooking.com/<tenant_code>/...`
+- URL scheme for tenants: `https://xentraerp.net/<tenant_code>/...`
+  (moved from `erp.badmintonbooking.com` on 2026-09-20)
   — `src/middleware.ts` in erp-frontend strips the leading tenant-code path
   segment via a rewrite (not a `[tenant]` route folder) and sets an
   `xentra_tenant` cookie. Reserved first-segments (admin, api, login, app,
@@ -478,6 +497,170 @@ error logs) will show it happening.
   concept) — nothing is created until that New form is actually saved.
   If a future doctype needs this and isn't in the table, it needs a
   manually-added entry, not just a data change.
+
+- **Fixed 2026-09-20**: print/PDF failed with HTTP 417 (`PDF generation
+  failed because of broken image links`, wkhtmltopdf `ContentNotFoundError`)
+  on every doctype — it can never have worked on this box. Cause: Frappe's
+  `/assets` static serving (`SharedDataMiddleware`) only exists in the dev
+  server (`bench start`); under production gunicorn (`:8001`) nothing serves
+  `/assets` or `/files` — Frappe expects nginx to. wkhtmltopdf fetches the
+  print stylesheet from `frappe.utils.get_url()`, which is `host_name` from
+  site config (`http://197349.xentraerp.local:8001`), got a 404, and Frappe
+  reports that as "broken image links". (Diagnosis trap: the 404 is also
+  written to the `website_404` redis hash, and a hand-made `curl` can give
+  inconsistent 200/404 depending on that cache and query string —
+  reproduce with wkhtmltopdf directly, not curl.) **Fix**: new internal-only
+  nginx listener `127.0.0.1:8002`
+  (`sites-available/frappe-internal`) that serves `/assets` and per-site
+  `/files` from disk and proxies everything else to gunicorn; tenant
+  `197349.xentraerp.local`'s `host_name` set to `...:8002` (was `...:8001`;
+  roll back with `bench --site <site> set-config host_name <old>`).
+  Verified: PDF for `SAL-ORD-2026-00002` generates (valid `%PDF-`, 21 KB).
+  **Every new tenant site needs the same `host_name` (`http://<site>:8002`)
+  — `provisioning.py` does not set it yet, so new tenants will hit this
+  again until it does.** `erp.badmintonbooking.com` / `demo.innovegicit.com`
+  have no `host_name` set and were not changed.
+- **Changed 2026-09-20**: `consolidateTabs` in `dynamic-form.tsx` had folded
+  *every* non-table tab (Accounting Dimensions, Terms, Address, More Info,
+  ...) into the Items tab. Now only the price sections — Currency and Price
+  List, Additional Discount (and Coupon Code), Totals, matched by
+  `PRICE_TAB_LABEL` — go into Items, so pricing reads on one page; all other
+  folded tabs return to a trailing "More Details" tab. Not verified visually
+  (no browser on this box).
+
+- **Added 2026-09-20 — backend names hidden from public URLs.** Requested:
+  nothing framework-branded visible when inspecting network traffic.
+  `src/lib/method-alias.ts` maps public method names to the backend's in the
+  `/api/method` and `/api/erp` proxies: `xentraerp.<x>` -> `frappe.<x>`,
+  `xentraerp.erp.<x>` -> `erpnext.<x>`; every frontend method string was
+  renamed (e.g. `/api/method/xentraerp.utils.print_format.download_pdf`).
+  Legacy `frappe.*` names are still *accepted* by the proxy (a stale cached
+  page keeps working) — they're just never emitted. Error responses (>= 400)
+  through all three proxies are scrubbed: `exc` (traceback) dropped, and
+  `frappe.`/`erpnext.` module paths in `exc_type`/`exception`/
+  `_server_messages` aliased. Verified: shipped client bundles contain no
+  `frappe.*`/`erpnext.*` method strings. **Not hidden**: the session cookie
+  names (`sid`, `system_user`, ...) are Frappe's standard ones and are passed
+  through as-is; `/api/resource/<DocType>` URLs necessarily contain ERPNext
+  doctype names. If a new frontend call to a backend method is added, use the
+  `xentraerp.` name (a bare `frappe.*` string would work but re-leaks it).
+- **Added 2026-09-20 — print designer.** Requested: position/remove fields,
+  global + custom header/footer, HTML-based printing. `PrintPanel` >
+  Customize now opens `print-designer.tsx` beside the live preview. A layout
+  (which header fields, side/order; item columns, order/label/align/width;
+  total rows; header/footer; font size) is compiled by `lib/print-layout.ts`
+  to the Jinja of a REAL Print Format (`custom_format: 1`), and the layout
+  JSON is embedded in that html as a `{# xentra-layout:v1 ... #}` Jinja
+  comment so the template can be reopened and edited. A Print Format without
+  that marker (hand-written, or older) opens in the raw HTML editor;
+  `standard: Yes` formats can't be edited in place, so they start a new
+  template. **Global header/footer = Frappe Letter Head** (the `is_default`
+  one applies to every print; `letter-head-dialog.tsx` manages them; the
+  print toolbar picks default / a specific one / none via the PDF endpoint's
+  `letterhead` / `no_letterhead` params). Frappe forces `source = Image` on
+  Letter Head insert, so the dialog re-saves it as HTML after creating.
+  Custom per-template header/footer is written into the template; a footer
+  is wrapped in `<div id="footer-html" class="visible-pdf">` (that id is what
+  Frappe lifts into the repeating PDF footer). Don't add the `page-break`
+  class to the root div — it forces a blank trailing page. Verified on
+  tenant 197349 by rendering real PDFs (field removal, reordering,
+  custom header/footer on every page, chosen/none/default letter head) and
+  the Letter Head create/update/default flow as `admin@jjc.com`. **The
+  designer UI itself has not been exercised in a browser** (none on this box).
+  Old `lib/print-template.ts` (fixed field-picker) was removed.
+
+## POS app (deployed 2026-09-21) — Retail + F&B
+
+**Live at `https://pos.xentraerp.net`** (DNS in the DigitalOcean zone, Let's Encrypt cert, nginx site
+`pos.xentraerp.net` = `scripts/nginx-pos.xentraerp.net.conf`; static Vue build from
+`/home/xentraerp/pos-frontend/dist`, `/api/*` proxied to the same Next.js process on `:8083`). Rebuild with
+`cd pos-frontend && npm ci && npm run build` — no restart needed, nginx serves the new `dist` directly.
+
+- **Backend code is live-linked**: `bench/apps/custom_erp/custom_erp` is a symlink into
+  `/home/xentraerp/custom_erp_app`, so whatever is checked out there IS production. Never leave it on a
+  half-merged/dirty branch. After Python changes: `supervisorctl restart innovegic-bench-web:innovegic-bench-frappe-web`;
+  after DocType changes: `bench --site 197349.xentraerp.local migrate` (then `supervisorctl status`).
+  New DocTypes only exist on sites that were migrated (tenant `197349`; `demo.innovegicit.com` doesn't have
+  `custom_erp`; the control-plane site was not migrated — the POS Invoice validate hook would error there if a POS
+  Invoice were ever saved).
+- **Modules**: `custom_erp/api/pos.py` (PIN login, set_pin, profiles), `pos_core.py` (settings, business date,
+  shifts, multi-currency checkout, reports), `pos_fnb.py` (tables, orders, KOT, split/merge/close bill).
+  DocTypes: XentraERP POS PIN / POS Settings (Single) / POS Table / POS Order (+Item) / KOT (+Item) / POS Shift
+  (+Cash) / POS Tender.
+- **Mode**: `XentraERP POS Settings.pos_mode` = Retail | F&B, flipped by a System Manager (`set_pos_mode`, refuses to
+  leave F&B while table orders are open). F&B methods refuse to run in Retail. Also: `require_shift`, `pos_247`,
+  `previous_day_billing` + `previous_day_until` (sales after midnight until the cut-off post to the previous
+  business day; a table keeps the business date it was opened on).
+- **Checkout is server-side only** (`pos_core.post_invoice`): ERPNext refuses a POS Invoice with no payment row, so
+  "create draft then attach payment" (the original retail `charge()`) could never work. Payments can be split across
+  methods/currencies (rate from Currency Exchange only — never an online fetch); change only from cash; each leg is
+  written to XentraERP POS Tender, which drives per-currency shift cash-up and the end-of-day report.
+- **GOTCHA (bug found by live HTTP test, not by in-process tests)**: never use `frappe.set_user()` to elevate inside a
+  request — it overwrites `session.sid` and wipes the form dict, which logged the cashier out after every bill.
+  `pos_core._elevated()` swaps only `session.user`. ERPNext's `set_missing_values` checks the *session user's* read
+  access to the Customer, which a cashier role lacks — hence the elevation, done after the cashier's own checks.
+- **Stock items need stock**: ERPNext refuses to POS-sell a stock item with no stock in the register's warehouse
+  ("not available under warehouse …"). The tenant's sample items (Blue Pen, Cola) are stock items with none.
+- **Security**: PIN = 6-8 digits, HMAC-SHA256 keyed with the site encryption key; lockout is per client IP
+  (8 wrong / 15 min) — this only works because the Next proxies forward nginx's `X-Real-IP` as `X-Forwarded-For`
+  (Frappe trusts the first XFF entry, so never forward a client-supplied one). A PIN session carries that user's full
+  roles across the API, so cashier users should hold a restricted role.
+- **Module gate**: `common_site_config.json` has `control_plane_host = erp.badmintonbooking.com`; `pin_login` asks the
+  control plane whether the tenant's `enabled_modules` includes `pos`. It fails OPEN (and logs) if the control plane is
+  unreachable, by design. `pos` is in tenant 197349's list.
+- **Checkout document (setting `checkout_document`)**: `POS Invoice` (default — one submitted POS Invoice, must be
+  paid in full) or `Draft Invoice + Receipt` (F&B `close_bill` creates a *Draft Sales Invoice*; on payment it is
+  submitted and one Payment Entry receipt per payment leg is created against it, non-cash legs first so change comes out
+  of cash). ERPNext can only attach a receipt to a *submitted Sales Invoice*, never to a Draft or a POS Invoice — that is
+  why the draft is submitted at completion. **Partial payment** (`allow_partial=1`, draft mode only): invoice is
+  submitted, shows Partly Paid (due_date is +30 days so it doesn't flip to Overdue), the order becomes `Part Paid`
+  (table stays occupied, items locked, can't be cancelled) and is finished by `bill_order` again / `settle_invoice`
+  (retail) — `list_open_balances` is the pending list. Reopening a closed check discards its draft.
+- **Locations** (`XentraERP POS Location`: code, cost centre, warehouse, registers): each location's invoices, POS
+  invoices and receipts get their own naming series (`<CODE>-INV-.YYYY.-`, `-POS-`, `-RCT-`), added to the doctypes'
+  `naming_series` options via Property Setter on first use (Frappe rejects a series that isn't an option). The
+  location's cost centre/warehouse override the register's. Location is stamped on shift/order/KOT/tender; tables can
+  belong to a location and each location has its own kitchen; the EOD report can filter/break down by location. A
+  register belongs to at most one location; no locations = standard ERPNext numbering. Disabled location = fallback.
+- **Staff & roles**: `POS Cashier` role (created on demand, READ-only on Item/Item Price/Item Group/POS Profile/Mode of
+  Payment/Customer/Price List/Currency — what the POS screens read over REST; everything that writes goes through
+  server methods). `create_pos_user` / `set_pin` (gives the role) / `set_pin_active` / `list_pos_users`, all
+  System-Manager-only, surfaced in the POS app under Settings → Staff & PINs. Administrators' PINs don't get the role.
+- **Gotchas found while building this**: `default` is a reserved SQL word (the original `list_pos_profiles`
+  `order_by="default desc"` crashed as soon as a register existed — backtick it); a document whose owner is changed in
+  the DB but not in memory can't be submitted ("Value cannot be changed for Created By"); ERPNext regenerates Payment
+  Entry remarks unless `custom_remarks=1`; a POS-created invoice built under the elevated scope must be re-owned to the
+  cashier (done) or reports attribute sales to Administrator.
+- **THE TENANT IS IN REAL USE (seen 2026-09-20)**: real staff user `pos1@jjc.com`, table `A1`, an open order, an open
+  shift, mode F&B. Never run a script that deletes "all tables/orders", never `set_pos_mode` back to Retail without
+  checking, and keep tests inside rolled-back transactions (see `scripts/pos-checks/README.md`).
+- **Roles & rights** (`pos_core.CAPS`, enforced server-side by `require_cap`, mirrored in the app by `pos.can(cap)`):
+  Waiter (view, kot, order, reserve — add items only, can't reduce/remove, close/pay/cancel-with-items/split/merge/move) ·
+  Cashier (+ modify, bill, shift; closes bills, takes payment) · Supervisor (+ supervise=void/re-open others'/close others'
+  shifts, tables, menu, reports, staff for waiter/cashier/kitchen) · Kitchen (kot only) · Administrator (System Manager:
+  everything incl. mode, settings, locations, currencies). One POS role per person (`set_pos_role`); a PIN with no POS role
+  is a Waiter. Refusals say "<Role> accounts can't do this — it needs …" (HTTP 403).
+- **Order flow**: every order starts Dine In (table) or Take Away (no table, token `001…` per business day/location,
+  optional name/phone). **Saving the order files the KOT automatically** (`auto_kot`, default on; `set_order_items`
+  returns `kot`); the order screen is a local cart with an explicit Save. The KOT shows on the kitchen board at once; a
+  kitchen printer prints it via per-DEVICE switches (localStorage): "Auto-print new tickets here" on the kitchen screen
+  and "KOT printer" on the ordering terminal (Bluetooth ESC/POS, or browser print through a hidden iframe — silent only
+  with Chrome `--kiosk-printing`). A server can't reach a LAN printer, which is why printing is device-side.
+- **Item notes**: on adding a dish the app asks "any special request?" (`item_notes_prompt`) with suggested chips + free
+  text; the note prints on the KOT. Suggestions: `pos_core.get_item_notes` — Claude (`claude-haiku-4-5`) when
+  `anthropic_api_key` is set in site config (or `ANTHROPIC_API_KEY`), else a built-in list by dish type; cached per item
+  (`XentraERP POS Item Note`), AI retried at most every 6h after a failure, supervisors can hand-edit or regenerate.
+  **No API key is configured yet**, so today every dish gets the built-in list (source "Standard").
+- **Reservations** (`XentraERP POS Reservation`): book (conflict check ±90 min per table, capacity check), edit, cancel,
+  no-show, seat (opens the order for the party, merges tables for a big party). A table shows Reserved from 2h before to
+  30min after a Booked time; billing an order completes its booking, cancelling it cancels the booking. Floor screen
+  follows `pos-frontend/design-references/manage-tables-reference.png`.
+- **Menu**: `list_menu` (server-priced, hides items hidden for the location — `XentraERP POS Hidden Item`, POS-only),
+  `save_menu_item` (new dishes are non-stock, priced as Item Price), `set_item_hidden`.
+- Not built: cash pay-in/pay-out/drops, cash-only float transfers between shifts, per-tender refunds UI, printing a KOT
+  to a kitchen printer (KOTs show on the kitchen screen), customer-specific pricing rules at the POS.
+- Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), `roles_takeaway_reservations_suite.py` (118), all rolled back, plus `e2e_http.py` (71, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after — it only removes ZZ rows). The UI screens were type-checked and built, and every API they call
+  is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
 
 ## Incident log
 

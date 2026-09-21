@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
 import { resolveTenant } from '@/lib/tenancy/registry';
+import { toBackendMethod, scrubErrorBody } from '@/lib/method-alias';
 
 function tenantSlug(req: NextRequest): string | undefined {
   return req.headers.get('x-xentra-tenant') || req.cookies.get('xentra_tenant')?.value || undefined;
@@ -10,7 +11,10 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
   const tenant = await resolveTenant(tenantSlug(req));
   const { hostIp, port, host } = tenant.backend;
 
-  const apiPath = params.path.map((segment) => encodeURIComponent(segment)).join('/');
+  // `method/<name>` calls use the public `xentraerp.*` alias, translated before forwarding.
+  const apiPath = params.path
+    .map((segment, i) => encodeURIComponent(params.path[0] === 'method' && i === 1 ? toBackendMethod(segment) : segment))
+    .join('/');
   const search = req.nextUrl.search || '';
   const path = `/api/${apiPath}${search}`;
 
@@ -24,6 +28,12 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
     'Content-Type': req.headers.get('content-type') || 'application/json',
     Accept: 'application/json',
     Host: host,
+    // The real client, as nginx saw it. Sent to the backend as the request's
+    // origin so per-visitor protections (e.g. the POS PIN lockout) key on the
+    // visitor, not on this proxy's loopback address. Taken from X-Real-IP,
+    // which nginx always overwrites, never from a client-suppliable
+    // X-Forwarded-For.
+    ...(req.headers.get('x-real-ip') ? { 'X-Forwarded-For': req.headers.get('x-real-ip') as string } : {}),
     ...(cookie ? { Cookie: cookie } : {}),
     ...(body && body.length ? { 'Content-Length': body.length } : {}),
   };
@@ -43,11 +53,13 @@ async function proxyRequest(req: NextRequest, { params }: { params: { path: stri
         const chunks: Buffer[] = [];
         proxyRes.on('data', (chunk) => chunks.push(chunk));
         proxyRes.on('end', () => {
-          const data = Buffer.concat(chunks);
+          let data = Buffer.concat(chunks);
 
           if ((proxyRes.statusCode || 0) >= 400) {
             console.error('[erp-proxy] ERROR body', proxyRes.statusCode, path, data.slice(0, 1500).toString('utf-8'));
           }
+
+          if ((proxyRes.statusCode || 0) >= 400) data = scrubErrorBody(data, proxyRes.headers['content-type'] as string | undefined);
 
           const responseHeaders = new Headers();
           responseHeaders.set(

@@ -16,6 +16,7 @@ import { ChildTable } from './child-table';
 import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
 import { RecordSummary } from './record-summary';
+import { ItemPricePanel, useItemPrices } from './item-price-panel';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Printer, PanelRight, Plus, ChevronDown, Loader2 } from 'lucide-react';
 
@@ -141,24 +142,32 @@ function consolidateTabs(rawTabs: Tab[]): Tab[] {
 
   if (!folded.length) return visible;
 
-  const moreSections: Section[] = folded.flatMap((tab) =>
-    tab.sections.map((section) => ({ ...section, label: section.label || tab.label }))
-  );
+  const toSections = (tabs: Tab[]): Section[] =>
+    tabs.flatMap((tab) => tab.sections.map((section) => ({ ...section, label: section.label || tab.label })));
 
-  // Attach the folded content to the tab holding the main child table
-  // (Items, for every real sales/purchase transaction) instead of a
-  // separate "More Details" tab — Currency/Totals/Discount/Accounting
-  // Dimensions read naturally right below the line items, the same place
-  // Frappe Desk itself surfaces running totals, rather than one more tab
-  // to hunt through. Falls back to a trailing "More Details" tab only
-  // when no visible tab has a table at all (a pure master doctype with
-  // nothing to attach this to).
+  // Price-related information should be readable on one page: Currency and
+  // Price List, Additional Discount and Totals are folded into the tab
+  // holding the main child table (Items, for every real sales/purchase
+  // transaction), directly below the line items. Only those three — every
+  // other folded tab (Accounting Dimensions, Terms, Address, More Info, ...)
+  // stays out of Items, in the trailing "More Details" tab. Falls back to
+  // "More Details" for everything when no visible tab has a table at all
+  // (a pure master doctype with nothing to attach the price sections to).
   const targetIdx = visible.findIndex(hasTable);
-  if (targetIdx === -1) {
-    return [...visible, { label: 'More Details', sections: moreSections }];
-  }
-  return visible.map((tab, i) => (i === targetIdx ? { ...tab, sections: [...tab.sections, ...moreSections] } : tab));
+  const priceTabs = targetIdx === -1 ? [] : folded.filter((tab) => PRICE_TAB_LABEL.test(tab.label.trim()));
+  const otherTabs = folded.filter((tab) => !priceTabs.includes(tab));
+
+  const withPrice = visible.map((tab, i) =>
+    i === targetIdx && priceTabs.length ? { ...tab, sections: [...tab.sections, ...toSections(priceTabs)] } : tab
+  );
+  return otherTabs.length ? [...withPrice, { label: 'More Details', sections: toSections(otherTabs) }] : withPrice;
 }
+
+// Sections that make up a document's price picture — see consolidateTabs.
+// Matches ERPNext's own labels ("Currency and Price List", "Additional
+// Discount", "Totals") on Sales/Purchase Order, Quotation, Invoices, and
+// Delivery Note/Purchase Receipt.
+const PRICE_TAB_LABEL = /^(currency and price list|additional discount( and coupon code)?|totals)$/i;
 
 export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
   const router = useRouter();
@@ -180,6 +189,15 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Item only: standard selling / purchase price inputs, stored as Item Price
+  // records (see lib/item-prices.ts). Keyed on the `name` prop — not on the
+  // name a just-created record gets — so a failed price save right after
+  // creation doesn't reload the panel and wipe what the user typed.
+  const isItem = doctype === 'Item';
+  const [createdName, setCreatedName] = useState<string | null>(null);
+  const savedName = name || createdName || undefined;
+  const itemPrices = useItemPrices(isItem, name, doc.stock_uom as string | undefined);
 
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
@@ -326,19 +344,36 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       for (const key of Object.keys(payload)) {
         if (payload[key] === '__user') payload[key] = '';
       }
-      const url = name
-        ? `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`
+      // A new Item's price is saved as an Item Price by the panel below; a
+      // `standard_rate` on the insert payload would make ERPNext create its
+      // own (duplicate) Item Price as well.
+      if (isItem && !savedName) delete payload.standard_rate;
+      const url = savedName
+        ? `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(savedName)}`
         : `/api/resource/${encodeURIComponent(doctype)}`;
       const res = await fetch(url, {
-        method: name ? 'PUT' : 'POST',
+        method: savedName ? 'PUT' : 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.exception || data?.message || res.statusText);
-      onSave?.(data.data);
-      onSaved?.((data.data as Record<string, unknown>)?.name as string);
+      const savedDoc = data.data as Record<string, unknown>;
+      if (!savedName) setCreatedName(savedDoc?.name as string);
+      if (isItem) {
+        try {
+          await itemPrices.save(savedDoc?.name as string);
+        } catch (priceErr) {
+          // The Item itself is saved; only the price step failed. Stay on the
+          // form (a retry updates this same record — see `savedName`) instead
+          // of navigating away and losing the message.
+          setSaveError(`The item was saved, but its price wasn't: ${priceErr instanceof Error ? priceErr.message : String(priceErr)}`);
+          return;
+        }
+      }
+      onSave?.(savedDoc);
+      onSaved?.(savedDoc?.name as string);
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -357,7 +392,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     setTransitioning(action);
     setTransitionError(null);
     try {
-      const res = await fetch(`/api/method/frappe.client.${action}`, {
+      const res = await fetch(`/api/method/xentraerp.client.${action}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -414,7 +449,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   if (!schema) return null;
 
   const docstatus = Number(doc.docstatus ?? 0);
-  const tabs = buildTabs(schema.fields);
+  // On Item, the old "Standard Selling Rate" field (shown only while creating)
+  // is replaced by the price panel, which also covers the purchase price.
+  const tabs = buildTabs(isItem ? schema.fields.filter((f) => f.fieldname !== 'standard_rate') : schema.fields);
 
   // A tab whose fields include an unfilled required one gets flagged in the
   // tab bar — the user shouldn't have to visit every tab to discover which
@@ -552,6 +589,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
 
       {/* Active tab content */}
       <div className="p-5 space-y-6">
+        {isItem && activeTab === 0 && <ItemPricePanel state={itemPrices} />}
         {tabs[activeTab]?.sections
           .filter((section) => evalDependsOn(section.depends_on, doc))
           .map((section, si) => {

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { pairPrinter, reconnectLastPrinter, isBluetoothAvailable, type ConnectedPrinter } from '@/lib/bluetooth-printer'
 import { buildReceiptBytes, printReceiptViaBrowser, type ReceiptData } from '@/lib/receipt'
+import { buildKotBytes, printKotViaBrowser, type KotData } from '@/lib/kot'
 
 export type PrintMethod = 'bluetooth' | 'browser'
 
@@ -9,6 +10,19 @@ export type PrintMethod = 'bluetooth' | 'browser'
 // data — localStorage is the right place for it, unlike anything that
 // needs to be shared across registers or read back by the back office.
 const STORAGE_KEY = 'xentra-pos-printer'
+// Whether THIS device prints kitchen tickets on its own: the terminal that takes the order
+// (prints right after saving), and/or the kitchen screen (prints each new ticket as it appears).
+const KOT_KEY = 'xentra-pos-kot-print'
+
+function readKotPrefs(): { terminal: boolean; kitchen: boolean } {
+  try {
+    const raw = localStorage.getItem(KOT_KEY)
+    if (raw) return { terminal: false, kitchen: false, ...JSON.parse(raw) }
+  } catch {
+    /* default: off */
+  }
+  return { terminal: false, kitchen: false }
+}
 
 function readStoredPreference(): { method: PrintMethod; deviceId?: string } {
   try {
@@ -34,6 +48,8 @@ interface PrinterState {
   connected: ConnectedPrinter | null
   connecting: boolean
   error: string | null
+  autoKotTerminal: boolean
+  autoKotKitchen: boolean
 }
 
 export const usePrinterStore = defineStore('printer', {
@@ -45,10 +61,31 @@ export const usePrinterStore = defineStore('printer', {
       connected: null,
       connecting: false,
       error: null,
+      autoKotTerminal: readKotPrefs().terminal,
+      autoKotKitchen: readKotPrefs().kitchen,
     }
   },
 
   actions: {
+    setAutoKot(where: 'terminal' | 'kitchen', on: boolean) {
+      if (where === 'terminal') this.autoKotTerminal = on
+      else this.autoKotKitchen = on
+      try {
+        localStorage.setItem(KOT_KEY, JSON.stringify({ terminal: this.autoKotTerminal, kitchen: this.autoKotKitchen }))
+      } catch {
+        /* not remembered */
+      }
+    },
+
+    async printKot(data: KotData) {
+      if (this.method === 'bluetooth') {
+        if (!this.connected) throw new Error('No Bluetooth printer connected — open Printer Settings to connect one.')
+        await this.connected.print(buildKotBytes(data))
+      } else {
+        printKotViaBrowser(data)
+      }
+    },
+
     setMethod(method: PrintMethod) {
       this.method = method
       writeStoredPreference({ method, deviceId: this.connected?.deviceId })

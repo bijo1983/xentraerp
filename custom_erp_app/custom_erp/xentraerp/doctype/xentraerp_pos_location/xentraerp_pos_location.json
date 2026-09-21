@@ -1,0 +1,103 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "location_code",
+  "location_name",
+  "disabled",
+  "column_break_1",
+  "company",
+  "cost_center",
+  "warehouse",
+  "profiles_section",
+  "profiles"
+ ],
+ "fields": [
+  {
+   "fieldname": "location_code",
+   "fieldtype": "Data",
+   "label": "Location Code",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "description": "2-8 letters/numbers. Appears in every bill number, e.g. MAIN-INV-2026-00001."
+  },
+  {
+   "fieldname": "location_name",
+   "fieldtype": "Data",
+   "label": "Location Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "in_list_view": 1,
+   "description": "Applied to this location's invoices."
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse",
+   "description": "Stock is issued from here (when the register updates stock)."
+  },
+  {
+   "fieldname": "profiles_section",
+   "fieldtype": "Section Break",
+   "label": "Registers at this location"
+  },
+  {
+   "fieldname": "profiles",
+   "fieldtype": "Table",
+   "label": "POS Profiles",
+   "options": "XentraERP POS Location Profile"
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Location",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:location_code",
+ "naming_rule": "By fieldname"
+}

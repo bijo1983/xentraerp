@@ -134,7 +134,7 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
       // Invoice/Payment Entry/... under labeled categories with a default
       // link fieldname plus per-doctype overrides for the odd one out
       // like Quotation using `party_name` instead of `customer`).
-      const meta = await fetch(`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`, {
+      const meta = await fetch(`/api/method/xentraerp.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`, {
         credentials: 'include',
       }).then((r) => r.json());
       const docs: Array<{ name?: string; __dashboard?: DashboardData }> = meta?.docs || [];
@@ -166,7 +166,7 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
         // set that count to 0, so a Sales Invoice created from a Sales
         // Order never showed up as a connection. get_open_count already
         // knows how to resolve this the same way Desk itself does.
-        const result = (await frappe.call('frappe.desk.notifications.get_open_count', { doctype, name })) as {
+        const result = (await frappe.call('xentraerp.desk.notifications.get_open_count', { doctype, name })) as {
           count?: Array<{ name: string; count?: number }>;
         };
         const counts: Record<string, number> = {};

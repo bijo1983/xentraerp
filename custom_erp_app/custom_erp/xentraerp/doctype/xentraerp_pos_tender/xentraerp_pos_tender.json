@@ -1,0 +1,144 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "invoice",
+  "invoice_doctype",
+  "receipt",
+  "shift",
+  "pos_profile",
+  "location",
+  "cashier",
+  "business_date",
+  "column_break_1",
+  "mode_of_payment",
+  "mode_type",
+  "currency",
+  "tendered",
+  "exchange_rate",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "invoice",
+   "fieldtype": "Data",
+   "label": "Invoice",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "shift",
+   "fieldtype": "Link",
+   "label": "Shift",
+   "options": "XentraERP POS Shift",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile"
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "label": "Cashier",
+   "options": "User",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "business_date",
+   "fieldtype": "Date",
+   "label": "Business Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Link",
+   "label": "Mode of Payment",
+   "options": "Mode of Payment",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "mode_type",
+   "fieldtype": "Data",
+   "label": "Mode Type"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Tendered Currency",
+   "options": "Currency",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "tendered",
+   "fieldtype": "Float",
+   "label": "Tendered",
+   "in_list_view": 1,
+   "description": "In the tendered currency; negative = change given back."
+  },
+  {
+   "fieldname": "exchange_rate",
+   "fieldtype": "Float",
+   "label": "Rate to invoice currency"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount (invoice currency)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "invoice_doctype",
+   "fieldtype": "Data",
+   "label": "Invoice Type",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "receipt",
+   "fieldtype": "Data",
+   "label": "Receipt (Payment Entry)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "label": "Location",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Tender",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

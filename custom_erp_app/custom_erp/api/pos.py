@@ -12,19 +12,33 @@ never across tenants.
 """
 
 import hashlib
+import hmac
 import os
 
 import frappe
 from frappe.utils import cint
 
-PIN_MIN_LENGTH = 4
+PIN_MIN_LENGTH = 6
+PIN_MAX_LENGTH = 8
 MAX_FAILED_ATTEMPTS = 8
 LOCKOUT_MINUTES = 15
 POS_MODULE_CODE = "pos"
 
 
 def _hash_pin(pin: str) -> str:
-	return hashlib.sha256(pin.encode()).hexdigest()
+	"""Keyed hash (HMAC-SHA256) with this site's own encryption key. A PIN has
+	only 10^6 possible values, so a plain unsalted hash would let anyone who
+	obtains the table reverse every PIN instantly; keying it with a per-site
+	secret that isn't stored in the table means a database leak alone doesn't
+	give them that."""
+	from frappe.utils.password import get_encryption_key
+
+	return hmac.new(get_encryption_key().encode(), pin.encode(), hashlib.sha256).hexdigest()
+
+
+def _validate_pin_format(pin: str):
+	if not pin.isdigit() or not (PIN_MIN_LENGTH <= len(pin) <= PIN_MAX_LENGTH):
+		frappe.throw(f"PIN must be {PIN_MIN_LENGTH}-{PIN_MAX_LENGTH} digits (numbers only).")
 
 
 def _tenant_has_module(module_code: str) -> bool:
@@ -118,8 +132,7 @@ def pin_login(pin: str):
 	_check_not_locked_out()
 
 	pin = (pin or "").strip()
-	if not pin or len(pin) < PIN_MIN_LENGTH:
-		frappe.throw(f"Enter your {PIN_MIN_LENGTH}-digit (or longer) PIN.")
+	_validate_pin_format(pin)
 
 	pin_hash = _hash_pin(pin)
 	matches = frappe.get_all(
@@ -168,13 +181,15 @@ def _require_system_manager():
 
 
 @frappe.whitelist()
-def set_pin(user: str, pin: str, pos_profile: str | None = None):
-	"""Admin action: set or replace a cashier's PIN on this tenant's site."""
-	_require_system_manager()
+def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: int = 1, pos_role: str | None = None):
+	"""Set or replace someone's PIN on this tenant's site (administrator; a supervisor
+	for waiters, cashiers and kitchen staff). Also gives them a POS role so their
+	screens can read items and prices: `pos_role`, else the role they already hold,
+	else Cashier — unless assign_role=0 or they are an administrator."""
+	_require_staff_admin(user, pos_role)
 
 	pin = (pin or "").strip()
-	if not pin or len(pin) < PIN_MIN_LENGTH:
-		frappe.throw(f"PIN must be at least {PIN_MIN_LENGTH} digits.")
+	_validate_pin_format(pin)
 	if not frappe.db.exists("User", user):
 		frappe.throw(f"No such user: {user}")
 
@@ -211,8 +226,15 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None):
 			}
 		)
 		doc.insert(ignore_permissions=True)
+	if cint(assign_role) and not _is_system_manager_user(user):
+		held = next((r for r in POS_ROLES if r in frappe.get_roles(user)), None)
+		_give_pos_role(user, pos_role or held or POS_ROLE)
 	frappe.db.commit()
 	return {"success": True}
+
+
+def _is_system_manager_user(user: str) -> bool:
+	return "System Manager" in frappe.get_roles(user)
 
 
 def validate_pos_invoice_profile(doc, method=None):
@@ -253,11 +275,134 @@ def list_pos_profiles():
 		fields=["name", "company", "currency", "warehouse", "customer", "selling_price_list"],
 	)
 	for profile in profiles:
+		from custom_erp.api.pos_core import location_of
+
+		loc = location_of(profile["name"])
+		profile["location"] = loc.location_code if loc else None
+		profile["location_name"] = loc.location_name if loc else None
 		payments = frappe.get_all(
 			"POS Payment Method",
 			filters={"parent": profile["name"], "parenttype": "POS Profile"},
 			fields=["mode_of_payment", "default"],
-			order_by="default desc, idx asc",
+			order_by="`default` desc, idx asc",
 		)
 		profile["payment_methods"] = [p["mode_of_payment"] for p in payments]
 	return profiles
+
+
+# ---------------------------------------------------------- staff & roles
+
+from custom_erp.api import pos_core as core  # noqa: E402  (after the module's own helpers, which pos_core doesn't import)
+
+POS_ROLES = ("POS Waiter", "POS Cashier", "POS Supervisor", "POS Kitchen")
+POS_ROLE = "POS Cashier"  # kept for callers that predate the four roles
+# What the POS screens read directly over the REST API (item grid, prices, payment modes,
+# the register). Everything that changes data goes through the server-side POS methods,
+# which check the role themselves — so these roles are read-only on purpose.
+POS_ROLE_READS = ("Item", "Item Price", "Item Group", "POS Profile", "Mode of Payment", "Customer", "Price List", "Currency")
+
+
+def ensure_pos_role(role: str = POS_ROLE) -> str:
+	"""Create a POS role (and its read permissions) the first time it is needed."""
+	from frappe.permissions import add_permission
+
+	if role not in POS_ROLES:
+		frappe.throw(f"Unknown POS role: {role}")
+	if not frappe.db.exists("Role", role):
+		frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 0}).insert(ignore_permissions=True)
+	for doctype in POS_ROLE_READS:
+		if frappe.db.exists("DocType", doctype) and not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0}):
+			add_permission(doctype, role, 0)
+	return role
+
+
+def _give_pos_role(user: str, role: str):
+	"""A person holds exactly one POS role: this replaces any other."""
+	ensure_pos_role(role)
+	doc = frappe.get_doc("User", user)
+	keep = [r for r in doc.roles if r.role not in POS_ROLES]
+	if role in [r.role for r in doc.roles] and len(keep) == len(doc.roles) - 1:
+		return
+	doc.set("roles", [{"role": r.role} for r in keep] + [{"role": role}])
+	doc.save(ignore_permissions=True)
+
+
+def _require_staff_admin(target: str | None = None, new_role: str | None = None):
+	"""Administrators manage everyone. Supervisors manage waiters, cashiers and kitchen
+	staff — not supervisors or administrators, and can't hand out the Supervisor role."""
+	core.require_cap("staff")
+	if core.pos_level() == "admin":
+		return
+	if new_role == "POS Supervisor":
+		frappe.throw("Only an administrator can give the Supervisor role.", frappe.PermissionError)
+	if target and core.pos_level(target) in ("supervisor", "admin"):
+		frappe.throw("Only an administrator can change a supervisor's or administrator's PIN.", frappe.PermissionError)
+
+
+@frappe.whitelist()
+def list_pos_users():
+	"""Everyone who could work the tills: their POS role and whether they have a PIN."""
+	core.require_cap("staff")
+	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "active"])}
+	out = []
+	for u in frappe.get_all("User", filters={"enabled": 1, "name": ["not in", ["Guest", "Administrator"]]}, fields=["name", "full_name"], order_by="full_name asc"):
+		roles = frappe.get_roles(u.name)
+		p = pins.get(u.name)
+		level = core.pos_level(u.name)
+		out.append(
+			{
+				"user": u.name,
+				"full_name": u.full_name,
+				"has_pin": bool(p),
+				"active": bool(p and p.active),
+				"pos_profile": p.pos_profile if p else None,
+				"pos_role": next((r for r in POS_ROLES if r in roles), None),
+				"level": level,
+				"role_label": core.LEVEL_LABEL.get(level or "", ""),
+				"is_cashier_role": "POS Cashier" in roles,
+				"is_admin": "System Manager" in roles,
+			}
+		)
+	return out
+
+
+@frappe.whitelist()
+def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | None = None, pos_role: str = "POS Waiter"):
+	"""Add a staff member who works the tills: a PIN-only user with one POS role
+	(Waiter by default — the least privilege), optionally locked to one register."""
+	_require_staff_admin(None, pos_role)
+	email = (email or "").strip().lower()
+	full_name = (full_name or "").strip()
+	if "@" not in email or not full_name:
+		frappe.throw("Enter the person's email and full name.")
+	if frappe.db.exists("User", email):
+		frappe.throw(f"{email} already exists — set a PIN for that user instead.")
+	_validate_pin_format((pin or "").strip())
+	ensure_pos_role(pos_role)
+	frappe.get_doc(
+		{"doctype": "User", "email": email, "first_name": full_name, "send_welcome_email": 0, "enabled": 1, "roles": [{"role": pos_role}]}
+	).insert(ignore_permissions=True)
+	set_pin(email, pin, pos_profile, 0)
+	return {"user": email, "pos_role": pos_role}
+
+
+@frappe.whitelist()
+def set_pin_active(user: str, active: int = 1):
+	"""Switch a person's PIN off (e.g. they left) or back on."""
+	_require_staff_admin(user)
+	if not frappe.db.exists("XentraERP POS PIN", user):
+		frappe.throw("That user has no PIN.")
+	frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
+	frappe.db.commit()
+	return {"success": True}
+
+
+@frappe.whitelist()
+def set_pos_role(user: str, pos_role: str):
+	"""Change someone's POS role (Waiter / Cashier / Supervisor / Kitchen)."""
+	_require_staff_admin(user, pos_role)
+	if "System Manager" in frappe.get_roles(user):
+		frappe.throw("An administrator's access comes from their administrator role.")
+	_give_pos_role(user, pos_role)
+	frappe.db.commit()
+	return {"user": user, "pos_role": pos_role}

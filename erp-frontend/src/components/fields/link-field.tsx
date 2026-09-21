@@ -53,7 +53,7 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
           filters: '{}',
           page_length: '20',
         });
-        const r = await fetch(`/api/method/frappe.desk.search.search_link?${params}`, { credentials: 'include' });
+        const r = await fetch(`/api/method/xentraerp.desk.search.search_link?${params}`, { credentials: 'include' });
         const data = await r.json();
         const results: Suggestion[] = (data.results || data.message || []).map((x: { value: string; description?: string }) => ({
           value: x.value,
