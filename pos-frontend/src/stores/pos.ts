@@ -38,6 +38,8 @@ export interface PosSettings {
   item_notes_prompt: number
   role: string
   level: 'admin' | 'supervisor' | 'cashier' | 'waiter' | 'kitchen' | null
+  // The location this person works at (their registers, shifts and reports follow it); null = every location.
+  location?: string | null
   caps: string[]
   require_shift: number
   pos_247: number

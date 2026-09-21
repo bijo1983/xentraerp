@@ -7,6 +7,8 @@ import { usePosStore } from '@/stores/pos'
 import { api } from '@/lib/api'
 import PayDialog from '@/components/PayDialog.vue'
 import ItemNoteDialog from '@/components/ItemNoteDialog.vue'
+import ConfirmSheet from '@/components/ConfirmSheet.vue'
+import SessionMenu from '@/components/SessionMenu.vue'
 import type { ReceiptData } from '@/lib/receipt'
 import type { KotData } from '@/lib/kot'
 
@@ -311,12 +313,23 @@ const newBill = () =>
     const o = await api.call<Order>(FNB + 'open_order', { table: order.value.table, pos_profile: profile.value.name, guests: 1, new_bill: 1 })
     router.push(`/order/${o.name}`)
   })
-const cancel = () =>
-  run(async () => {
-    if (!window.confirm('Cancel this order? Anything already in the kitchen will be cancelled too.')) return
+// ---- closing an order that shouldn't go ahead
+// Mirrors what the server allows: anyone may close an order with nothing on it; one whose items never
+// reached the kitchen needs a cashier; once food was sent only a supervisor or administrator can void it.
+const savedItems = computed(() => order.value?.items.length || 0)
+const sentToKitchen = computed(() => (order.value?.items || []).some((l) => l.kot_qty > 0))
+const closeKind = computed<'empty' | 'unsent' | 'sent'>(() => (!savedItems.value ? 'empty' : sentToKitchen.value ? 'sent' : 'unsent'))
+const canClose = computed(() => !partPaid.value && (closeKind.value === 'empty' || (closeKind.value === 'unsent' ? pos.can('modify') : pos.can('supervise'))))
+const closeLabel = computed(() => (closeKind.value === 'sent' ? 'Void order' : 'Close order'))
+const closeHint = computed(() => (closeKind.value === 'sent' ? 'Food was sent to the kitchen — ask a supervisor to void this order.' : 'Ask a cashier to close this order.'))
+const closing = ref(false)
+const closeOrder = () => {
+  closing.value = false
+  return run(async () => {
     await api.call(FNB + 'cancel_order', { order: orderId.value })
     router.push('/floor')
   })
+}
 </script>
 
 <template>
@@ -330,6 +343,7 @@ const cancel = () =>
         <span v-if="!takeAway" class="reg-pill">{{ order?.guests }} guests</span>
         <label class="pill" style="cursor: pointer" title="Print the kitchen ticket from this device when the order is saved"><input type="checkbox" :checked="printer.autoKotTerminal" @change="printer.setAutoKot('terminal', ($event.target as HTMLInputElement).checked)" /> KOT printer</label>
         <div class="term-search"><span class="icn">⌕</span><input v-model="search" type="text" placeholder="Search menu…" /></div>
+        <SessionMenu />
       </div>
       <div class="cat-rail">
         <div class="cat-chip" :class="{ active: group === 'all' }" @click="group = 'all'">All</div>
@@ -412,7 +426,6 @@ const cancel = () =>
           <button v-if="!takeAway" class="btn btn-ghost mini" @click="panel = panel === 'transfer' ? null : 'transfer'">Move table</button>
           <button v-if="!takeAway" class="btn btn-ghost mini" @click="newBill">New bill</button>
         </template>
-        <button class="btn btn-ghost mini" style="color: var(--danger)" @click="cancel">Cancel</button>
       </div>
 
       <div v-if="!partPaid" class="row" style="padding: 0 14px 14px">
@@ -429,6 +442,13 @@ const cancel = () =>
 
       <button v-if="canBill" class="charge-btn" :disabled="busy || dirty || !order?.items.length" @click="startPay"><span>{{ partPaid ? 'Collect balance' : 'Pay' }}</span><span class="r tabular">{{ money(partPaid ? order?.balance || 0 : order?.total || 0) }}</span></button>
       <p v-else class="sub2" style="margin: 0 20px 14px">Ask a cashier to close the bill and take payment.</p>
+
+      <div v-if="!partPaid" class="close-order-wrap">
+        <button v-if="canClose" class="btn close-order" :disabled="busy" @click="closing = true">
+          ✕ {{ closeLabel }}<small v-if="closeKind === 'empty'"> · nothing ordered</small><small v-else-if="closeKind === 'unsent'"> · not sent to the kitchen</small>
+        </button>
+        <p v-else class="sub2">{{ closeHint }}</p>
+      </div>
     </div>
 
     <ItemNoteDialog
@@ -452,5 +472,19 @@ const cancel = () =>
       @pay="pay"
       @cancel="paying = false"
     />
+    <ConfirmSheet
+      v-if="closing"
+      :title="`${closeLabel}?`"
+      :confirm-label="closeLabel"
+      danger
+      :busy="busy"
+      cancel-label="Keep the order"
+      @confirm="closeOrder"
+      @cancel="closing = false"
+    >
+      <p v-if="closeKind === 'empty'">Nothing was ordered. This frees {{ takeAway ? 'the take-away token' : `table ${order?.table}` }}.</p>
+      <p v-else-if="closeKind === 'unsent'">{{ savedItems }} item{{ savedItems === 1 ? '' : 's' }} ({{ money(order?.total || 0) }}) were never sent to the kitchen. They will be discarded and {{ takeAway ? 'the order closed' : 'the table freed' }}.</p>
+      <p v-else>Food was already sent to the kitchen. Voiding cancels the kitchen tickets too.</p>
+    </ConfirmSheet>
   </div>
 </template>

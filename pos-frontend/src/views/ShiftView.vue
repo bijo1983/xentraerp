@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePosStore, type Shift, type CashRow } from '@/stores/pos'
 import { api } from '@/lib/api'
+import SessionMenu from '@/components/SessionMenu.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -103,6 +104,7 @@ async function finish() {
       <span class="pill">Business day {{ pos.settings?.business_date }}</span>
       <span v-if="pos.settings?.pos_247" class="pill ok">24/7</span>
       <button class="btn btn-ghost mini" @click="router.push('/registers')">Back</button>
+      <SessionMenu style="margin-left: auto" />
     </div>
 
     <!-- Just closed: the result -->

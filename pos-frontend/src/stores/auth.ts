@@ -109,6 +109,16 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // Hand the till to the next person: end this session but stay signed in to the
+    // organization, so they only need their PIN.
+    async switchUser() {
+      await api.logout().catch(() => {})
+      this.user = null
+      this.restrictedProfile = null
+      this.posProfile = null
+      usePosStore().reset()
+    },
+
     async logout() {
       await api.logout().catch(() => {})
       api.setTenantCookie('')

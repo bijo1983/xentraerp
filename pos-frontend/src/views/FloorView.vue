@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import FloorPlan, { type PlanTable } from '@/components/FloorPlan.vue'
 import NewOrderDialog from '@/components/NewOrderDialog.vue'
 import ReservationDialog, { type Booking } from '@/components/ReservationDialog.vue'
+import SessionMenu from '@/components/SessionMenu.vue'
 
 interface FloorOrder { name: string; guests: number; total: number; waiter: string | null; bill_closed: number; merged: boolean; part_paid?: boolean; primary_table: string; kots_pending: number }
 interface FloorTable extends PlanTable {
@@ -238,9 +239,7 @@ async function run(fn: () => Promise<void>) {
         <button class="btn btn-primary mini" @click="startOrder">+ New order</button>
         <button class="btn btn-ghost mini" @click="router.push('/kitchen')">Kitchen (KOT)</button>
         <button v-if="pos.can('bill') && pos.hasRetail" class="btn btn-ghost mini" @click="router.push('/terminal')">Quick sale</button>
-        <button v-if="pos.can('shift')" class="btn btn-ghost mini" @click="router.push('/shift')">Shift</button>
-        <button v-if="pos.canManage" class="btn btn-ghost mini" @click="router.push('/admin')">Settings</button>
-        <button class="btn btn-ghost mini" @click="router.push('/registers')">Registers</button>
+        <SessionMenu style="margin-left: auto" />
       </div>
       <div class="row" style="margin: 8px 0 4px">
         <button class="cat-chip" :class="{ active: zone === 'all' }" @click="zone = 'all'">All areas</button>
