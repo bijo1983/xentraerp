@@ -7,7 +7,8 @@ const router = useRouter()
 const auth = useAuthStore()
 
 type Step = 'tenant' | 'pin'
-const step = ref<Step>('tenant')
+// After "Switch user" the organization is still known — go straight to the PIN pad.
+const step = ref<Step>(auth.orgName ? 'pin' : 'tenant')
 const tenantCode = ref('')
 const pin = ref('')
 const error = ref<string | null>(null)
