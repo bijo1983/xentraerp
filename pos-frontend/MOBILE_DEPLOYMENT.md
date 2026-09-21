@@ -52,6 +52,17 @@ machine with Android Studio (Android), or through a CI service (see
   (required by Apple for any Bluetooth usage since iOS 13); Android's
   Bluetooth/location permissions come from the plugin's own manifest
   automatically, nothing to add by hand there
+- `android/app/build.gradle` — a `release` signing config that reads from
+  `android/keystore.properties` (gitignored) when present, so both a local
+  build and CI can produce a properly-signed release without hand-editing
+  Gradle files each time
+- `.github/workflows/android-release.yml` — builds and signs the Android
+  app entirely on GitHub's Linux runners (see "Cloud build via GitHub
+  Actions" below) — no Android Studio or local SDK needed at all
+- A release keystore (`xentraerp-pos-release.keystore`) was generated for
+  this project and sent to you directly — **not** committed to git, and
+  not stored anywhere in this repo or session once handed off. Keep it and
+  its password somewhere durable; see "The release signing key" below.
 
 ## Accounts you'll need (I can't create these for you)
 
@@ -105,8 +116,53 @@ In Xcode:
 
 ## Android: build, test, submit
 
-Can be done on Linux, macOS, or Windows with Android Studio installed
-(free) and the Google Play Console account above.
+Unlike iOS, Android has **no macOS/Xcode requirement** — a signed release
+build can be produced entirely in the cloud via GitHub Actions, with
+nothing installed on your own machine at all. That's the path below;
+Android Studio locally is still there as an alternative if you'd rather
+build on your own machine.
+
+### 1. The release signing key
+
+A release build must be signed with a keystore — a private key file that
+must exist before any signed build can happen, and must be kept forever
+(losing it means you can never update the app under the same Play Store
+listing again). One was generated for this project and handed to you
+directly (not committed to git, obviously) — store `xentraerp-pos-
+release.keystore` and its password somewhere durable and private (a
+password manager or secrets vault) right now if you haven't already.
+`android/.gitignore` excludes `*.keystore`/`keystore.properties` so it can
+never be accidentally committed even if it ends up in this folder.
+
+If you ever need a fresh one instead:
+```bash
+keytool -genkey -v -keystore xentraerp-pos-release.keystore \
+  -alias xentraerp-pos -keyalg RSA -keysize 2048 -validity 10000
+```
+
+### 2a. Cloud build via GitHub Actions (no downloads at all)
+
+`.github/workflows/android-release.yml` is already set up. One-time setup:
+
+1. In this repo: **Settings → Secrets and variables → Actions → New
+   repository secret**, add four secrets:
+   - `ANDROID_KEYSTORE_BASE64` — the keystore file, base64-encoded
+     (`base64 -w0 xentraerp-pos-release.keystore`, or `base64 -i
+     xentraerp-pos-release.keystore | tr -d '\n'` on macOS)
+   - `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_PASSWORD` — the
+     password you were given (same value for both, for this keystore)
+   - `ANDROID_KEY_ALIAS` — `xentraerp-pos`
+2. **Actions tab → "Android release build (POS)" → Run workflow.**
+3. When it finishes, download `xentraerp-pos-release-aab` from the run's
+   **Artifacts** section — that's the signed `.aab` ready to upload to
+   Play Console (step 3 below). Nothing was installed locally to produce
+   it.
+
+Re-run the same workflow (no setup needed again) any time you want a new
+signed build after native-shell changes — see "Updating the app" below
+for when that's actually necessary.
+
+### 2b. Local build via Android Studio (alternative)
 
 ```bash
 cd pos-frontend
@@ -114,29 +170,12 @@ npm install
 npm run android:open    # builds the web app, cap sync, opens Android Studio
 ```
 
-### 1. Create a release signing key (one time, keep this file and its
-   password permanently — losing it means you can never update the app
-   again under the same listing)
-
-```bash
-keytool -genkey -v -keystore xentraerp-pos-release.keystore \
-  -alias xentraerp-pos -keyalg RSA -keysize 2048 -validity 10000
-```
-
-Store this `.keystore` file and its passwords somewhere durable and
-private (a password manager or secrets vault) — **do not commit it to
-git**. `android/.gitignore` already excludes `*.jks`/`*.keystore` patterns
-are commented out by the Capacitor template; double-check before your
-first `git add` in `android/` that this file isn't staged.
-
-### 2. Wire the keystore into the release build
-
-In Android Studio: **Build → Generate Signed Bundle / APK → Android App
-Bundle**, point it at the keystore above, and build a **release** AAB. (Or
-configure `android/app/build.gradle`'s `signingConfigs`/`buildTypes.release`
-block to reference it via `local.properties`/environment variables if you
-want this scriptable for CI later — not pre-configured here since the
-keystore itself can't be generated or stored in this session.)
+Either drop the keystore into `android/keystore.properties` (copy
+`android/keystore.properties.example`, fill in the real path/passwords —
+`build.gradle` already wires this into the `release` signing config) and
+run `./gradlew bundleRelease` from `android/`, or use Android Studio's
+**Build → Generate Signed Bundle / APK → Android App Bundle** wizard
+pointed at the keystore directly.
 
 ### 3. Google Play Console
 
