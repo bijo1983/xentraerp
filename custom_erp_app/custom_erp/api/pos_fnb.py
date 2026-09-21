@@ -36,11 +36,11 @@ KOT_TRANSITIONS = {
 # --------------------------------------------------------------- guards
 
 
-def _require_fnb(cap: str = "view"):
-	"""Signed-in POS user, tenant in F&B mode, and a role that grants `cap`."""
+def _require_fnb(cap: str = "view", pos_profile: str | None = None):
+	"""Signed-in POS user, table service switched on (for the register's location when there is
+	one, else tenant-wide), and a role that grants `cap`."""
 	core.require_pos_user()
-	if core.settings()["pos_mode"] != "F&B":
-		frappe.throw("Table service isn't enabled — this organization's POS is in Retail mode.")
+	core.require_mode("F&B", pos_profile)
 	core.require_cap(cap)
 
 
@@ -126,7 +126,7 @@ def _table_status(disabled, reserved, has_order) -> str:
 def list_tables(pos_profile: str | None = None):
 	"""Every table with its live status and the open bills sitting on it. Given a
 	register, only that register's location's tables (plus any shared ones)."""
-	_require_fnb("view")
+	_require_fnb("view", pos_profile)
 	tables = frappe.get_all(
 		"XentraERP POS Table",
 		fields=["name", "zone", "seats", "reserved", "disabled", "location"],
@@ -294,6 +294,8 @@ def _open_order(order: str, for_update: bool = False):
 	doc = frappe.get_doc("XentraERP POS Order", order)
 	if doc.status != "Open":
 		frappe.throw(f"This order is already {doc.status.lower()}.")
+	if doc.location:  # someone tied to a location only handles that location's orders
+		core.require_user_location(doc.location)
 	return doc
 
 
@@ -306,6 +308,8 @@ def _payable_order(order: str, for_update: bool = False):
 	doc = frappe.get_doc("XentraERP POS Order", order)
 	if doc.status not in ("Open", "Part Paid"):
 		frappe.throw(f"This order is already {doc.status.lower()}.")
+	if doc.location:
+		core.require_user_location(doc.location)
 	return doc
 
 
@@ -354,7 +358,7 @@ def open_order(
 	Dine In seats a party at `table` (or returns the bill already open there;
 	`new_bill=1` starts an additional bill on an occupied table). Take Away needs
 	no table: the order gets a token number and an optional name/phone."""
-	_require_fnb("order")
+	_require_fnb("order", pos_profile)
 	if order_type not in ("Dine In", "Take Away"):
 		frappe.throw("Choose Dine In or Take Away.")
 	core.get_profile(pos_profile)
@@ -399,7 +403,7 @@ def open_order(
 def list_open_orders(pos_profile: str | None = None):
 	"""Open take-away orders (they have no table to find them by), oldest first, so the
 	floor can list them and staff can go back to one that isn't paid yet."""
-	_require_fnb("view")
+	_require_fnb("view", pos_profile)
 	loc = core.location_of(pos_profile) if pos_profile else None
 	return [
 		{"name": o.name, "token": o.token, "guest_name": o.guest_name, "total": flt(o.total), "status": o.status, "guests": cint(o.guests), "bill_closed": cint(o.bill_closed)}
@@ -555,7 +559,7 @@ def _kot_payload(k) -> dict:
 def list_kots(statuses=None, pos_profile: str | None = None):
 	"""Tickets for the kitchen screen — oldest first. Active ones by default.
 	Given a register, only its location's tickets (each site has its own kitchen)."""
-	_require_fnb("kot")
+	_require_fnb("kot", pos_profile)
 	if isinstance(statuses, str):
 		try:
 			statuses = json.loads(statuses)
@@ -953,7 +957,7 @@ def _res_payload(r) -> dict:
 def list_reservations(date: str | None = None, pos_profile: str | None = None):
 	"""The day's bookings for the guests panel, earliest first. Given a register,
 	only its location's."""
-	_require_fnb("reserve")
+	_require_fnb("reserve", pos_profile)
 	day = str(getdate(date)) if date else str(core.business_date())
 	loc = core.location_of(pos_profile) if pos_profile else None
 	rows = frappe.get_all(RESERVATION, filters={"reservation_date": day}, fields=["*"], order_by="reservation_time asc, creation asc", limit_page_length=0)
@@ -999,7 +1003,7 @@ def save_reservation(
 ):
 	"""Book a party for a date and time, optionally holding tables for them.
 	A table already booked within 90 minutes of that time is refused."""
-	_require_fnb("reserve")
+	_require_fnb("reserve", pos_profile)
 	guest_name = (guest_name or "").strip()
 	if not guest_name:
 		frappe.throw("Enter the guest's name.")
@@ -1068,7 +1072,7 @@ def mark_no_show(name: str):
 def seat_reservation(name: str, pos_profile: str, tables=None):
 	"""The party has arrived: open their table (joining several for a big party)
 	and start the order. `tables` overrides the ones held for them."""
-	_require_fnb("reserve")
+	_require_fnb("reserve", pos_profile)
 	doc = _booked(name)
 	chosen = _clean_tables(tables, pos_profile, cint(doc.party_size)) if tables else _split_tables(doc.tables)
 	if not chosen:

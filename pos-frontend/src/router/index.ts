@@ -53,7 +53,7 @@ router.beforeEach(async (to) => {
     return auth.posProfile ? { name: 'kitchen' } : { name: 'registers' }
   }
   // Counter sales and the shift drawer are for people who bill; waiters take orders on the floor.
-  if (to.name === 'terminal' && !pos.can('bill')) return { name: pos.isFnb ? 'floor' : 'registers' }
+  if (to.name === 'terminal' && (!pos.can('bill') || !pos.hasRetail)) return { name: pos.isFnb ? 'floor' : 'registers' }
   if (to.name === 'shift' && !pos.can('shift')) return { name: pos.isFnb ? 'floor' : 'registers' }
   if (SELLING.has(String(to.name)) || to.name === 'shift') {
     if (!auth.posProfile) return { name: 'registers' }

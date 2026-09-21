@@ -242,7 +242,7 @@ try:
     r = fnb.bill_order(o["name"], "Cash")
     check("…so its bills fall back to the standard numbering", r["invoice"].startswith("ACC-PSINV-") and r["location"] is None, r["invoice"])
     as_user("Administrator")
-    core.save_location("ZZTMP", "Temp", None, None, [])
+    core.save_location("ZZTMP", "Temp", "Main - JC", None, [])
     core.delete_location("ZZTMP"); check("an unused location can be deleted", not frappe.db.exists("XentraERP POS Location", "ZZTMP"))
 
 except Exception:

@@ -29,6 +29,10 @@ export interface Shift {
 
 export interface PosSettings {
   pos_mode: PosMode
+  // The kinds of POS running for the chosen register (its location's Retail / F&B switches — both can be on);
+  // `pos_mode` is the main one and `global_mode` the tenant-wide default that registers with no location follow.
+  modes: PosMode[]
+  global_mode: PosMode
   checkout_document: 'POS Invoice' | 'Draft Invoice + Receipt'
   auto_kot: number
   item_notes_prompt: number
@@ -53,13 +57,17 @@ export const usePosStore = defineStore('pos', {
   state: () => ({
     settings: null as PosSettings | null,
     shift: null as Shift | null,
+    // The register chosen at sign-in: the modes on offer come from its location.
+    profile: null as string | null,
     loaded: false,
   }),
   getters: {
     mode: (s): PosMode => s.settings?.pos_mode ?? 'Retail',
     isFnb(): boolean {
-      return this.mode === 'F&B'
+      return !!this.settings?.modes?.includes('F&B') || this.mode === 'F&B'
     },
+    // Counter sales are on for this register (in F&B-only locations there is no quick sale).
+    hasRetail: (s) => (s.settings?.modes ? s.settings.modes.includes('Retail') : true),
     canAdmin: (s) => !!s.settings?.can_switch,
     // What the signed-in person's POS role allows (the server checks it too).
     can: (s) => (cap: string) => !!s.settings?.caps.includes(cap),
@@ -70,16 +78,18 @@ export const usePosStore = defineStore('pos', {
     promptNotes: (s) => !!s.settings?.item_notes_prompt,
     roleLabel: (s) => s.settings?.role || '',
     // Anything that opens the Settings & reports screen: tables, menu, staff, reports or admin settings.
-    canManage: (s) => ['tables', 'menu', 'staff', 'reports', 'settings'].some((c) => s.settings?.caps.includes(c)),
+    canManage: (s) => ['tables', 'menu', 'reports', 'settings'].some((c) => s.settings?.caps.includes(c)),
   },
   actions: {
-    async load() {
-      const s = await api.call<PosSettings>(CORE + 'get_pos_settings')
+    async load(posProfile?: string | null) {
+      if (posProfile !== undefined) this.profile = posProfile
+      const s = await api.call<PosSettings>(CORE + 'get_pos_settings', this.profile ? { pos_profile: this.profile } : undefined)
       this.settings = s
       this.shift = s.shift
       this.loaded = true
     },
     reset() {
+      this.profile = null
       this.settings = null
       this.shift = null
       this.loaded = false

@@ -180,13 +180,24 @@ def _require_system_manager():
 		frappe.throw("Not permitted", frappe.PermissionError)
 
 
+def _check_location(location: str | None, pos_profile: str | None):
+	"""A person's location must exist, and if they are also locked to a register, that
+	register must belong to it."""
+	if location and not frappe.db.exists("XentraERP POS Location", {"name": location, "disabled": 0}):
+		frappe.throw(f"No such location: {location}")
+	if location and pos_profile:
+		loc = core.location_of(pos_profile)
+		if not loc or loc.location_code != location:
+			frappe.throw(f"Register '{pos_profile}' doesn't belong to location {location}.")
+
+
 @frappe.whitelist()
-def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: int = 1, pos_role: str | None = None):
-	"""Set or replace someone's PIN on this tenant's site (administrator; a supervisor
-	for waiters, cashiers and kitchen staff). Also gives them a POS role so their
-	screens can read items and prices: `pos_role`, else the role they already hold,
-	else Cashier — unless assign_role=0 or they are an administrator."""
-	_require_staff_admin(user, pos_role)
+def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: int = 1, pos_role: str | None = None, location: str | None = None):
+	"""Set or replace someone's PIN on this tenant's site (company administrator). Also
+	gives them a POS role so their screens can read items and prices: `pos_role`, else
+	the role they already hold, else Cashier — unless assign_role=0 or they are an
+	administrator."""
+	_require_staff_admin()
 
 	pin = (pin or "").strip()
 	_validate_pin_format(pin)
@@ -208,12 +219,17 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 	if collision:
 		frappe.throw("This PIN is already in use by another cashier. Choose a different one.")
 
-	if frappe.db.exists("XentraERP POS PIN", user):
+	# None = leave as it is; "" = clear.
+	existing = frappe.db.get_value("XentraERP POS PIN", user, ["pos_profile", "location"], as_dict=True)
+	new_profile = (pos_profile or None) if pos_profile is not None else (existing.pos_profile if existing else None)
+	new_location = (location or None) if location is not None else (existing.location if existing else None)
+	_check_location(new_location, new_profile)
+	if existing:
 		doc = frappe.get_doc("XentraERP POS PIN", user)
 		doc.pin_hash = pin_hash
 		doc.active = 1
-		if pos_profile is not None:
-			doc.pos_profile = pos_profile
+		doc.pos_profile = new_profile
+		doc.location = new_location
 		doc.save(ignore_permissions=True)
 	else:
 		doc = frappe.get_doc(
@@ -221,7 +237,8 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 				"doctype": "XentraERP POS PIN",
 				"user": user,
 				"pin_hash": pin_hash,
-				"pos_profile": pos_profile,
+				"pos_profile": new_profile,
+				"location": new_location,
 				"active": 1,
 			}
 		)
@@ -229,6 +246,8 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 	if cint(assign_role) and not _is_system_manager_user(user):
 		held = next((r for r in POS_ROLES if r in frappe.get_roles(user)), None)
 		_give_pos_role(user, pos_role or held or POS_ROLE)
+	# The PIN itself is never logged — only that it changed, and who changed it.
+	frappe.get_doc("User", user).add_comment("Info", f"POS PIN set by {frappe.session.user}.")
 	frappe.db.commit()
 	return {"success": True}
 
@@ -260,6 +279,7 @@ def validate_pos_invoice_profile(doc, method=None):
 	)
 	if restriction and doc.pos_profile != restriction:
 		frappe.throw(f"Your PIN is restricted to the '{restriction}' register — you can't post against a different one.")
+	core.enforce_user_location(doc.pos_profile)
 
 
 @frappe.whitelist()
@@ -287,7 +307,9 @@ def list_pos_profiles():
 			order_by="`default` desc, idx asc",
 		)
 		profile["payment_methods"] = [p["mode_of_payment"] for p in payments]
-	return profiles
+	# Someone tied to a location is only offered that location's registers.
+	mine = core.user_location()
+	return [p for p in profiles if p["location"] == mine] if mine else profiles
 
 
 # ---------------------------------------------------------- staff & roles
@@ -327,23 +349,17 @@ def _give_pos_role(user: str, role: str):
 	doc.save(ignore_permissions=True)
 
 
-def _require_staff_admin(target: str | None = None, new_role: str | None = None):
-	"""Administrators manage everyone. Supervisors manage waiters, cashiers and kitchen
-	staff — not supervisors or administrators, and can't hand out the Supervisor role."""
-	core.require_cap("staff")
-	if core.pos_level() == "admin":
-		return
-	if new_role == "POS Supervisor":
-		frappe.throw("Only an administrator can give the Supervisor role.", frappe.PermissionError)
-	if target and core.pos_level(target) in ("supervisor", "admin"):
-		frappe.throw("Only an administrator can change a supervisor's or administrator's PIN.", frappe.PermissionError)
+def _require_staff_admin():
+	"""POS staff, PINs and roles are managed by the company administrator, from the
+	User form in the ERP app — nothing at the tills can change them."""
+	core.require_manager()
 
 
 @frappe.whitelist()
 def list_pos_users():
 	"""Everyone who could work the tills: their POS role and whether they have a PIN."""
-	core.require_cap("staff")
-	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "active"])}
+	_require_staff_admin()
+	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "location", "active"])}
 	out = []
 	for u in frappe.get_all("User", filters={"enabled": 1, "name": ["not in", ["Guest", "Administrator"]]}, fields=["name", "full_name"], order_by="full_name asc"):
 		roles = frappe.get_roles(u.name)
@@ -356,6 +372,7 @@ def list_pos_users():
 				"has_pin": bool(p),
 				"active": bool(p and p.active),
 				"pos_profile": p.pos_profile if p else None,
+				"location": core.user_location(u.name),
 				"pos_role": next((r for r in POS_ROLES if r in roles), None),
 				"level": level,
 				"role_label": core.LEVEL_LABEL.get(level or "", ""),
@@ -370,7 +387,7 @@ def list_pos_users():
 def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | None = None, pos_role: str = "POS Waiter"):
 	"""Add a staff member who works the tills: a PIN-only user with one POS role
 	(Waiter by default — the least privilege), optionally locked to one register."""
-	_require_staff_admin(None, pos_role)
+	_require_staff_admin()
 	email = (email or "").strip().lower()
 	full_name = (full_name or "").strip()
 	if "@" not in email or not full_name:
@@ -389,7 +406,7 @@ def create_pos_user(email: str, full_name: str, pin: str, pos_profile: str | Non
 @frappe.whitelist()
 def set_pin_active(user: str, active: int = 1):
 	"""Switch a person's PIN off (e.g. they left) or back on."""
-	_require_staff_admin(user)
+	_require_staff_admin()
 	if not frappe.db.exists("XentraERP POS PIN", user):
 		frappe.throw("That user has no PIN.")
 	frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
@@ -400,9 +417,113 @@ def set_pin_active(user: str, active: int = 1):
 @frappe.whitelist()
 def set_pos_role(user: str, pos_role: str):
 	"""Change someone's POS role (Waiter / Cashier / Supervisor / Kitchen)."""
-	_require_staff_admin(user, pos_role)
+	_require_staff_admin()
 	if "System Manager" in frappe.get_roles(user):
 		frappe.throw("An administrator's access comes from their administrator role.")
 	_give_pos_role(user, pos_role)
 	frappe.db.commit()
 	return {"user": user, "pos_role": pos_role}
+
+
+@frappe.whitelist()
+def get_pos_access(user: str):
+	"""What the User form's POS Access panel shows: the person's POS role, register and
+	whether their PIN exists / is switched on — never the PIN itself (only a keyed hash
+	is stored)."""
+	_require_staff_admin()
+	if not frappe.db.exists("User", user):
+		frappe.throw(f"No such user: {user}")
+	roles = frappe.get_roles(user)
+	pin = frappe.db.get_value("XentraERP POS PIN", user, ["pos_profile", "location", "active"], as_dict=True)
+	level = core.pos_level(user)
+	locations = frappe.get_all(
+		"XentraERP POS Location",
+		filters={"disabled": 0},
+		fields=["name as code", "location_name as name", "company", "cost_center", "warehouse"],
+		order_by="name asc",
+	)
+	registers = [
+		{"name": r, "location": (core.location_code(core.location_of(r)))}
+		for r in frappe.get_all("POS Profile", filters={"disabled": 0}, pluck="name", order_by="name asc")
+	]
+	# Where they actually work: their own setting, else the location of the register they're locked to.
+	effective = core.user_location(user)
+	where = next((l for l in locations if l.code == effective), None)
+	return {
+		"user": user,
+		"has_pin": bool(pin),
+		"active": bool(pin and pin.active),
+		"pos_profile": pin.pos_profile if pin else None,
+		"location": pin.location if pin else None,
+		"effective_location": effective,
+		"cost_center": where.cost_center if where else None,
+		"warehouse": where.warehouse if where else None,
+		"pos_role": next((r for r in POS_ROLES if r in roles), None),
+		"level": level,
+		"role_label": core.LEVEL_LABEL.get(level or "", ""),
+		"is_admin": "System Manager" in roles,
+		"pos_roles": list(POS_ROLES),
+		"locations": locations,
+		"registers": registers,
+		"pin_min": PIN_MIN_LENGTH,
+		"pin_max": PIN_MAX_LENGTH,
+	}
+
+
+@frappe.whitelist()
+def save_pos_access(user: str, pos_role: str | None = None, pos_profile: str | None = None, active=None, location: str | None = None):
+	"""Change a person's POS role, the location they work at (empty = every location), the
+	register they are locked to (empty = any register at that location) and their PIN
+	on/off switch, leaving the PIN itself as it is. The location, register and switch
+	belong to the PIN, so they need one to exist."""
+	_require_staff_admin()
+	if not frappe.db.exists("User", user):
+		frappe.throw(f"No such user: {user}")
+	has_pin = frappe.db.exists("XentraERP POS PIN", user)
+	if pos_profile is not None or active is not None or location is not None:
+		if not has_pin:
+			frappe.throw("Set a PIN first — the location, register and on/off switch belong to the PIN.")
+	if pos_role:
+		if pos_role not in POS_ROLES:
+			frappe.throw(f"Unknown POS role: {pos_role}")
+		if _is_system_manager_user(user):
+			frappe.throw("An administrator's access comes from their administrator role.")
+		_give_pos_role(user, pos_role)
+	if pos_profile is not None or location is not None:
+		current = frappe.db.get_value("XentraERP POS PIN", user, ["pos_profile", "location"], as_dict=True)
+		new_profile = (pos_profile or None) if pos_profile is not None else current.pos_profile
+		new_location = (location or None) if location is not None else current.location
+		if new_profile and not frappe.db.exists("POS Profile", new_profile):
+			frappe.throw(f"No such register: {new_profile}")
+		_check_location(new_location, new_profile)
+		frappe.db.set_value("XentraERP POS PIN", user, {"pos_profile": new_profile, "location": new_location})
+	if active is not None:
+		frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
+	frappe.get_doc("User", user).add_comment("Info", f"POS access changed by {frappe.session.user}.")
+	frappe.db.commit()
+	return get_pos_access(user)
+
+
+def _random_unused_pin() -> str:
+	"""A random PIN no active cashier already has (pin_login finds a person by PIN alone)."""
+	import secrets
+
+	in_use = set(frappe.get_all("XentraERP POS PIN", filters={"active": 1}, pluck="pin_hash"))
+	for _ in range(200):
+		pin = "".join(secrets.choice("0123456789") for _ in range(PIN_MIN_LENGTH))
+		if _hash_pin(pin) not in in_use:
+			return pin
+	frappe.throw("Couldn't find a free PIN — set one by hand.")
+
+
+@frappe.whitelist()
+def reset_pin(user: str):
+	"""Give a person a new random PIN (forgotten, or handing a till to someone new) and
+	return it — this is the only time it can be read, so pass it on straight away. Also
+	switches the PIN on. Someone with no POS role yet becomes a Waiter (least privilege)."""
+	_require_staff_admin()
+	if not frappe.db.exists("User", user):
+		frappe.throw(f"No such user: {user}")
+	pin = _random_unused_pin()
+	set_pin(user, pin, None, 1, None if any(r in frappe.get_roles(user) for r in POS_ROLES) else "POS Waiter")
+	return {"pin": pin}

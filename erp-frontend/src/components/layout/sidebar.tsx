@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import {
   LayoutDashboard, Users, Package, ChevronLeft,
   ShoppingCart, FileText, Truck, Receipt,
   ClipboardList, ShoppingBag, PackageCheck, FileMinus,
   BookOpen, CreditCard, BarChart2, Building2,
   BarChart3, Settings, Shield,
+  ArrowLeftRight, PackagePlus, PackageMinus, Warehouse, ClipboardCheck, ScrollText, Boxes,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useERPStore } from '@/store/erp-store';
@@ -42,6 +44,22 @@ const navGroups = [
     ],
   },
   {
+    // `?field=value` links open the list already filtered (Opening Stock is a Stock
+    // Reconciliation whose purpose is "Opening Stock", a transfer is a Stock Entry of
+    // type Material Transfer, ...), and "New" from there pre-fills the same field.
+    label: 'Inventory',
+    items: [
+      { label: 'Stock Levels', href: '/inventory', icon: Boxes },
+      { label: 'Opening Stock', href: '/app/Stock%20Reconciliation?purpose=Opening%20Stock', icon: PackagePlus },
+      { label: 'Stock Adjustment', href: '/app/Stock%20Reconciliation?purpose=Stock%20Reconciliation', icon: ClipboardCheck },
+      { label: 'Stock Transfer', href: '/app/Stock%20Entry?stock_entry_type=Material%20Transfer', icon: ArrowLeftRight },
+      { label: 'Material Receipt', href: '/app/Stock%20Entry?stock_entry_type=Material%20Receipt', icon: PackageCheck },
+      { label: 'Material Issue', href: '/app/Stock%20Entry?stock_entry_type=Material%20Issue', icon: PackageMinus },
+      { label: 'Stock Ledger', href: '/app/Stock%20Ledger%20Entry', icon: ScrollText },
+      { label: 'Warehouses', href: '/app/Warehouse', icon: Warehouse },
+    ],
+  },
+  {
     label: 'Accounts',
     items: [
       { label: 'Journal Entries', href: '/journal-entries', icon: BookOpen },
@@ -56,7 +74,6 @@ const navGroups = [
       { label: 'Customers', href: '/customers', icon: Users },
       { label: 'Suppliers', href: '/suppliers', icon: Building2 },
       { label: 'Items', href: '/items', icon: Package },
-      { label: 'Inventory', href: '/inventory', icon: Package },
     ],
   },
   {
@@ -68,8 +85,30 @@ const navGroups = [
   },
 ];
 
+// Active state for a nav link. A link with a query string (`/app/Stock%20Entry?stock_entry_type=…`)
+// is active only on that path with those query values, so the filtered views of one doctype
+// don't all light up together.
+function isActive(href: string, pathname: string, search: URLSearchParams): boolean {
+  const [path, query] = href.split('?');
+  const here = decodeURIComponent(pathname);
+  const target = decodeURIComponent(path);
+  if (!query) return here === target || here.startsWith(target + '/');
+  const want = new URLSearchParams(query);
+  return here === target && Array.from(want.entries()).every(([k, v]) => search.get(k) === v);
+}
+
+// useSearchParams needs a Suspense boundary; the fallback holds the sidebar's place so the layout doesn't jump.
 export function Sidebar() {
+  return (
+    <Suspense fallback={<aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-sidebar-border bg-sidebar" />}>
+      <SidebarInner />
+    </Suspense>
+  );
+}
+
+function SidebarInner() {
   const pathname = usePathname();
+  const search = useSearchParams();
   const tenantCode = useTenantCode();
   const { sidebarOpen, toggleSidebar } = useERPStore();
 
@@ -104,10 +143,10 @@ export function Sidebar() {
             {!sidebarOpen && <div className="my-1.5 mx-2 border-t border-sidebar-border" />}
             {group.items.map((item) => {
               const href = withTenant(item.href, tenantCode);
-              const active = pathname === href || pathname.startsWith(href + '/');
+              const active = isActive(href, pathname, search);
               return (
                 <Link
-                  key={item.href}
+                  key={item.label}
                   href={href}
                   title={!sidebarOpen ? item.label : undefined}
                   className={cn(
