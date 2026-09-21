@@ -1,0 +1,77 @@
+name: Android release build (POS)
+
+# Builds a signed Android App Bundle for the XentraERP POS app entirely on
+# GitHub's own Linux runners — no Android Studio, no Mac, nothing installed
+# on your own machine. Manual trigger only (Actions tab → this workflow →
+# "Run workflow"), since it produces a real signed release artifact rather
+# than running on every push.
+#
+# One-time setup before the first run — add these under this repo's
+# Settings → Secrets and variables → Actions → New repository secret:
+#   ANDROID_KEYSTORE_BASE64   base64 of the .keystore file (see
+#                             MOBILE_DEPLOYMENT.md for how it was generated)
+#   ANDROID_KEYSTORE_PASSWORD the keystore's store password
+#   ANDROID_KEY_ALIAS         the key alias inside it (xentraerp-pos)
+#   ANDROID_KEY_PASSWORD      the key's own password (same as the store
+#                             password for a keystore generated the way
+#                             MOBILE_DEPLOYMENT.md describes)
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pos-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pos-frontend/package-lock.json
+
+      - name: Install web app dependencies
+        run: npm ci
+
+      - name: Type-check + build the web app
+        run: npm run build
+
+      - name: Sync into the native Android project
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Write the release keystore from secrets
+        run: |
+          # build.gradle resolves storeFile via `rootProject.file(...)`,
+          # and android/ is the Gradle root project — so this path (and
+          # the one written into keystore.properties below) is relative
+          # to android/, not android/app/.
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Build signed release AAB
+        working-directory: pos-frontend/android
+        run: ./gradlew bundleRelease
+
+      - name: Remove the keystore from the runner
+        if: always()
+        run: rm -f android/release.keystore android/keystore.properties
+
+      - name: Upload the signed AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: xentraerp-pos-release-aab
+          path: pos-frontend/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 90
