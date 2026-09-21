@@ -51,7 +51,7 @@ export const usePrinterStore = defineStore('printer', {
   actions: {
     setMethod(method: PrintMethod) {
       this.method = method
-      writeStoredPreference({ method, deviceId: this.connected?.device.id })
+      writeStoredPreference({ method, deviceId: this.connected?.deviceId })
     },
 
     // Opens the browser's Bluetooth device picker — must be called from a
@@ -62,7 +62,7 @@ export const usePrinterStore = defineStore('printer', {
       try {
         this.connected = await pairPrinter()
         this.method = 'bluetooth'
-        writeStoredPreference({ method: 'bluetooth', deviceId: this.connected.device.id })
+        writeStoredPreference({ method: 'bluetooth', deviceId: this.connected.deviceId })
       } catch (err) {
         this.error = err instanceof Error ? err.message : 'Could not connect to a Bluetooth printer'
         throw err

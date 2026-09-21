@@ -258,7 +258,7 @@ async function signOut() {
             :disabled="printer.connecting"
             @click="printer.connectBluetoothPrinter()"
           >
-            {{ printer.connected ? `Connected: ${printer.connected.device.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
+            {{ printer.connected ? `Connected: ${printer.connected.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
           </button>
         </div>
         <p v-if="printer.method === 'bluetooth' && !printer.bluetoothSupported" style="margin: 8px 0 0; font-size: 11.5px; color: var(--warning)">

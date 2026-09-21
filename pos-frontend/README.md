@@ -1,5 +1,26 @@
-# Vue 3 + TypeScript + Vite
+# XentraERP POS — pos-frontend
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 + TypeScript + Vite single-page app for `pos.xentraerp.net`, and the
+source for the native iOS/Android apps (via Capacitor — see below).
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## Web development
+
+```bash
+npm install
+npm run dev      # proxies /api to VITE_API_PROXY_TARGET (default http://127.0.0.1:8083)
+npm run build     # type-checks then builds dist/
+```
+
+## Native iOS / Android apps
+
+The native apps are a thin Capacitor shell around this same web app — see
+[`MOBILE_DEPLOYMENT.md`](./MOBILE_DEPLOYMENT.md) for the full build,
+signing, and App Store / Play Store submission guide.
+
+Quick reference once the native toolchains are installed:
+
+```bash
+npm run android:open   # build web, sync, open android/ in Android Studio
+npm run ios:open       # build web, sync, open ios/App/App.xcworkspace in Xcode (macOS only)
+npm run cap:icons      # regenerate all icon/splash sizes from resources/icon.png + resources/splash.png
+```
