@@ -16,6 +16,9 @@ const RESERVED_SEGMENTS = new Set([
 
 const TENANT_CODE_RE = /^[a-z0-9]{2,10}$/;
 
+const STATIC_ASSET_RE =
+  /\.(png|jpe?g|gif|svg|ico|webp|avif|bmp|css|js|mjs|map|json|txt|xml|webmanifest|woff2?|ttf|otf|eot|mp4|webm|mp3|pdf)$/i;
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const segments = pathname.split('/').filter(Boolean);
@@ -24,10 +27,13 @@ export function middleware(req: NextRequest) {
 
   const [first, ...rest] = segments;
   const last = segments[segments.length - 1];
-  // Any request whose last segment has a file extension is a static asset
-  // (image, font, manifest, etc.) — never a tenant-prefixed page route.
+  // A request whose last segment ends in a known static-asset extension
+  // (image, font, manifest, etc.) is never a tenant-prefixed page route.
   // This is the general safety net; RESERVED_SEGMENTS covers real routes.
-  if (RESERVED_SEGMENTS.has(first) || !TENANT_CODE_RE.test(first) || last.includes('.')) {
+  // Only real asset extensions count: document names can contain dots — a
+  // User is named by email (pos1@jjc.com), which used to be mistaken for a
+  // file and left un-rewritten, so /<tenant>/app/User/<email> returned 404.
+  if (RESERVED_SEGMENTS.has(first) || !TENANT_CODE_RE.test(first) || STATIC_ASSET_RE.test(last)) {
     return NextResponse.next();
   }
 
