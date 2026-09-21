@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTenantCode, withTenant } from '@/lib/tenant';
 
 const reports = [
   { label: 'Trial Balance', name: 'Trial Balance', desc: 'Debit/credit summary by account' },
@@ -17,6 +18,7 @@ const reports = [
 
 export default function ReportsPage() {
   const router = useRouter();
+  const tenantCode = useTenantCode();
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Reports</h2>
@@ -25,7 +27,7 @@ export default function ReportsPage() {
           <Card
             key={r.name}
             className="cursor-pointer hover:border-primary transition-colors"
-            onClick={() => router.push(`/app/query-report/${encodeURIComponent(r.name)}`)}
+            onClick={() => router.push(withTenant(`/app/query-report/${encodeURIComponent(r.name)}`, tenantCode))}
           >
             <CardHeader className="pb-2"><CardTitle className="text-base">{r.label}</CardTitle></CardHeader>
             <CardContent><p className="text-sm text-muted-foreground">{r.desc}</p></CardContent>

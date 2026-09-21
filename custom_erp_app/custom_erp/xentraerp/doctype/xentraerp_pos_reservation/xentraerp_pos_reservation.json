@@ -1,0 +1,134 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "guest_name",
+  "phone",
+  "party_size",
+  "column_break_1",
+  "reservation_date",
+  "reservation_time",
+  "meal",
+  "status",
+  "tables_section",
+  "tables",
+  "location",
+  "pos_order",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "guest_name",
+   "fieldtype": "Data",
+   "label": "Guest Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "party_size",
+   "fieldtype": "Int",
+   "label": "Party Size",
+   "reqd": 1,
+   "default": "2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "reservation_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "reservation_time",
+   "fieldtype": "Time",
+   "label": "Time",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "meal",
+   "fieldtype": "Select",
+   "label": "Meal",
+   "options": "Breakfast\nLunch\nDinner\nOther",
+   "default": "Dinner"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Booked\nSeated\nCompleted\nCancelled\nNo Show",
+   "default": "Booked",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "tables_section",
+   "fieldtype": "Section Break",
+   "label": "Tables"
+  },
+  {
+   "fieldname": "tables",
+   "fieldtype": "Small Text",
+   "label": "Tables",
+   "description": "Comma-separated table names held for this party."
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Data",
+   "label": "Location",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pos_order",
+   "fieldtype": "Link",
+   "label": "Order",
+   "options": "XentraERP POS Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Reservation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "reservation_date",
+ "sort_order": "ASC",
+ "states": [],
+ "autoname": "RES-.#####",
+ "naming_rule": "Expression (old style)"
+}

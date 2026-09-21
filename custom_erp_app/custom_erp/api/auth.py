@@ -47,3 +47,40 @@ def get_current_user():
         "user_image": user.user_image,
         "roles": [r.role for r in user.roles],
     }
+
+
+@frappe.whitelist()
+def get_login_status():
+    """Tell the frontend whether the just-logged-in user must change their
+    (default 'admin') password before continuing — set on tenant approval."""
+    pending = frappe.get_all(
+        "XentraERP Tenant",
+        filters={"tenant_admin_email": frappe.session.user, "admin_must_change_password": 1},
+        fields=["name", "tenant_code"],
+        limit_page_length=1,
+    )
+    return {
+        "force_password_change": bool(pending),
+        "tenant_code": pending[0].tenant_code if pending else None,
+    }
+
+
+@frappe.whitelist()
+def change_password(new_password):
+    """Set a new password for the current session user and clear the
+    force-password-change flag on their tenant record, if any."""
+    if not new_password or len(new_password) < 8:
+        frappe.throw(_("Password must be at least 8 characters."))
+
+    from frappe.utils.password import update_password
+
+    update_password(frappe.session.user, new_password)
+
+    frappe.db.set_value(
+        "XentraERP Tenant",
+        {"tenant_admin_email": frappe.session.user},
+        "admin_must_change_password",
+        0,
+    )
+    frappe.db.commit()
+    return {"success": True}

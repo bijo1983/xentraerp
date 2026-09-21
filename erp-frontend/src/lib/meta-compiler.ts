@@ -12,7 +12,8 @@ export type ComponentType =
   | 'readonly'
   | 'hidden'
   | 'tab_break'
-  | 'section_break';
+  | 'section_break'
+  | 'attach';
 
 export interface CompiledField {
   fieldname: string;
@@ -25,11 +26,16 @@ export interface CompiledField {
   hidden?: boolean;
   default?: string;
   description?: string;
+  depends_on?: string;
+  mandatory_depends_on?: string;
+  /** Frappe's own flag for "show this field as a grid column" — used to keep ChildTable's compact columns limited to what ERPNext itself shows, instead of every field on the child doctype. */
+  in_list_view?: boolean;
 }
 
 export interface CompiledMeta {
   doctype: string;
   fields: CompiledField[];
+  is_submittable: boolean;
 }
 
 const FIELDTYPE_MAP: Record<string, ComponentType> = {
@@ -59,8 +65,8 @@ const FIELDTYPE_MAP: Record<string, ComponentType> = {
   'Fold': 'hidden',
   'Heading': 'hidden',
   'Button': 'hidden',
-  'Attach': 'text',
-  'Attach Image': 'text',
+  'Attach': 'attach',
+  'Attach Image': 'attach',
   'Barcode': 'text',
   'Color': 'text',
   'Rating': 'number',
@@ -77,7 +83,15 @@ export function compileMeta(rawMeta: any): CompiledMeta {
     .filter((f: any) => f.fieldname && f.fieldtype !== 'Column Break' && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Fold' && f.fieldtype !== 'Button')
     .map((f: any): CompiledField => ({
       fieldname: f.fieldname,
-      label: f.label || f.fieldname,
+      // Section/Tab Break fields routinely have NO label in the doctype's
+      // own meta (they're often pure layout dividers) — falling back to
+      // the raw fieldname (e.g. "section_break_31") for those, the same
+      // fallback a real data field needs so it always has *something*
+      // visible, instead surfaced fieldname-looking junk as literal tab/
+      // section titles once DynamicForm started promoting labeled
+      // sections to their own tabs. Only fall back for fields that are
+      // actually rendered as a labeled control.
+      label: f.label || (f.fieldtype === 'Section Break' || f.fieldtype === 'Tab Break' ? '' : f.fieldname),
       fieldtype: f.fieldtype,
       component: FIELDTYPE_MAP[f.fieldtype] || 'text',
       options: f.options,
@@ -86,9 +100,132 @@ export function compileMeta(rawMeta: any): CompiledMeta {
       hidden: !!f.hidden,
       default: f.default,
       description: f.description,
+      depends_on: f.depends_on,
+      mandatory_depends_on: f.mandatory_depends_on,
+      in_list_view: !!f.in_list_view,
     }));
 
-  return { doctype: rawMeta.name, fields };
+  return { doctype: rawMeta.name, fields, is_submittable: !!rawMeta.is_submittable };
+}
+
+// ---------------------------------------------------------------------------
+// depends_on / mandatory_depends_on evaluation
+//
+// Frappe doctypes express these as either a bare fieldname (truthy check) or
+// a JS-ish expression prefixed with "eval:", e.g.
+//   eval:doc.status=="Lost"
+//   eval:doc.status!="Lost"
+//   eval:doc.some_field
+//   eval:!doc.some_field
+//   eval:doc.qty==1
+//   eval:doc.a=="X" && doc.b=="Y"
+//   eval:doc.a=="X" || doc.b=="Y"
+//
+// We deliberately do NOT use JS eval() on this string. Instead we parse the
+// small set of patterns Frappe doctypes actually use in practice. Anything
+// we don't recognize is treated as "condition met" (fail OPEN) so we never
+// hide a field/section that should be visible — the safer failure mode for
+// a data-entry form.
+// ---------------------------------------------------------------------------
+
+type DocLike = Record<string, unknown>;
+
+function coerceCmpValue(raw: string): string | number | boolean {
+  const trimmed = raw.trim();
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  // strip matching quotes
+  const m = trimmed.match(/^["'](.*)["']$/);
+  return m ? m[1] : trimmed;
+}
+
+function readDocField(doc: DocLike, field: string): unknown {
+  return doc[field];
+}
+
+export function isTruthyDocValue(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  if (typeof v === 'string') return v.trim() !== '' && v !== '0';
+  if (typeof v === 'number') return v !== 0;
+  return !!v;
+}
+
+// Evaluate a single atomic condition like `doc.field=="X"`, `doc.field!="X"`,
+// `doc.field==1`, `doc.field`, `!doc.field`. Returns null if it doesn't
+// recognize the pattern (caller should fail open).
+function evalAtom(atom: string, doc: DocLike): boolean | null {
+  const s = atom.trim();
+
+  // !doc.field
+  let m = s.match(/^!\s*doc\.([a-zA-Z0-9_]+)$/);
+  if (m) return !isTruthyDocValue(readDocField(doc, m[1]));
+
+  // doc.field == "value"  or  doc.field != "value"  (also numeric/bool)
+  m = s.match(/^doc\.([a-zA-Z0-9_]+)\s*(==|!=)\s*(.+)$/);
+  if (m) {
+    const [, field, op, rawVal] = m;
+    const expected = coerceCmpValue(rawVal);
+    const actualRaw = readDocField(doc, field);
+    let equal: boolean;
+    if (actualRaw === undefined || actualRaw === null) {
+      // Real JS/Frappe semantics: undefined/null is never loosely equal to
+      // a concrete literal — NOT even "" (`undefined == ""` is false in
+      // JS). Coercing an absent field to "" before comparing (the previous
+      // behavior) silently made `doc.field != ""` evaluate to FALSE for a
+      // field a row simply hasn't set yet, hiding fields ERPNext's own
+      // doctypes expect visible by default (e.g. Sales Order Item's `rate`,
+      // gated on `eval: doc.type != ""` — `type` is never actually present
+      // on the row, so real Frappe always shows it, but this evaluator was
+      // hiding it, making Rate look non-editable).
+      equal = false;
+    } else if (typeof expected === 'number') {
+      equal = Number(actualRaw) === expected;
+    } else if (typeof expected === 'boolean') {
+      equal = isTruthyDocValue(actualRaw) === expected;
+    } else {
+      equal = String(actualRaw) === expected;
+    }
+    return op === '==' ? equal : !equal;
+  }
+
+  // bare doc.field truthy check
+  m = s.match(/^doc\.([a-zA-Z0-9_]+)$/);
+  if (m) return isTruthyDocValue(readDocField(doc, m[1]));
+
+  return null;
+}
+
+/**
+ * Evaluate a Frappe depends_on / mandatory_depends_on expression against a
+ * doc-like object. Returns true when the condition is met (field should be
+ * shown / is mandatory), and fails OPEN (returns true) for anything it
+ * cannot parse, rather than hiding real data-entry fields.
+ */
+export function evalDependsOn(expr: string | undefined | null, doc: DocLike): boolean {
+  if (!expr) return true;
+  const trimmed = expr.trim();
+  if (!trimmed) return true;
+
+  // Non-"eval:" values are treated as a bare fieldname truthy check
+  // (Frappe supports this shorthand for depends_on).
+  const body = trimmed.startsWith('eval:') ? trimmed.slice(5).trim() : `doc.${trimmed}`;
+  if (!body) return true;
+
+  // Split on top-level && / || (no parens support needed for our patterns —
+  // doctypes in this app don't nest them).
+  const orParts = body.split('||');
+  try {
+    return orParts.some((orPart) => {
+      const andParts = orPart.split('&&');
+      return andParts.every((atom) => {
+        const r = evalAtom(atom, doc);
+        return r === null ? true : r; // fail open per-atom too
+      });
+    });
+  } catch {
+    return true;
+  }
 }
 
 export interface PermissionSet {

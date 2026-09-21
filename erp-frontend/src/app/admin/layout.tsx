@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Package, Settings, CreditCard,
   BarChart3, Shield, Bell, Building2, ChevronLeft, LogOut,
-  Layers, FileText, Zap, Globe, Server, Activity
+  Layers, FileText, Zap, Globe, Server, Activity, FlaskConical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -73,12 +74,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         open ? 'w-56' : 'w-14'
       )}>
         <div className="flex h-14 items-center justify-between border-b px-3 shrink-0">
-          {open && (
-            <div>
-              <span className="text-sm font-bold">Xentra</span>
-              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">Admin</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 min-w-0">
+            <Image src="/brand/mark.png" alt="XentraERP" width={22} height={22} className="rounded-md shrink-0" />
+            {open && (
+              <div className="min-w-0 flex items-center gap-1.5 whitespace-nowrap overflow-hidden">
+                <span className="text-sm font-bold truncate">XentraERP</span>
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-primary bg-primary/10 px-1.5 py-0.5 rounded">Admin</span>
+              </div>
+            )}
+          </div>
           <button onClick={() => setOpen(!open)} className="rounded p-1 hover:bg-accent ml-auto">
             <ChevronLeft className={cn('h-4 w-4 transition-transform', !open && 'rotate-180')} />
           </button>
@@ -116,12 +120,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <div className="border-t p-2 shrink-0">
           <Link
-            href="/"
-            title={!open ? 'ERP Portal' : undefined}
+            href="/sandbox/dashboard"
+            title={!open ? 'Sandbox' : undefined}
             className="flex items-center gap-2.5 mx-1 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent mb-1"
           >
-            <Building2 className="h-4 w-4 shrink-0" />
-            {open && <span>ERP Portal</span>}
+            <FlaskConical className="h-4 w-4 shrink-0" />
+            {open && <span>Sandbox</span>}
           </Link>
           <button
             onClick={handleLogout}

@@ -18,12 +18,19 @@ export function useDocTypeSchema(doctype: string) {
     }
 
     setLoading(true);
-    fetch(`/api/method/frappe.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}&with_parent=1`, {
+    fetch(`/api/method/xentraerp.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}&with_parent=1`, {
       credentials: 'include',
     })
       .then((r) => r.json())
       .then((data) => {
-        const rawMeta = data?.docs?.[0] || data?.message?.docs?.[0];
+        // getdoctype's with_parent=1 flag returns a bundle led by the
+        // PARENT doctype's meta (plus all its child-table doctypes) when
+        // `doctype` is itself a child table — docs[0] is only the requested
+        // doctype when it isn't a child table. Find the matching entry by
+        // name instead of assuming position, or every child-table grid in
+        // the app renders the parent transaction's own fields.
+        const docs: Array<{ name?: string }> = data?.docs || data?.message?.docs || [];
+        const rawMeta = docs.find((d) => d?.name === doctype) || docs[0];
         if (!rawMeta) throw new Error('No meta returned');
         const compiled = compileMeta(rawMeta);
         cache[doctype] = compiled;

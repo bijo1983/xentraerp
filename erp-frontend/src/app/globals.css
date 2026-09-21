@@ -2,46 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand anchors from XentraERP_Official_Brand_Package/07_Developer_Kit:
+   navy #031B4E, primary blue #1776FF. Everything else in this palette is
+   tuned around those two anchors toward a calmer, higher-contrast neutral
+   scale — Linear/Notion-style restraint (soft surfaces, quiet borders,
+   text that's actually dark enough to read at a glance) with Dynamics-style
+   density for data tables and Apple-style smoothing on motion/elevation. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 20% 98%;         /* #F8FAFC canvas */
+    --foreground: 222 47% 12%;         /* near-navy, slightly softened for body text */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    --card-foreground: 222 47% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 12%;
+    --primary: 215.4 100% 54.5%;       /* #1776FF */
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 210 25% 95%;
+    --secondary-foreground: 222 47% 15%;
+    --muted: 210 22% 95%;
+    --muted-foreground: 215 16% 42%;   /* darker than shadcn default — Linear-style legible secondary text */
+    --accent: 214 65% 95.5%;           /* faint brand-blue tint for hover/active states */
+    --accent-foreground: 220.8 92.6% 15.9%;
+    --destructive: 0 84.2% 60.2%;      /* #EF4444 */
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --success: 142 70% 36%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 95% 44%;
+    --warning-foreground: 48 96% 98%;
+    --border: 214 20% 90%;
+    --input: 214 20% 88%;
+    --ring: 215.4 100% 54.5%;
+    --radius: 0.75rem;                 /* card: 12px, button (rounded-md): 10px */
+
+    /* Sidebar gets a hair darker than the canvas — the subtle plane
+       separation Notion/Linear both use instead of a hard border alone. */
+    --sidebar: 210 24% 96.5%;
+    --sidebar-foreground: 222 47% 18%;
+    --sidebar-border: 214 20% 89%;
+    --sidebar-accent: 214 70% 93.5%;
+    --sidebar-accent-foreground: 215.4 100% 40%;
+
+    --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+    --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+    --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 222 47% 7%;          /* #0A0F1C */
+    --foreground: 210 30% 96%;
+    --card: 222 44% 10%;
+    --card-foreground: 210 30% 96%;
+    --popover: 222 44% 10%;
+    --popover-foreground: 210 30% 96%;
+    --primary: 215.4 100% 58%;         /* #1776FF, lifted slightly for dark contrast */
+    --primary-foreground: 222 47% 7%;
+    --secondary: 222 33% 15%;
+    --secondary-foreground: 210 30% 96%;
+    --muted: 222 30% 14%;
+    --muted-foreground: 215 18% 68%;
+    --accent: 217 45% 18%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 70% 42%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --success: 142 60% 42%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 90% 52%;
+    --warning-foreground: 26 30% 10%;
+    --border: 222 28% 18%;
+    --input: 222 28% 20%;
+    --ring: 215.4 100% 58%;
+
+    --sidebar: 224 46% 8.5%;
+    --sidebar-foreground: 210 25% 88%;
+    --sidebar-border: 222 28% 16%;
+    --sidebar-accent: 217 45% 18%;
+    --sidebar-accent-foreground: 210 90% 78%;
+
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.24);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.2);
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.24);
   }
 }
 
@@ -50,6 +90,29 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
   }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), var(--font-body), sans-serif;
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
+  }
+}
+
+@layer utilities {
+  /* Apple-ish standard easing for hover/press/expand transitions. */
+  .transition-smooth {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .shadow-elevation-xs { box-shadow: var(--shadow-xs); }
+  .shadow-elevation-sm { box-shadow: var(--shadow-sm); }
+  .shadow-elevation-md { box-shadow: var(--shadow-md); }
+}
+
+/* Brand hero gradient — navy to primary, matching xentraerp-theme.css .xe-hero */
+.xentra-hero {
+  background: linear-gradient(135deg, #031b4e 0%, #1776ff 100%);
 }
