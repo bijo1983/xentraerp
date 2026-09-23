@@ -11,6 +11,45 @@
   </head>
   <body>
     <div id="app"></div>
+    <!--
+      Fallback shown if the Vue app hasn't mounted anything into #app within
+      10s — pairs with capacitor.config.ts's SplashScreen.launchShowDuration
+      (also 10s + a bit), so this becomes visible right around when the
+      native splash forces itself away, instead of a bare blank/frozen
+      screen with no way to recover. Plain inline script/CSS, not a Vue
+      component: it has to work even if the Vue bundle itself never loads
+      or errors before mounting.
+    -->
+    <div
+      id="connect-fallback"
+      style="display: none; position: fixed; inset: 0; z-index: 9999; background: #0a0f1c; color: #edf2fc; font-family: system-ui, -apple-system, sans-serif; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 16px"
+    >
+      <div style="font-size: 17px; font-weight: 600">Taking longer than expected to connect</div>
+      <div style="font-size: 13.5px; color: #8c99b8; max-width: 320px">
+        Check your internet connection, then try again.
+      </div>
+      <button
+        onclick="location.reload()"
+        style="padding: 12px 28px; border: 0; border-radius: 10px; background: #1776ff; color: #fff; font-weight: 600; font-size: 14.5px"
+      >
+        Retry
+      </button>
+    </div>
+    <script>
+      ;(function () {
+        var appEl = document.getElementById('app')
+        var fallbackEl = document.getElementById('connect-fallback')
+        var timer = setTimeout(function () {
+          if (!appEl.hasChildNodes()) fallbackEl.style.display = 'flex'
+        }, 10500)
+        new MutationObserver(function () {
+          if (appEl.hasChildNodes()) {
+            clearTimeout(timer)
+            fallbackEl.style.display = 'none'
+          }
+        }).observe(appEl, { childList: true })
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

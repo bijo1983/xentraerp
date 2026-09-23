@@ -29,11 +29,20 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       // Hidden explicitly from App.vue's onMounted (see src/lib/native.ts)
-      // once the first real screen has painted, rather than on a fixed
-      // timer — avoids a blank white flash between splash and content on
-      // a slow connection (remember, this app loads its UI from
-      // PRODUCTION_REMOTE_URL, not a bundled copy).
-      launchAutoHide: false,
+      // once the first real screen has painted — the fast path, avoiding a
+      // blank flash between splash and content on a slow connection (this
+      // app loads its UI from PRODUCTION_REMOTE_URL, not a bundled copy).
+      // launchAutoHide stays TRUE as a safety net: if the remote page never
+      // finishes loading at all (network failure, a stall in Capacitor's
+      // own bridge injection — seen once on real hardware even though the
+      // same URL loaded fine in a plain WebView), the app.vue onMounted
+      // hide() call never fires, and previously the splash then hung
+      // forever with zero feedback. launchShowDuration forces it to hide
+      // regardless after this many ms, revealing index.html's own
+      // fallback "taking longer than expected" screen underneath instead
+      // of leaving the user stuck on a frozen logo.
+      launchAutoHide: true,
+      launchShowDuration: 10000,
       backgroundColor: '#0a0f1c',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
