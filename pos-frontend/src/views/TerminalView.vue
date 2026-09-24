@@ -266,17 +266,24 @@ async function signOut() {
           <span class="icn">⌕</span>
           <input v-model="search" type="text" placeholder="Search items…" />
         </div>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="printerSettingsOpen = !printerSettingsOpen">
-          🖨️ Printer
-        </button>
-        <button v-if="pos.draftMode" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="openBalances">Pending balances</button>
-        <button v-if="pos.isFnb" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/floor')">Tables</button>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/shift')">Shift</button>
-        <button v-if="pos.canManage" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/admin')">Settings</button>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="switchRegister">
-          Switch register
-        </button>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="signOut">Sign out</button>
+        <div class="topbar-actions">
+          <button
+            class="btn-icon"
+            :class="{ on: printerSettingsOpen }"
+            title="Printer settings"
+            aria-label="Printer settings"
+            @click="printerSettingsOpen = !printerSettingsOpen"
+          >
+            🖨️
+          </button>
+          <button v-if="pos.draftMode" class="btn btn-ghost" @click="openBalances">💳 Pending balances</button>
+          <button v-if="pos.isFnb" class="btn btn-ghost" @click="router.push('/floor')">🍽️ Tables</button>
+          <button class="btn btn-ghost" @click="router.push('/shift')">⏱️ Shift</button>
+          <button v-if="pos.canManage" class="btn btn-ghost" @click="router.push('/admin')">⚙️ Settings</button>
+          <button class="btn btn-ghost" @click="switchRegister">⇄ Switch register</button>
+          <span class="topbar-divider" />
+          <button class="btn-danger-ghost btn" @click="signOut">⏻ Sign out</button>
+        </div>
       </div>
 
       <div v-if="printerSettingsOpen" style="padding: 14px 22px; border-bottom: 1px solid var(--border-soft); background: var(--surface)">

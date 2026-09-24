@@ -1,22 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #0a0f1c;
-  --canvas: #060a14;
-  --surface: #121a2e;
-  --surface-2: #182140;
-  --surface-3: #1d2748;
-  --border: #253253;
-  --border-soft: #1a2340;
-  --text: #edf2fc;
-  --text-muted: #8c99b8;
-  --text-faint: #5b6a8c;
+  /* Slightly lifted off pure-black-navy, and surfaces step up more clearly
+     from one another — the flat, "abrupt" feel reported on a real device
+     was mostly a lack of elevation/contrast between layers, not the hue
+     itself, so this keeps the same dark-navy identity rather than
+     switching to a light theme. */
+  --bg: #0c1220;
+  --canvas: #080d18;
+  --surface: #151d33;
+  --surface-2: #1c2540;
+  --surface-3: #232e4d;
+  --border: #2b385c;
+  --border-soft: #202a48;
+  --text: #f2f5fc;
+  --text-muted: #97a3c4;
+  --text-faint: #64729a;
   --accent: #1776ff;
-  --accent-soft: #12294f;
+  --accent-soft: #14295a;
   --accent-text: #bfdbff;
-  --success: #1fae6b;
-  --warning: #e0972b;
-  --danger: #ef4444;
+  --success: #22c07a;
+  --warning: #eb9f34;
+  --danger: #f0555a;
+  --danger-soft: #3a1420;
   --cat-beverages: #22b8cf;
   --cat-bakery: #e0972b;
   --cat-mains: #ef6c4d;
@@ -25,6 +31,9 @@
   --radius-lg: 20px;
   --radius-md: 14px;
   --radius-sm: 10px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 20px rgba(2, 5, 14, 0.4);
+  --shadow-lift: 0 10px 30px rgba(2, 5, 14, 0.5);
   color-scheme: dark;
 }
 
@@ -72,12 +81,22 @@ h3,
   font-weight: 600;
   font-size: 14.5px;
   border-radius: var(--radius-sm);
+  /* 44px is the standard minimum comfortable touch target — the old
+     buttons (padding: 8px 14px at 12.5px text) measured well under that
+     on a phone, which is a big part of why the topbar read as cramped. */
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   transition:
     filter 0.15s ease,
-    transform 0.05s ease;
+    transform 0.05s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .btn:active {
-  transform: translateY(1px);
+  transform: scale(0.97);
 }
 .btn-primary {
   width: 100%;
@@ -85,6 +104,7 @@ h3,
   margin-top: 16px;
   background: var(--accent);
   color: #fff;
+  box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover {
   filter: brightness(1.08);
@@ -93,15 +113,61 @@ h3,
   background: var(--surface-3);
   color: var(--text-faint);
   cursor: not-allowed;
+  box-shadow: none;
 }
 .btn-ghost {
+  padding: 10px 16px;
   background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.btn-ghost:hover {
+  background: var(--surface-3);
+  border-color: var(--text-faint);
+}
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+/* A clearly separate, lower-emphasis treatment for destructive/exit
+   actions (sign out) so it doesn't blend into the row of ordinary ghost
+   buttons — same family, tinted red, only really "loud" on press. */
+.btn-danger-ghost {
+  padding: 10px 16px;
+  background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
-.btn-ghost:hover {
+.btn-danger-ghost:hover,
+.btn-danger-ghost:active {
+  background: var(--danger-soft);
+  color: #ffb3b6;
+  border-color: var(--danger);
+}
+/* A round icon-only button, used for the printer/settings/etc. glyphs in
+   the redesigned toolbars — compact but still a full touch target. */
+.btn-icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.btn-icon:hover {
+  background: var(--surface-3);
   color: var(--text);
-  border-color: var(--text-faint);
+}
+.btn-icon.on {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--accent);
 }
 
 /* ---------------- Sign-in ---------------- */
@@ -471,6 +537,38 @@ h3,
   font-weight: 600;
 }
 
+/* Replaces the old plain flex-wrap row of same-weight ghost buttons
+   (Printer / Settings / Shift / Switch register / Sign out all crammed
+   together, wrapping onto 2-3 messy lines on a phone) with a single
+   horizontally-scrollable strip. On a narrow screen it drops onto its
+   own line below the brand/search (flex-basis below forces that within
+   the parent's flex-wrap), then scrolls sideways instead of wrapping —
+   a standard, low-friction mobile toolbar pattern. */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1 1 100%;
+  padding-bottom: 2px;
+}
+.topbar-actions::-webkit-scrollbar {
+  display: none;
+}
+.topbar-actions > * {
+  flex-shrink: 0;
+}
+.topbar-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 26px;
+  background: var(--border);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
 .cat-rail {
   display: flex;
   gap: 8px;
@@ -752,16 +850,37 @@ h3,
   font-family: 'Outfit', sans-serif;
 }
 
-@media (max-width: 820px) {
+@media (max-width: 900px) {
+  /* Matches .order-shell's own breakpoint below, so .cart's docked
+     mobile styling (shared by both screens) kicks in at the same width
+     either place it's used. The cart used to be reachable only by
+     scrolling past the ENTIRE
+     item list first, because .terminal switched to height:auto here —
+     with no bounded height, the item grid's own overflow-y:auto never
+     kicked in and the whole page just grew tall instead. Keeping
+     height:100vh on mobile too means the item grid and the cart each
+     scroll inside their own fixed-size pane, and the cart — with its
+     totals and Pay button — is always partly on-screen, docked at the
+     bottom, instead of buried below every item tile. */
   .terminal {
     flex-direction: column;
-    height: auto;
-    min-height: 100vh;
+    height: 100vh;
+  }
+  .term-main {
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+  .item-grid {
+    min-height: 0;
   }
   .cart {
     width: 100%;
+    max-height: 46vh;
+    flex-shrink: 0;
     border-left: 0;
     border-top: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-lift);
   }
   .regselect {
     padding: 28px 18px;
@@ -817,7 +936,23 @@ h3,
 .simple-table th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
 .simple-table td.num, .simple-table th.num { text-align: right; }
 .order-shell { display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
-@media (max-width: 900px) { .order-shell { grid-template-columns: 1fr; height: auto; } }
+@media (max-width: 900px) {
+  /* Same fix as .terminal above, and for the same reason: this is the
+     "cart shows all the way down after the item list" screen the fix
+     was specifically reported against. Reuses .cart's docked mobile
+     styling from the block above since both screens share that class. */
+  .order-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    height: 100vh;
+  }
+  .order-shell .term-main {
+    min-height: 0;
+  }
+  .order-shell .item-grid {
+    min-height: 0;
+  }
+}
 .sel-line { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }
 .sel-line input[type='number'] { width: 70px; }
 
