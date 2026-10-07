@@ -65,9 +65,15 @@ def set_rounding(enabled, step=None):
 		# 1 is stored as 0: ERPNext's own "whole unit" value
 		frappe.db.set_value("Currency", currency, "smallest_currency_fraction_value", 0 if step == 1.0 else step)
 
+	# Not gd.save(): that re-validates the whole form, and tenants provisioned without
+	# ERPNext's setup wizard have no Current Fiscal Year, so it fails as mandatory.
+	# Set the switch and run the same per-doctype default update its on_update does.
+	disabled = 0 if enabled else 1
+	frappe.db.set_single_value("Global Defaults", "disable_rounded_total", disabled)
+	frappe.db.set_default("disable_rounded_total", disabled)
 	gd = frappe.get_single("Global Defaults")
-	gd.disable_rounded_total = 0 if enabled else 1
-	gd.save(ignore_permissions=True)
+	gd.disable_rounded_total = disabled
+	gd.toggle_rounded_total()
 	for profile in frappe.get_all("POS Profile", pluck="name"):
 		frappe.db.set_value("POS Profile", profile, "disable_rounded_total", 0 if enabled else 1)
 	frappe.db.commit()

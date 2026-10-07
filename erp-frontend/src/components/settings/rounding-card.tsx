@@ -32,8 +32,13 @@ export function RoundingCard() {
       load((await frappe.call('custom_erp.api.rounding.set_rounding', { enabled: enabled ? 1 : 0, step })) as Rounding);
       setMsg({ ok: true, text: 'Saved. New bills and invoices use this from now on.' });
     } catch (e: unknown) {
-      const err = e as { response?: { status?: number } };
-      setMsg({ ok: false, text: err.response?.status === 403 ? 'Only an administrator can change this.' : 'Could not save the setting.' });
+      const err = e as { response?: { status?: number; data?: { _server_messages?: string } } };
+      let text = err.response?.status === 403 ? 'Only an administrator can change this.' : 'Could not save the setting.';
+      try {
+        const m = JSON.parse(err.response?.data?._server_messages || '[]') as string[];
+        if (m.length) text = String((JSON.parse(m[0]) as { message?: string }).message || text).replace(/<[^>]*>/g, '');
+      } catch { /* keep the generic text */ }
+      setMsg({ ok: false, text });
     } finally {
       setBusy(false);
     }

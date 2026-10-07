@@ -727,6 +727,12 @@ variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and re
   `disable_rounded_total` and the company currency's `smallest_currency_fraction_value` (0 = whole unit) in step,
   and the POS stamps it on every invoice it builds (`rounding.apply_to`). UI: ERP Settings → Bill rounding, and
   POS app Settings → Hours & kitchen. Changing it affects new documents only.
+  It does NOT `save()` Global Defaults: tenants provisioned without the setup wizard have no Current Fiscal Year,
+  so a full save fails as mandatory (seen as HTTP 417 on 197349). It sets the field + default and calls
+  `toggle_rounded_total()` itself.
+- **ERP rebuilds: keep the old build's `/_next/static` chunks.** Browser tabs open during a rebuild still request the
+  old hashed chunks (`ChunkLoadError ... 400/404`). After `npm run build`, `cp -rn .next-old-*/static/. .next/static/`
+  before `pm2 restart` and deleting `.next-old-*`.
 
 ## Incident log
 
