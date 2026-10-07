@@ -17,7 +17,7 @@ const SECTION_ICONS: Record<string, typeof Wallet> = {
 
 // XentraERP's own reports (not ERPNext reports), listed first in their section.
 const CUSTOM_REPORTS = [
-  { name: 'POS End of Day', section: 'Point of Sale', href: '/reports/pos-end-of-day', subtitle: 'Sales, payments, shifts and cash-up for one business day' },
+  { name: 'POS End of Day', section: 'Point of Sale', href: '/reports/pos-end-of-day', subtitle: 'Sales, payments, shifts and cash-up for one business day', module: 'pos' },
 ];
 
 interface Entry { name: string; section: string; href: string; subtitle: string }
@@ -32,7 +32,9 @@ export default function ReportsPage() {
     const standard = REPORTS
       .filter((r) => !permitted || permitted.has(r.name))
       .map((r) => ({ name: r.name, section: r.section, href: `/reports/${r.slug}`, subtitle: r.ref_doctype }));
-    return [...CUSTOM_REPORTS, ...standard];
+    // Only what the tenant's package includes (standard ones are already filtered server-side).
+    const custom = CUSTOM_REPORTS.filter((r) => !ctx?.modules || ctx.modules.includes(r.module));
+    return [...custom, ...standard];
   }, [ctx]);
 
   const q = query.trim().toLowerCase();

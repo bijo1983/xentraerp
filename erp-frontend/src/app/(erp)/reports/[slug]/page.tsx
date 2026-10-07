@@ -82,10 +82,10 @@ function ReportRunner({ report, tenantCode, urlFilters }: { report: ReportDef; t
     setRunning(true);
     setError(null);
     try {
-      const res = (await frappe.call('xentraerp.desk.query_report.run', {
+      // Gated by the tenant's subscription, then Frappe's own query_report.run.
+      const res = (await frappe.call('custom_erp.api.reports.run_report', {
         report_name: report.name,
         filters: JSON.stringify(filtersForRun(report, vals)),
-        ignore_prepared_report: 1,
       })) as Record<string, unknown>;
       if (seq !== runSeq.current) return;
       const columns = normalizeColumns((res.columns as unknown[]) || []).filter((c) => c.fieldtype !== 'Hidden');

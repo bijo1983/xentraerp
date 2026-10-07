@@ -41,41 +41,31 @@ def _validate_pin_format(pin: str):
 		frappe.throw(f"PIN must be {PIN_MIN_LENGTH}-{PIN_MAX_LENGTH} digits (numbers only).")
 
 
-def _tenant_has_module(module_code: str) -> bool:
-	"""Ask the control-plane site whether this tenant's subscription
-	includes `module_code`. custom_erp.api.tenants.get_enabled_modules
-	lives on the control-plane site's database — a different site/database
-	entirely from wherever this function runs — so this is a plain
-	internal HTTP call to the control-plane site (same box, loopback),
-	not a cross-site frappe.get_doc (in-process site-switching has already
-	proven unreliable elsewhere in this app, see provisioning.py).
+def tenant_modules() -> list[str] | None:
+	"""The module codes this tenant's subscription includes, from the control-plane
+	site's XentraERP Tenant record (custom_erp.api.tenants.get_enabled_modules).
+	That record lives in a different site/database, so this is a plain internal
+	HTTP call to the control-plane site (same box, loopback) — not a cross-site
+	frappe.get_doc (in-process site-switching proved unreliable, see provisioning.py).
+	Cached for a minute per site.
 
-	FAILS OPEN (returns True) whenever the check can't actually be
-	performed — no control-plane host configured, or the request fails —
-	because a broken check should never silently lock every tenant out of
-	login. It still logs an error either way, so "this isn't actually
-	enforced yet" is visible in the error log rather than silently true.
-
-	To activate this gate, set XENTRAERP_CONTROL_PLANE_HOST (in
-	site_config.json or as an env var for the bench worker process) to
-	the control-plane site's hostname (e.g. erp.badmintonbooking.com per
-	CLAUDE.md, if that's still the control-plane site in this deployment —
-	confirm before setting it). Until that's set, POS (and any future
-	module gated the same way) is NOT actually restricted by subscription,
-	regardless of enabled_modules — every tenant can use it.
+	Returns None when it can't be determined — no `control_plane_host` configured
+	(site config or XENTRAERP_CONTROL_PLANE_HOST) or the request fails. Callers FAIL
+	OPEN on None: a broken check must never lock every tenant out. It is logged.
 	"""
+	cached = frappe.cache().get_value("xentraerp_tenant_modules")
+	if cached is not None:
+		return cached
 	control_plane_host = frappe.conf.get("control_plane_host") or os.environ.get("XENTRAERP_CONTROL_PLANE_HOST")
 	if not control_plane_host:
 		frappe.log_error(
 			title="XentraERP module entitlement check not configured",
 			message=(
-				f"Checked whether this tenant has the '{module_code}' module, but "
-				"XENTRAERP_CONTROL_PLANE_HOST isn't set — entitlement is NOT "
-				"enforced; every tenant can use this module regardless of "
-				"subscription until this is configured."
+				"control_plane_host isn't set — module entitlement is NOT enforced; every "
+				"tenant can use every module regardless of subscription until it is configured."
 			),
 		)
-		return True
+		return None
 
 	tenant_code = frappe.local.site.split(".")[0]
 	try:
@@ -88,11 +78,18 @@ def _tenant_has_module(module_code: str) -> bool:
 			timeout=3,
 		)
 		resp.raise_for_status()
-		enabled = resp.json().get("message") or []
-		return module_code in enabled
+		enabled = list(resp.json().get("message") or [])
 	except Exception:
 		frappe.log_error(title="XentraERP module entitlement check failed")
-		return True
+		return None
+	frappe.cache().set_value("xentraerp_tenant_modules", enabled, expires_in_sec=60)
+	return enabled
+
+
+def _tenant_has_module(module_code: str) -> bool:
+	"""Whether this tenant's subscription includes `module_code` (fails open, see tenant_modules)."""
+	enabled = tenant_modules()
+	return True if enabled is None else module_code in enabled
 
 
 def _throttle_key() -> str:

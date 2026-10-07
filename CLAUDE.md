@@ -734,6 +734,28 @@ variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and re
   old hashed chunks (`ChunkLoadError ... 400/404`). After `npm run build`, `cp -rn .next-old-*/static/. .next/static/`
   before `pm2 restart` and deleting `.next-old-*`.
 
+## Subscription gating & new-tenant defaults (added 2026-10-07)
+
+- **Reports follow the tenant's package**: `custom_erp.api.pos.tenant_modules()` reads `XentraERP Tenant.enabled_modules`
+  from the control plane (internal HTTP, cached 60s, **fails open** — None = unknown = everything). `reports.report_context`
+  only lists reports whose module is in the package (`reports.MODULE_OF`: Accounts→accounting, Selling/CRM→selling,
+  Stock→inventory, Support→support/maintenance, POS Register & Sales Payment Summary→pos, ...), and the frontend runs
+  reports through `reports.run_report`, which refuses a report outside the package before calling Frappe's
+  `query_report.run`. POS End of Day shows only with `pos`. Module codes are `xentraerp_tenant.ALL_MODULES`
+  (note: `inventory`, not `stock`).
+- **New tenants** (`provisioning.run_default_setup`, idempotent, also via the admin "Manage" re-run):
+  `_ensure_fiscal_year()` creates/uses a Fiscal Year covering today and sets Global Defaults' Current Fiscal Year (the
+  Setup Wizard normally does; without it Global Defaults can't be saved); bill rounding is set **off** when the company
+  is first created (`rounding.set_rounding_off_for_new_tenant`) — a re-run never overrides the tenant's own choice; new
+  POS Profiles follow the tenant setting (`hooks.py` POS Profile before_insert). Tenant admin roles (incl. Quality
+  Manager / Support Team / Maintenance Manager) come from `tenants.TENANT_ADMIN_ROLES`. Reports catalog/UI is shared code.
+- **POS location warehouse**: a group warehouse ("All Warehouses") can't take stock entries ("Group node warehouse is not
+  allowed to select for transactions" — broke billing a stock item on 197349). `save_location` refuses one and
+  `pos_core.location_warehouse()` ignores one (falls back to the register's warehouse).
+- **Tenant 197349 data still to fix (DB writes were blocked for the assistant)**: Global Defaults Current Fiscal Year is
+  empty (its only FY is named `20226`, covering 2026); locations SEHLA and 1001 point at the group "All Warehouses - JC";
+  Cola and Blue Pen are still stock items with zero stock.
+
 ## Incident log
 
 - **2026-09-13, ~11:33 AM**: entire `innovegic-bench` supervisor group (Redis

@@ -55,7 +55,10 @@ export interface ReportContext {
   fiscal_year: string;
   year_start: string;
   year_end: string;
+  /** Standard reports this user may run within the tenant's subscription. */
   permitted: string[];
+  /** The subscription's module codes; null when unknown (everything is offered). */
+  modules: string[] | null;
 }
 
 let contextPromise: Promise<ReportContext> | null = null;

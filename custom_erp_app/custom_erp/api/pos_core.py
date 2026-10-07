@@ -259,6 +259,15 @@ def location_of(pos_profile: str):
 	return frappe.get_doc("XentraERP POS Location", name[0][0]) if name else None
 
 
+def location_warehouse(loc) -> str | None:
+	"""The location's warehouse, if it can take stock. A group warehouse (e.g. "All
+	Warehouses") can't — ERPNext refuses stock entries against it — so it is ignored and
+	the register's own warehouse applies."""
+	if not loc or not loc.warehouse:
+		return None
+	return None if cint(frappe.db.get_value("Warehouse", loc.warehouse, "is_group")) else loc.warehouse
+
+
 def location_code(loc) -> str | None:
 	return loc.location_code if loc else None
 
@@ -401,6 +410,8 @@ def save_location(location_code: str, location_name: str, cost_center: str | Non
 		val = {"cost_center": cost_center, "warehouse": warehouse}[field]
 		if val and not frappe.db.exists(dt, val):
 			frappe.throw(f"No such {dt.lower()}: {val}")
+	if warehouse and cint(frappe.db.get_value("Warehouse", warehouse, "is_group")):
+		frappe.throw(f"'{warehouse}' is a group of warehouses. Choose the actual warehouse this location sells from (e.g. Stores).")
 	values = {"location_name": location_name.strip(), "cost_center": cost_center or None, "warehouse": warehouse or None,
 	          "disabled": cint(bool(cint(disabled))), "profiles": [{"pos_profile": pr} for pr in profiles]}
 	exists = frappe.db.exists("XentraERP POS Location", code)
@@ -765,10 +776,11 @@ def _profile_invoice(profile, lines, customer=None, business_dt=None):
 		d["cost_center"] = loc.cost_center
 		for row in d["items"]:
 			row["cost_center"] = loc.cost_center
-	if loc and loc.warehouse:
-		d["set_warehouse"] = loc.warehouse
+	loc_wh = location_warehouse(loc)
+	if loc_wh:
+		d["set_warehouse"] = loc_wh
 		for row in d["items"]:
-			row["warehouse"] = loc.warehouse
+			row["warehouse"] = loc_wh
 	if business_dt:
 		# Post to the business day, at the real time of day.
 		d.update({"set_posting_time": 1, "posting_date": str(business_dt), "posting_time": now_datetime().strftime("%H:%M:%S")})
@@ -955,7 +967,7 @@ def _result(name, doctype, profile, inv, due, paid, change, business_dt, legs, r
 
 def _draft_invoice_doc(profile, lines, customer, business_dt):
 	loc = location_of(profile.name)
-	warehouse = (loc.warehouse if loc and loc.warehouse else None) or profile.warehouse
+	warehouse = location_warehouse(loc) or profile.warehouse
 	cost_center = (loc.cost_center if loc and loc.cost_center else None) or profile.cost_center
 	items = []
 	for l in lines:

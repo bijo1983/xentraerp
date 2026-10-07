@@ -36,6 +36,20 @@ def apply_to(doc: dict, doctype: str):
 		doc["disable_rounded_total"] = 0 if is_enabled() else 1
 
 
+def profile_follows_tenant(doc, method=None):
+	"""POS Profile before_insert: start with the tenant's rounding setting."""
+	doc.disable_rounded_total = 0 if is_enabled() else 1
+
+
+def set_rounding_off_for_new_tenant():
+	"""Provisioning default: bill the exact amount (no rounding)."""
+	frappe.db.set_single_value("Global Defaults", "disable_rounded_total", 1)
+	frappe.db.set_default("disable_rounded_total", 1)
+	gd = frappe.get_single("Global Defaults")
+	gd.disable_rounded_total = 1
+	gd.toggle_rounded_total()
+
+
 @frappe.whitelist()
 def get_rounding():
 	currency = _company_currency()
