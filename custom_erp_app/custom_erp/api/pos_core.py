@@ -27,6 +27,8 @@ from datetime import timedelta
 import frappe
 from frappe.utils import add_days, cint, flt, get_datetime, get_time, getdate, now_datetime
 
+from custom_erp.api import rounding
+
 SETTINGS = "XentraERP POS Settings"
 MODES = ("Retail", "F&B")
 CHECKOUT_DOCS = ("POS Invoice", "Draft Invoice + Receipt")
@@ -770,6 +772,7 @@ def _profile_invoice(profile, lines, customer=None, business_dt=None):
 	if business_dt:
 		# Post to the business day, at the real time of day.
 		d.update({"set_posting_time": 1, "posting_date": str(business_dt), "posting_time": now_datetime().strftime("%H:%M:%S")})
+	rounding.apply_to(d, "POS Invoice")
 	return d
 
 
@@ -987,6 +990,7 @@ def _draft_invoice_doc(profile, lines, customer, business_dt):
 		d["cost_center"] = cost_center
 	if profile.taxes_and_charges:
 		d["taxes_and_charges"] = profile.taxes_and_charges
+	rounding.apply_to(d, "Sales Invoice")
 	return frappe.get_doc(d)
 
 

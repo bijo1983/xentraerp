@@ -120,8 +120,30 @@ const removeTable = (t: Table) =>
     await loadTables()
   })
 
+// --- bill rounding (tenant-wide: ERPNext rounded totals, custom_erp.api.rounding)
+interface Rounding { enabled: boolean; currency: string; step: number; steps: number[] }
+const rounding = ref<Rounding | null>(null)
+const roundOn = ref(false)
+const roundStep = ref(1)
+const loadRounding = () =>
+  run(async () => {
+    const r = await api.call<Rounding>('custom_erp.api.rounding.get_rounding')
+    rounding.value = r
+    roundOn.value = r.enabled
+    roundStep.value = r.step
+  })
+const saveRounding = () =>
+  run(async () => {
+    const r = await api.call<Rounding>('custom_erp.api.rounding.set_rounding', { enabled: roundOn.value ? 1 : 0, step: roundStep.value })
+    rounding.value = r
+    roundOn.value = r.enabled
+    roundStep.value = r.step
+  }, 'Saved — new bills use this from now on')
+const stepLabel = (v: number) => (v === 1 ? `whole ${rounding.value?.currency || 'unit'}` : `${v} ${rounding.value?.currency || ''}`)
+
 function openTab(t: Tab) {
   tab.value = t
+  if (t === 'hours') loadRounding()
   if (t === 'locations') loadLocations()
   else if (t === 'tables') loadTables()
   else if (t === 'menu') loadMenu()
@@ -261,6 +283,16 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
         <b>POS Invoice</b> — one submitted POS Invoice with the payments inside it; must be paid in full.<br />
         <b>Draft Invoice + Receipt</b> — checkout makes a Draft Sales Invoice; when payment is finalized it is submitted and a receipt (Payment Entry) is created against it for each payment. A <b>partial payment</b> is allowed: the invoice becomes <b>Partly Paid</b> and the cashier finishes billing later from <i>Pending balances</i> (retail) or the table (F&amp;B).
       </p>
+    </div>
+    <div v-if="tab === 'hours'" class="card">
+      <h4>Bill rounding</h4>
+      <label class="row"><input v-model="roundOn" type="checkbox" :disabled="busy || !rounding" /> Round bill totals
+        <select v-if="roundOn" v-model.number="roundStep" class="fld" :disabled="busy">
+          <option v-for="v in rounding?.steps || []" :key="v" :value="v">to {{ stepLabel(v) }}</option>
+        </select>
+        <button class="btn btn-primary mini" :disabled="busy || !rounding || (rounding.enabled === roundOn && (!roundOn || rounding.step === roundStep))" @click="saveRounding">Save</button>
+      </label>
+      <p style="color: var(--text-muted)">Off bills the exact amount. On rounds every new bill's total to the chosen step — e.g. 2.345 to 0.05 is 2.350. This is the organization-wide setting, so it also applies to sales and purchase documents in the ERP.</p>
     </div>
     <div v-if="tab === 'hours'" class="card">
       <h4>Kitchen &amp; order notes</h4>

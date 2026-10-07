@@ -715,8 +715,12 @@ variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and re
   to a whole unit when rounding is on and the currency has no smallest-fraction value: tenant 197349 has BHD with
   `smallest_currency_fraction_value = 0` and `disable_rounded_total = 0`, so 2.500 was billed as 2.000). Gross
   sales therefore didn't match money received. Shift totals, the EOD report, and open balances now use
-  `pos_core.BILLED` (rounded total when set) and the EOD shows the rounding adjustment. The rounding setting
-  itself was left as is.
+  `pos_core.BILLED` (rounded total when set) and the EOD shows the rounding adjustment.
+- **Bill rounding is a tenant setting** (`custom_erp/api/rounding.py`, `get_rounding`/`set_rounding`, System
+  Manager): off, or on to a step (0.005 … 1). It keeps Global Defaults `disable_rounded_total`, every POS Profile's
+  `disable_rounded_total` and the company currency's `smallest_currency_fraction_value` (0 = whole unit) in step,
+  and the POS stamps it on every invoice it builds (`rounding.apply_to`). UI: ERP Settings → Bill rounding, and
+  POS app Settings → Hours & kitchen. Changing it affects new documents only.
 
 ## Incident log
 
