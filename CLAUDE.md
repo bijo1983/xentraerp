@@ -575,6 +575,9 @@ error logs) will show it happening.
 `pos.xentraerp.net` = `scripts/nginx-pos.xentraerp.net.conf`; static Vue build from
 `/home/xentraerp/pos-frontend/dist`, `/api/*` proxied to the same Next.js process on `:8083`). Rebuild with
 `cd pos-frontend && npm ci && npm run build` — no restart needed, nginx serves the new `dist` directly.
+**Vite needs Node 22** (`/root/.nvm/versions/node/v22.23.1/bin`; under v18 it crashes at startup). The POS is
+used live, so build beside it and swap: `npx vite build --outDir dist-new --emptyOutDir`, and only if that
+succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tail` still "succeeds" in a `&&` chain).
 
 - **Backend code is live-linked**: `bench/apps/custom_erp/custom_erp` is a symlink into
   `/home/xentraerp/custom_erp_app`, so whatever is checked out there IS production. Never leave it on a
