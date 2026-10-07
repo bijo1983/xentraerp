@@ -249,7 +249,7 @@ async function run(fn: () => Promise<void>) {
         <button v-for="z in zones" :key="z" class="cat-chip" :class="{ active: zone === z }" @click="zone = z">{{ z }}</button>
       </div>
       <div class="legend">
-        <span><i style="background: #8b9cff" />Available</span><span><i style="background: #14826e" />Reserved</span><span><i style="background: #e8622a" />On Dine</span>
+        <span><i style="background: var(--status-available)" />Available</span><span><i style="background: var(--status-reserved)" />Reserved</span><span><i style="background: var(--status-occupied)" />On Dine</span>
       </div>
       <p v-if="error" class="error-box">{{ error }}</p>
       <p v-if="loading" style="color: var(--text-muted)">Loading tables…</p>

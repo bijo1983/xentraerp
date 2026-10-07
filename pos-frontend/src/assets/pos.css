@@ -1,40 +1,54 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-
 :root {
-  /* Slightly lifted off pure-black-navy, and surfaces step up more clearly
-     from one another — the flat, "abrupt" feel reported on a real device
-     was mostly a lack of elevation/contrast between layers, not the hue
-     itself, so this keeps the same dark-navy identity rather than
-     switching to a light theme. */
-  --bg: #0c1220;
-  --canvas: #080d18;
-  --surface: #151d33;
-  --surface-2: #1c2540;
-  --surface-3: #232e4d;
-  --border: #2b385c;
-  --border-soft: #202a48;
-  --text: #f2f5fc;
-  --text-muted: #97a3c4;
-  --text-faint: #64729a;
-  --accent: #1776ff;
-  --accent-soft: #14295a;
-  --accent-text: #bfdbff;
-  --success: #22c07a;
-  --warning: #eb9f34;
-  --danger: #f0555a;
-  --danger-soft: #3a1420;
-  --cat-beverages: #22b8cf;
-  --cat-bakery: #e0972b;
-  --cat-mains: #ef6c4d;
-  --cat-desserts: #d6669e;
-  --cat-retail: #8b7cf6;
+  /* Light "modern indigo" theme — cool slate-tinted neutrals rather than
+     stark white, so cards/panels still read as distinct layers without
+     reaching back for a dark palette. */
+  --canvas: #f4f6fb;
+  --bg: #eef1f8;
+  --surface: #ffffff;
+  --surface-2: #f6f8fc;
+  --surface-3: #eaeef7;
+  --border: #dde3f0;
+  --border-soft: #e8ecf5;
+  --text: #161b2e;
+  --text-muted: #5b6480;
+  --text-faint: #8d96b0;
+  --accent: #4f46e5;
+  --accent-soft: #eef0ff;
+  --accent-text: #4338ca;
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --success-text: #15803d;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --warning-text: #92400e;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --danger-text: #b91c1c;
+  --cat-beverages: #0891b2;
+  --cat-bakery: #b45309;
+  --cat-mains: #c2410c;
+  --cat-desserts: #be185d;
+  --cat-retail: #6d28d9;
+  /* 3 occupancy concepts (available/reserved/occupied), each with a
+     soft-tint + text pair, referenced consistently at every call site
+     (floor-plan tiles, chairs, table cards, guest time badges) instead
+     of ad hoc one-off colors per call site. */
+  --status-available: #15a46e;
+  --status-available-soft: #e2f8ee;
+  --status-available-text: #0f7a52;
+  --status-reserved: #7c5cfc;
+  --status-reserved-soft: #efeaff;
+  --status-reserved-text: #5b3dd1;
+  --status-occupied: #f0653a;
+  --status-occupied-soft: #feeadf;
+  --status-occupied-text: #c2410c;
   --radius-lg: 20px;
   --radius-md: 14px;
   --radius-sm: 10px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 6px 20px rgba(2, 5, 14, 0.4);
-  --shadow-lift: 0 10px 30px rgba(2, 5, 14, 0.5);
-  color-scheme: dark;
+  --shadow-sm: 0 1px 2px rgba(31, 41, 68, 0.06);
+  --shadow-md: 0 8px 24px rgba(31, 41, 68, 0.08);
+  --shadow-lift: 0 20px 48px rgba(31, 41, 68, 0.14);
+  color-scheme: light;
 }
 
 * {
@@ -65,7 +79,7 @@ h1,
 h2,
 h3,
 .display {
-  font-family: 'Outfit', system-ui, sans-serif;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   text-wrap: balance;
 }
 
@@ -143,7 +157,7 @@ h3,
 .btn-danger-ghost:hover,
 .btn-danger-ghost:active {
   background: var(--danger-soft);
-  color: #ffb3b6;
+  color: var(--danger-text);
   border-color: var(--danger);
 }
 /* A round icon-only button, used for the printer/settings/etc. glyphs in
@@ -178,17 +192,30 @@ h3,
   justify-content: center;
   padding: 40px 20px;
   background:
-    radial-gradient(680px 420px at 18% -10%, var(--accent-soft), transparent 60%),
-    radial-gradient(600px 380px at 100% 100%, #10203f, transparent 55%),
-    var(--bg);
+    radial-gradient(900px 600px at 12% -8%, rgba(79, 70, 229, 0.16), transparent 60%),
+    radial-gradient(760px 620px at 100% 8%, rgba(124, 92, 252, 0.14), transparent 55%),
+    radial-gradient(640px 500px at 50% 115%, rgba(21, 164, 110, 0.08), transparent 60%),
+    var(--canvas);
 }
 .signin-card {
+  position: relative;
   width: 100%;
   max-width: 380px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 36px 32px 32px;
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+}
+.signin-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), #7c5cfc);
 }
 .signin-mark {
   display: flex;
@@ -201,20 +228,21 @@ h3,
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(155deg, var(--accent), #0b4fc4);
+  background: linear-gradient(135deg, var(--accent), #3730a3);
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   color: #fff;
   font-size: 16px;
 }
 .signin-mark .word {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
   font-size: 17px;
-  color: #fff;
+  color: var(--text);
 }
 .signin-mark .word span {
   color: var(--accent-text);
@@ -266,7 +294,7 @@ h3,
   font-size: 19px;
   text-align: center;
   margin: 0 0 4px;
-  color: #fff;
+  color: var(--text);
   font-weight: 600;
 }
 .signin .sub {
@@ -281,8 +309,8 @@ h3,
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: #fff;
-  font-family: 'Outfit', sans-serif;
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 17px;
   letter-spacing: 0.12em;
   text-align: center;
@@ -299,7 +327,7 @@ h3,
 }
 .field:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .pin-dots {
@@ -330,14 +358,19 @@ h3,
   padding: 17px 0;
   font-size: 19px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
+  transition: transform 0.05s ease, background 0.15s ease;
 }
 .keypad button:hover {
   background: var(--surface-3);
+}
+.keypad button:active {
+  transform: scale(0.96);
 }
 .keypad button.aux {
   font-size: 12.5px;
@@ -348,10 +381,10 @@ h3,
 .error-box {
   margin-bottom: 16px;
   padding: 11px 13px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
-  color: #fca5a5;
+  color: var(--danger-text);
   font-size: 13px;
 }
 
@@ -378,12 +411,12 @@ h3,
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: linear-gradient(155deg, #8b7cf6, #4c3fd6);
+  background: linear-gradient(135deg, var(--cat-retail), #5b21b6);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 15px;
 }
@@ -396,11 +429,11 @@ h3,
 .whoami .name {
   font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 .regselect h2 {
   font-size: 20px;
-  color: #fff;
+  color: var(--text);
   margin: 0 0 4px;
 }
 .regselect .sub2 {
@@ -442,7 +475,7 @@ h3,
 }
 .reg-card .name {
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   font-size: 15px;
   margin-bottom: 3px;
 }
@@ -475,16 +508,16 @@ h3,
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   font-size: 14.5px;
 }
 .term-topbar .brand .glyph {
   width: 24px;
   height: 24px;
   border-radius: 7px;
-  background: linear-gradient(155deg, var(--accent), #0b4fc4);
+  background: linear-gradient(135deg, var(--accent), #3730a3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -511,7 +544,7 @@ h3,
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 9px 14px 9px 34px;
-  color: #fff;
+  color: var(--text);
   font: inherit;
   font-size: 13.5px;
   outline: none;
@@ -533,7 +566,7 @@ h3,
   text-align: right;
 }
 .term-topbar .shift b {
-  color: #fff;
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -598,11 +631,11 @@ h3,
 }
 .cat-chip.active {
   background: var(--surface-3);
-  color: #fff;
+  color: var(--text);
   border-color: var(--text-faint);
 }
 .cat-chip:hover {
-  color: #fff;
+  color: var(--text);
 }
 
 .item-grid {
@@ -644,9 +677,9 @@ h3,
   color: var(--cat, var(--accent-text));
 }
 .item-tile .nm {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   font-size: 14px;
   line-height: 1.25;
 }
@@ -654,6 +687,7 @@ h3,
   font-size: 14px;
   font-weight: 600;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .cart {
@@ -677,7 +711,7 @@ h3,
 .cart-head h3 {
   margin: 0;
   font-size: 15px;
-  color: #fff;
+  color: var(--text);
 }
 .cart-head .clear {
   font-size: 12px;
@@ -737,7 +771,7 @@ h3,
 .line .info .nm {
   font-size: 13.5px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
 }
 .line .info .unit {
   font-size: 11.5px;
@@ -767,16 +801,18 @@ h3,
 .stepper .qty {
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   width: 16px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .line .amt {
   font-size: 13.5px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   flex-shrink: 0;
   padding-top: 1px;
+  font-variant-numeric: tabular-nums;
 }
 
 .cart-totals {
@@ -792,14 +828,17 @@ h3,
 }
 .trow.grand {
   font-size: 19px;
-  color: #fff;
+  color: var(--text);
   font-weight: 700;
   padding-top: 10px;
   margin-top: 6px;
   border-top: 1px dashed var(--border);
 }
 .trow.grand .val {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
+}
+.trow .val {
+  font-variant-numeric: tabular-nums;
 }
 
 .pay-methods {
@@ -830,7 +869,7 @@ h3,
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(155deg, var(--success), #157a4c);
+  background: linear-gradient(135deg, var(--success), #0e7c3f);
   border: 0;
   border-radius: var(--radius-md);
   display: flex;
@@ -847,7 +886,7 @@ h3,
   cursor: not-allowed;
 }
 .charge-btn .r {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Space Grotesk', sans-serif;
 }
 
 @media (max-width: 900px) {
@@ -888,7 +927,7 @@ h3,
 }
 
 /* ---- POS modes, shifts, F&B (added) ------------------------------------ */
-.modal-back { position: fixed; inset: 0; background: rgba(3, 6, 14, 0.7); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+.modal-back { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
 .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; width: min(560px, 100%); max-height: 90vh; overflow: auto; }
 .fld { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 9px 10px; font: inherit; min-width: 0; }
 .fld:focus { outline: 2px solid var(--accent); }
@@ -907,14 +946,14 @@ h3,
 .seg button { background: transparent; border: 0; color: var(--text-muted); padding: 9px 20px; font: inherit; cursor: pointer; }
 .seg button.on { background: var(--accent); color: #fff; }
 .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; background: var(--surface-3); color: var(--text-muted); }
-.pill.ok { background: rgba(31, 174, 107, 0.15); color: var(--success); }
-.pill.warn { background: rgba(224, 151, 43, 0.15); color: var(--warning); }
-.pill.bad { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+.pill.ok { background: var(--success-soft); color: var(--success-text); }
+.pill.warn { background: var(--warning-soft); color: var(--warning-text); }
+.pill.bad { background: var(--danger-soft); color: var(--danger-text); }
 .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .table-card { text-align: left; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 14px; color: var(--text); cursor: pointer; font: inherit; min-height: 96px; }
-.table-card.Available { border-color: var(--success); }
-.table-card.Occupied { border-color: var(--accent); background: var(--accent-soft); }
-.table-card.Reserved { border-color: var(--warning); }
+.table-card.Available { border-color: var(--status-available); }
+.table-card.Occupied { border-color: var(--status-occupied); background: var(--status-occupied-soft); }
+.table-card.Reserved { border-color: var(--status-reserved); }
 .table-card.Disabled { opacity: 0.4; cursor: not-allowed; }
 .table-card .tn { font-weight: 700; font-size: 17px; }
 .table-card .ts { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
@@ -929,7 +968,7 @@ h3,
 .kot .kn { font-size: 12px; color: var(--warning); display: block; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 .stat { background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; }
-.stat .v { font-size: 22px; font-weight: 700; }
+.stat .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat .l { font-size: 11.5px; color: var(--text-muted); }
 .simple-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .simple-table th, .simple-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border-soft); }
@@ -966,9 +1005,9 @@ h3,
 .gtab .n { display: inline-block; margin-left: 4px; min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; }
 .gcard { display: flex; gap: 10px; align-items: stretch; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 12px; padding: 10px; margin-bottom: 8px; cursor: pointer; text-align: left; width: 100%; color: var(--text); font: inherit; }
 .gcard .gtime { min-width: 64px; border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; font-weight: 600; padding: 6px; }
-.gtime.Booked { background: rgba(20, 130, 110, 0.18); color: #4fd1b5; }
-.gtime.Seated, .gtime.Open { background: rgba(232, 98, 42, 0.18); color: #ff9a6b; }
-.gtime.Free { background: rgba(120, 140, 255, 0.15); color: #9fb0ff; }
+.gtime.Booked { background: var(--status-reserved-soft); color: var(--status-reserved-text); }
+.gtime.Seated, .gtime.Open { background: var(--status-occupied-soft); color: var(--status-occupied-text); }
+.gtime.Free { background: var(--status-available-soft); color: var(--status-available-text); }
 .gcard .gmeta { font-size: 12px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 .plan-wrap { padding: 20px 26px; }
 .legend { display: flex; gap: 18px; font-size: 13px; color: var(--text-muted); margin: 6px 0 14px; }
@@ -979,13 +1018,13 @@ h3,
 .plan-item:disabled { opacity: 0.35; cursor: not-allowed; }
 .plan-box { position: relative; }
 .plan-table { position: absolute; inset: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px solid transparent; }
-.plan-table.Available { background: rgba(120, 140, 255, 0.14); color: #b7c3ff; border-color: rgba(120, 140, 255, 0.35); }
-.plan-table.Reserved { background: rgba(20, 130, 110, 0.22); color: #6fe0c8; border-color: rgba(20, 160, 130, 0.5); }
-.plan-table.Occupied { background: rgba(232, 98, 42, 0.2); color: #ffab85; border-color: rgba(232, 98, 42, 0.55); }
+.plan-table.Available { background: var(--status-available-soft); color: var(--status-available-text); border-color: var(--status-available); }
+.plan-table.Reserved { background: var(--status-reserved-soft); color: var(--status-reserved-text); border-color: var(--status-reserved); }
+.plan-table.Occupied { background: var(--status-occupied-soft); color: var(--status-occupied-text); border-color: var(--status-occupied); }
 .plan-table .pn { font-weight: 700; font-size: 13px; } .plan-table .pg { font-size: 12px; margin-top: 2px; }
 .chair { position: absolute; border-radius: 5px; border: 1.5px solid var(--text-faint); background: transparent; }
-.chair.Reserved.filled { background: #14826e; border-color: #14826e; }
-.chair.Occupied.filled { background: #e8622a; border-color: #e8622a; }
+.chair.Reserved.filled { background: var(--status-reserved); border-color: var(--status-reserved); }
+.chair.Occupied.filled { background: var(--status-occupied); border-color: var(--status-occupied); }
 .type-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .type-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 12px; border-radius: 16px; border: 1.5px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; }
 .type-tile:hover { border-color: var(--accent); background: var(--accent-soft); }

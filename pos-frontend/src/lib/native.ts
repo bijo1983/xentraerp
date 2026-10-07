@@ -14,11 +14,11 @@ export function isNativeApp(): boolean {
 export async function bootstrapNativeShell(router: Router): Promise<void> {
   if (!isNativeApp()) return
 
-  // Dark status bar icons/text to match the app's permanently-dark POS
-  // theme (see assets/pos.css --bg: #0a0f1c) — StatusBar.Style.Dark means
-  // "dark background, light content", not "dark mode".
-  await StatusBar.setStyle({ style: Style.Dark }).catch(() => {})
-  await StatusBar.setBackgroundColor({ color: '#0a0f1c' }).catch(() => {})
+  // Light status bar icons/text to match the app's light POS theme (see
+  // assets/pos.css --canvas: #f4f6fb) — StatusBar.Style.Light means "light
+  // background, dark content", not "light mode".
+  await StatusBar.setStyle({ style: Style.Light }).catch(() => {})
+  await StatusBar.setBackgroundColor({ color: '#f4f6fb' }).catch(() => {})
 
   // Android hardware/gesture back button: mirror in-app back navigation
   // instead of the OS default (which would background or kill the app from

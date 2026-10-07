@@ -43,7 +43,7 @@ const config: CapacitorConfig = {
       // of leaving the user stuck on a frozen logo.
       launchAutoHide: true,
       launchShowDuration: 10000,
-      backgroundColor: '#0a0f1c',
+      backgroundColor: '#f4f6fb',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
     },
