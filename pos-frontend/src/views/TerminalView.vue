@@ -258,11 +258,19 @@ async function printLastReceipt() {
           <span class="icn">⌕</span>
           <input v-model="search" type="text" placeholder="Search items…" />
         </div>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="printerSettingsOpen = !printerSettingsOpen">
-          🖨️ Printer
-        </button>
-        <button v-if="pos.draftMode" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="openBalances">Pending balances</button>
-        <button v-if="pos.isFnb" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/floor')">Tables</button>
+        <div class="topbar-actions">
+          <button
+            class="btn-icon"
+            :class="{ on: printerSettingsOpen }"
+            title="Printer settings"
+            aria-label="Printer settings"
+            @click="printerSettingsOpen = !printerSettingsOpen"
+          >
+            🖨️
+          </button>
+          <button v-if="pos.draftMode" class="btn btn-ghost" @click="openBalances">💳 Pending balances</button>
+          <button v-if="pos.isFnb" class="btn btn-ghost" @click="router.push('/floor')">🍽️ Tables</button>
+        </div>
         <SessionMenu />
       </div>
 
@@ -290,7 +298,7 @@ async function printLastReceipt() {
             :disabled="printer.connecting"
             @click="printer.connectBluetoothPrinter()"
           >
-            {{ printer.connected ? `Connected: ${printer.connected.device.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
+            {{ printer.connected ? `Connected: ${printer.connected.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
           </button>
         </div>
         <p v-if="printer.method === 'bluetooth' && !printer.bluetoothSupported" style="margin: 8px 0 0; font-size: 11.5px; color: var(--warning)">

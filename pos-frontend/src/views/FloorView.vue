@@ -236,9 +236,11 @@ async function run(fn: () => Promise<void>) {
       <div class="page-head" style="margin-bottom: 4px">
         <h2>Manage Tables</h2>
         <span v-if="profile.location" class="pill">{{ profile.location_name || profile.location }}</span>
-        <button class="btn btn-primary mini" @click="startOrder">+ New order</button>
-        <button class="btn btn-ghost mini" @click="router.push('/kitchen')">Kitchen (KOT)</button>
-        <button v-if="pos.can('bill') && pos.hasRetail" class="btn btn-ghost mini" @click="router.push('/terminal')">Quick sale</button>
+        <button class="btn btn-primary mini" style="width: auto; margin-top: 0" @click="startOrder">+ New order</button>
+        <div class="topbar-actions" style="flex: 0 1 auto">
+          <button class="btn btn-ghost mini" @click="router.push('/kitchen')">🍳 Kitchen (KOT)</button>
+          <button v-if="pos.can('bill') && pos.hasRetail" class="btn btn-ghost mini" @click="router.push('/terminal')">🛒 Quick sale</button>
+        </div>
         <SessionMenu style="margin-left: auto" />
       </div>
       <div class="row" style="margin: 8px 0 4px">
@@ -246,7 +248,7 @@ async function run(fn: () => Promise<void>) {
         <button v-for="z in zones" :key="z" class="cat-chip" :class="{ active: zone === z }" @click="zone = z">{{ z }}</button>
       </div>
       <div class="legend">
-        <span><i style="background: #8b9cff" />Available</span><span><i style="background: #14826e" />Reserved</span><span><i style="background: #e8622a" />On Dine</span>
+        <span><i style="background: var(--status-available)" />Available</span><span><i style="background: var(--status-reserved)" />Reserved</span><span><i style="background: var(--status-occupied)" />On Dine</span>
       </div>
       <p v-if="error" class="error-box">{{ error }}</p>
       <p v-if="loading" style="color: var(--text-muted)">Loading tables…</p>
