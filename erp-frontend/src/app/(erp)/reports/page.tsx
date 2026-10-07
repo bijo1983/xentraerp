@@ -5,7 +5,6 @@ import {
   Wallet, ShoppingCart, Users, ShoppingBag, Warehouse, CreditCard, Factory,
   FolderKanban, HardDrive, ShieldCheck, LifeBuoy, Search, FileBarChart,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useTenantCode, withTenant } from '@/lib/tenant';
 import { REPORTS, SECTIONS, useReportContext } from '@/lib/reports/catalog';
@@ -52,31 +51,34 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {SECTIONS.map((section) => {
-        const items = visible.filter((e) => e.section === section);
-        if (!items.length) return null;
-        const Icon = SECTION_ICONS[section] || FileBarChart;
-        return (
-          <section key={section} className="space-y-3">
-            <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              <Icon className="h-3.5 w-3.5" /> {section}
-              <span className="font-normal normal-case tracking-normal">· {items.length}</span>
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {items.map((e) => (
-                <Link key={e.href} href={withTenant(e.href, tenantCode)}>
-                  <Card className="h-full cursor-pointer transition-colors hover:border-primary">
-                    <CardContent className="p-4">
-                      <p className="text-sm font-medium">{e.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{e.subtitle}</p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      <div className="columns-1 gap-6 sm:columns-2 lg:columns-3 xl:columns-4">
+        {SECTIONS.map((section) => {
+          const items = visible.filter((e) => e.section === section);
+          if (!items.length) return null;
+          const Icon = SECTION_ICONS[section] || FileBarChart;
+          return (
+            <section key={section} className="mb-6 break-inside-avoid">
+              <h3 className="mb-1.5 flex items-center gap-2 border-b pb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Icon className="h-3.5 w-3.5" /> {section}
+                <span className="ml-auto font-normal normal-case tracking-normal">{items.length}</span>
+              </h3>
+              <ul className="space-y-px">
+                {items.map((e) => (
+                  <li key={e.href}>
+                    <Link
+                      href={withTenant(e.href, tenantCode)}
+                      title={e.subtitle}
+                      className="block truncate rounded px-1.5 py-1 text-sm text-foreground/90 transition-colors hover:bg-muted hover:text-primary"
+                    >
+                      {e.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
 
       {!visible.length && <p className="py-12 text-center text-sm text-muted-foreground">No reports match “{query}”.</p>}
     </div>

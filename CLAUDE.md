@@ -697,8 +697,14 @@ variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and re
   grouped by module (Accounting, Selling, CRM, Buying, Stock, Point of Sale, Manufacturing, Projects, Assets,
   Quality, Support), plus XentraERP's own **POS End of Day** (`reports/pos-end-of-day`, = `pos_core.end_of_day_report`).
   The old page linked to `/app/query-report/<name>`, a route that never existed — every card was a dead link.
-- **One generic runner** (`reports/[slug]`) runs any report through Frappe's own `xentraerp.desk.query_report.run`
-  (filters, auto-rerun on change, totals row, tree indent, links to documents, search, CSV, print).
+- **One generic runner** (`reports/[slug]`) runs any report through Frappe's own `xentraerp.desk.query_report.run`;
+  results render in `components/reports/result-grid.tsx`: sortable headers, per-column filters (text contains;
+  numbers take `>`, `<`, `=`...), tree expand/collapse for `indent` reports, Table / Group view (group by any text
+  column with subtotals), drill-down menus on Link cells (`drillsFor` in `lib/reports/catalog.ts`: Account →
+  General Ledger, Customer → GL/AR/Sales Register, Item → Stock Ledger/Balance, ...; opens the target report with
+  `?filters=<json>` over its defaults), and a Columns dialog (show/hide/reorder, and add a field from a Link
+  column's record — fetched client-side with `get_list`, because Frappe v14's `custom_columns` argument isn't
+  JSON-decoded over HTTP). Column layout is per report in localStorage. The Reports index is a compact grouped list.
 - **Filters come from `erp-frontend/src/lib/reports/catalog.json`**, generated offline by
   `node scripts/generate-report-catalog.mjs /home/frappe/innovegic-bench/apps` — it evaluates each report's own
   `<report>.js` against a stub `frappe` and records the filters; session-dependent defaults become tokens

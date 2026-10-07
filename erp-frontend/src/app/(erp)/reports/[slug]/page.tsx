@@ -1,12 +1,11 @@
 'use client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, Download, Play, Printer, X, SlidersHorizontal } from 'lucide-react';
+import { useParams, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Play, X, SlidersHorizontal } from 'lucide-react';
 import { frappe } from '@/lib/frappe';
-import { cn } from '@/lib/utils';
-import { toCsv, downloadTextFile } from '@/lib/csv';
 import { useTenantCode, withTenant } from '@/lib/tenant';
+import { ResultGrid } from '@/components/reports/result-grid';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LinkField } from '@/components/fields/link-field';
 import {
   findReport, useReportContext, initialFilterValues, filterActive, missingRequired, filtersForRun,
-  selectOptions, normalizeColumns, normalizeRows, formatCell, linkTarget, NUMERIC_TYPES,
+  selectOptions, normalizeColumns, normalizeRows, formatCell,
   type ReportDef, type ReportFilter, type FilterValues, type ReportColumn,
 } from '@/lib/reports/catalog';
 
@@ -26,8 +25,6 @@ interface Result {
   summary: Summary[];
   hasTotalRow: boolean;
 }
-
-const ROW_CAP = 2000; // rendered rows; CSV export always has everything
 
 export default function ReportRunnerPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -41,7 +38,21 @@ export default function ReportRunnerPage() {
       </div>
     );
   }
-  return <ReportRunner key={report.slug} report={report} tenantCode={tenantCode} />;
+  return <RunnerWithUrl report={report} tenantCode={tenantCode} />;
+}
+
+// Drill-downs open a report with `?filters=<json>`, applied over the report's defaults.
+function RunnerWithUrl({ report, tenantCode }: { report: ReportDef; tenantCode: string | null }) {
+  const raw = useSearchParams().get('filters') || '';
+  const urlFilters = useMemo<FilterValues>(() => {
+    try {
+      const v = JSON.parse(raw || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? (v as FilterValues) : {};
+    } catch {
+      return {};
+    }
+  }, [raw]);
+  return <ReportRunner key={`${report.slug}|${raw}`} report={report} tenantCode={tenantCode} urlFilters={urlFilters} />;
 }
 
 function BackLink({ tenantCode }: { tenantCode: string | null }) {
@@ -52,19 +63,17 @@ function BackLink({ tenantCode }: { tenantCode: string | null }) {
   );
 }
 
-function ReportRunner({ report, tenantCode }: { report: ReportDef; tenantCode: string | null }) {
+function ReportRunner({ report, tenantCode, urlFilters }: { report: ReportDef; tenantCode: string | null; urlFilters: FilterValues }) {
   const { ctx, error: ctxError } = useReportContext();
   const [values, setValues] = useState<FilterValues | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [showAll, setShowAll] = useState(false);
   const runSeq = useRef(0);
 
   useEffect(() => {
-    if (ctx && !values) setValues(initialFilterValues(report, ctx));
-  }, [ctx, values, report]);
+    if (ctx && !values) setValues({ ...initialFilterValues(report, ctx), ...urlFilters });
+  }, [ctx, values, report, urlFilters]);
 
   const missing = useMemo(() => (values ? missingRequired(report, values) : []), [report, values]);
 
@@ -88,7 +97,6 @@ function ReportRunner({ report, tenantCode }: { report: ReportDef; tenantCode: s
         summary: Array.isArray(res.report_summary) ? (res.report_summary as Summary[]) : [],
         hasTotalRow: !!(res.add_total_row || report.add_total_row) && !res.skip_total_row && rows.length > 1,
       });
-      setShowAll(false);
     } catch (e: unknown) {
       if (seq !== runSeq.current) return;
       const err = e as { response?: { data?: { _server_messages?: string; exception?: string } }; message?: string };
@@ -109,30 +117,8 @@ function ReportRunner({ report, tenantCode }: { report: ReportDef; tenantCode: s
   const setValue = (field: string, v: unknown) => setValues((prev) => ({ ...(prev || {}), [field]: v }));
 
   const currency = ctx?.currency || '';
-  const q = search.trim().toLowerCase();
-  const bodyRows = useMemo(() => {
-    if (!result) return [];
-    const rows = result.hasTotalRow ? result.rows.slice(0, -1) : result.rows;
-    if (!q) return rows;
-    return rows.filter((r) => result.columns.some((c) => String(r[c.fieldname] ?? '').toLowerCase().includes(q)));
-  }, [result, q]);
+  const bodyRows = useMemo(() => (result ? (result.hasTotalRow ? result.rows.slice(0, -1) : result.rows) : []), [result]);
   const totalRow = result?.hasTotalRow ? result.rows[result.rows.length - 1] : null;
-  const shown = showAll ? bodyRows : bodyRows.slice(0, ROW_CAP);
-
-  const exportCsv = () => {
-    if (!result) return;
-    const rows = totalRow ? [...bodyRows, totalRow] : bodyRows;
-    downloadTextFile(
-      `${report.slug}.csv`,
-      toCsv(result.columns.map((c) => c.label), rows.map((r) => result.columns.map((c) => cellText(r[c.fieldname])))),
-    );
-  };
-
-  const print = () => {
-    if (!result) return;
-    const rows = totalRow ? [...bodyRows, totalRow] : bodyRows;
-    printTable(report.name, describeFilters(report, values || {}), result.columns, rows, currency, !!totalRow);
-  };
 
   const visibleFilters = report.filters.filter((f) => !f.hidden && values && filterActive(f, values));
 
@@ -147,12 +133,6 @@ function ReportRunner({ report, tenantCode }: { report: ReportDef; tenantCode: s
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => values && run(values)} disabled={!values || !!missing.length || running}>
             <Play className="mr-1 h-3.5 w-3.5" /> {running ? 'Running…' : 'Run'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!result?.rows.length}>
-            <Download className="mr-1 h-3.5 w-3.5" /> CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={print} disabled={!result?.rows.length}>
-            <Printer className="mr-1 h-3.5 w-3.5" /> Print
           </Button>
         </div>
       </div>
@@ -195,89 +175,24 @@ function ReportRunner({ report, tenantCode }: { report: ReportDef; tenantCode: s
 
       {result && (
         <Card>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-            <p className="text-xs text-muted-foreground">
-              {bodyRows.length.toLocaleString()} row{bodyRows.length === 1 ? '' : 's'}
-              {running && ' · refreshing…'}
-            </p>
-            <Input className="h-8 w-56 text-xs" placeholder="Search in results…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
+          {result.message && <p className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">{result.message}</p>}
           <CardContent className="p-0">
-            {result.message && <p className="border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">{result.message}</p>}
-            {!result.rows.length ? (
-              <p className="py-14 text-center text-sm text-muted-foreground">No data for these filters.</p>
-            ) : (
-              <div className="max-h-[70vh] overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-card">
-                    <tr className="border-b bg-muted/20">
-                      {result.columns.map((c) => (
-                        <th
-                          key={c.fieldname}
-                          className={cn(
-                            'whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-                            NUMERIC_TYPES.has(c.fieldtype) ? 'text-right' : 'text-left',
-                          )}
-                        >
-                          {c.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shown.map((row, i) => (
-                      <ResultRow key={i} row={row} columns={result.columns} currency={currency} tenantCode={tenantCode} />
-                    ))}
-                    {totalRow && (
-                      <ResultRow row={totalRow} columns={result.columns} currency={currency} tenantCode={tenantCode} total />
-                    )}
-                  </tbody>
-                </table>
-                {bodyRows.length > shown.length && (
-                  <div className="border-t p-3 text-center">
-                    <Button variant="link" size="sm" onClick={() => setShowAll(true)}>
-                      Showing {shown.length.toLocaleString()} of {bodyRows.length.toLocaleString()} rows — show all
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+            <ResultGrid
+              slug={report.slug}
+              title={report.name}
+              subtitle={describeFilters(report, values || {})}
+              columns={result.columns}
+              rows={bodyRows}
+              totalRow={totalRow}
+              currency={currency}
+              tenantCode={tenantCode}
+              filters={values || {}}
+              ctx={ctx}
+            />
           </CardContent>
         </Card>
       )}
     </div>
-  );
-}
-
-function ResultRow({ row, columns, currency, tenantCode, total }: {
-  row: Record<string, unknown>; columns: ReportColumn[]; currency: string; tenantCode: string | null; total?: boolean;
-}) {
-  const indent = Number(row.indent) || 0;
-  const bold = !!(total || row.is_group || row.bold);
-  return (
-    <tr className={cn('border-b last:border-0', total ? 'bg-muted/40 font-semibold' : 'hover:bg-muted/20', bold && 'font-semibold')}>
-      {columns.map((c, ci) => {
-        const raw = row[c.fieldname];
-        const text = total && ci === 0 && (raw === undefined || raw === null || raw === '') ? 'Total' : formatCell(raw, c, row, currency);
-        const target = !total ? linkTarget(c, row) : null;
-        const numeric = NUMERIC_TYPES.has(c.fieldtype);
-        return (
-          <td
-            key={c.fieldname}
-            className={cn('whitespace-nowrap px-3 py-1.5', numeric && 'text-right tabular-nums', numeric && Number(raw) < 0 && 'text-destructive')}
-            style={ci === 0 && indent ? { paddingLeft: `${0.75 + indent * 1.1}rem` } : undefined}
-          >
-            {target && text ? (
-              <Link className="text-primary hover:underline" href={withTenant(`/app/${encodeURIComponent(target)}/${encodeURIComponent(String(raw))}`, tenantCode)}>
-                {text}
-              </Link>
-            ) : (
-              text
-            )}
-          </td>
-        );
-      })}
-    </tr>
   );
 }
 
@@ -411,11 +326,6 @@ function FilterField({ filter: f, values, onChange }: { filter: ReportFilter; va
   }
 }
 
-function cellText(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  return String(v).replace(/<[^>]*>/g, '');
-}
-
 function serverMessage(data?: { _server_messages?: string; exception?: string }): string | null {
   if (!data) return null;
   try {
@@ -440,40 +350,4 @@ function describeFilters(report: ReportDef, values: FilterValues): string {
     })
     .filter(Boolean)
     .join(' · ');
-}
-
-function escapeHtml(s: string) {
-  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
-}
-
-/** Prints the result table on its own (not the app around it) through a hidden iframe. */
-function printTable(title: string, subtitle: string, columns: ReportColumn[], rows: Record<string, unknown>[], currency: string, lastIsTotal: boolean) {
-  const head = columns.map((c) => `<th class="${NUMERIC_TYPES.has(c.fieldtype) ? 'n' : ''}">${escapeHtml(c.label)}</th>`).join('');
-  const body = rows.map((r, i) => {
-    const total = lastIsTotal && i === rows.length - 1;
-    const cells = columns.map((c, ci) => {
-      let text = formatCell(r[c.fieldname], c, r, currency);
-      if (total && ci === 0 && !text) text = 'Total';
-      const pad = ci === 0 && Number(r.indent) ? ` style="padding-left:${6 + Number(r.indent) * 14}px"` : '';
-      return `<td class="${NUMERIC_TYPES.has(c.fieldtype) ? 'n' : ''}"${pad}>${escapeHtml(text)}</td>`;
-    }).join('');
-    return `<tr${total ? ' class="t"' : ''}>${cells}</tr>`;
-  }).join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
-    body{font:11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#111;margin:16px}
-    h1{font-size:16px;margin:0 0 2px}p{margin:0 0 10px;color:#555}
-    table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left;white-space:nowrap}
-    th{font-size:10px;text-transform:uppercase;color:#555}.n{text-align:right}.t td{font-weight:600;border-top:2px solid #333}
-    @page{size:landscape;margin:12mm}
-  </style></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
-  const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-  document.body.appendChild(frame);
-  const doc = frame.contentWindow!.document;
-  doc.open();
-  doc.write(html);
-  doc.close();
-  frame.contentWindow!.focus();
-  frame.contentWindow!.print();
-  setTimeout(() => frame.remove(), 1000);
 }

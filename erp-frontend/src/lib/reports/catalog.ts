@@ -257,3 +257,55 @@ export function linkTarget(col: ReportColumn, row: Record<string, unknown>): str
   if (col.fieldtype === 'Dynamic Link' && col.options && typeof row[col.options] === 'string') return row[col.options] as string;
   return null;
 }
+
+// ── Drill-down ────────────────────────────────────────────────────
+
+export interface Drill { label: string; slug: string; filters: FilterValues }
+
+type DrillRule = { label: string; report: string; filters: (value: string) => FilterValues };
+
+// For a value of a given doctype in a report cell: the reports that break it down,
+// as Desk's own drill-downs do (account -> General Ledger, item -> Stock Ledger, ...).
+const DRILL_RULES: Record<string, DrillRule[]> = {
+  Account: [{ label: 'General Ledger', report: 'General Ledger', filters: (v) => ({ account: [v] }) }],
+  Customer: [
+    { label: 'General Ledger', report: 'General Ledger', filters: (v) => ({ party_type: 'Customer', party: [v] }) },
+    { label: 'Accounts Receivable', report: 'Accounts Receivable', filters: (v) => ({ customer: v }) },
+    { label: 'Sales Register', report: 'Sales Register', filters: (v) => ({ customer: v }) },
+  ],
+  Supplier: [
+    { label: 'General Ledger', report: 'General Ledger', filters: (v) => ({ party_type: 'Supplier', party: [v] }) },
+    { label: 'Accounts Payable', report: 'Accounts Payable', filters: (v) => ({ supplier: v }) },
+    { label: 'Purchase Register', report: 'Purchase Register', filters: (v) => ({ supplier: v }) },
+  ],
+  Item: [
+    { label: 'Stock Ledger', report: 'Stock Ledger', filters: (v) => ({ item_code: v }) },
+    { label: 'Stock Balance', report: 'Stock Balance', filters: (v) => ({ item_code: v }) },
+    { label: 'Item-wise Purchase Register', report: 'Item-wise Purchase Register', filters: (v) => ({ item_code: v }) },
+  ],
+  Warehouse: [
+    { label: 'Stock Balance', report: 'Stock Balance', filters: (v) => ({ warehouse: v }) },
+    { label: 'Stock Ledger', report: 'Stock Ledger', filters: (v) => ({ warehouse: v }) },
+  ],
+  'Cost Center': [{ label: 'General Ledger', report: 'General Ledger', filters: (v) => ({ cost_center: [v] }) }],
+  Project: [{ label: 'General Ledger', report: 'General Ledger', filters: (v) => ({ project: [v] }) }],
+};
+
+/** Drill-downs for `value` (a `doctype` record), carrying over the company and date range. */
+export function drillsFor(doctype: string, value: string, current: FilterValues, ctx: ReportContext | null): Drill[] {
+  const from = current.from_date || current.period_start_date || ctx?.year_start;
+  const to = current.to_date || current.period_end_date || current.report_date || ctx?.today;
+  const company = current.company || ctx?.company;
+  return (DRILL_RULES[doctype] || []).flatMap((rule) => {
+    const target = REPORTS.find((r) => r.name === rule.report);
+    if (!target) return [];
+    const names = new Set(target.filters.map((f) => f.fieldname));
+    const wanted: FilterValues = { company, from_date: from, to_date: to, report_date: to, ...rule.filters(value) };
+    const filters = Object.fromEntries(Object.entries(wanted).filter(([k, v]) => names.has(k) && v !== undefined && v !== ''));
+    return [{ label: rule.label, slug: target.slug, filters }];
+  });
+}
+
+export function reportHref(slug: string, filters?: FilterValues): string {
+  return `/reports/${slug}${filters && Object.keys(filters).length ? `?filters=${encodeURIComponent(JSON.stringify(filters))}` : ''}`;
+}
