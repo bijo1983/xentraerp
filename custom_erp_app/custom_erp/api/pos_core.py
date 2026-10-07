@@ -601,13 +601,19 @@ def _cash_taken(shift_name: str) -> dict:
 	return {r[0]: flt(r[1]) for r in rows}
 
 
+# What a sale actually billed: the rounded total when ERPNext rounded it, else the
+# grand total. Reports must use this, not base_grand_total — the POS charges the
+# rounded amount, so summing grand totals overstates sales against the cash taken.
+BILLED = "if(base_rounded_total <> 0, base_rounded_total, base_grand_total)"
+
+
 def _shift_sales(shift_name: str) -> tuple:
 	rows = frappe.db.sql("select distinct invoice, invoice_doctype from `tabXentraERP POS Tender` where shift=%s and invoice is not null", (shift_name,))
 	total = 0.0
 	for doctype in ("POS Invoice", "Sales Invoice"):
 		names = [r[0] for r in rows if (r[1] or "POS Invoice") == doctype]
 		if names:
-			total += flt(frappe.db.sql(f"select sum(base_grand_total) from `tab{doctype}` where name in %s and docstatus=1", (names,))[0][0])
+			total += flt(frappe.db.sql(f"select sum({BILLED}) from `tab{doctype}` where name in %s and docstatus=1", (names,))[0][0])
 	return len(rows), total
 
 
@@ -1142,7 +1148,7 @@ def list_open_balances(pos_profile: str | None = None):
 	rows = frappe.get_all(
 		"Sales Invoice",
 		filters=filters,
-		fields=["name", "customer", "grand_total", "outstanding_amount", "status", "posting_date", "pos_profile", "currency", "owner"],
+		fields=["name", "customer", "grand_total", "rounded_total", "outstanding_amount", "status", "posting_date", "pos_profile", "currency", "owner"],
 		order_by="creation asc",
 		limit_page_length=200,
 	)
@@ -1153,9 +1159,9 @@ def list_open_balances(pos_profile: str | None = None):
 		{
 			"invoice": r.name,
 			"customer": r.customer,
-			"total": flt(r.grand_total),
+			"total": flt(r.rounded_total or r.grand_total),
 			"balance": flt(r.outstanding_amount),
-			"paid": flt(r.grand_total) - flt(r.outstanding_amount),
+			"paid": flt(r.rounded_total or r.grand_total) - flt(r.outstanding_amount),
 			"status": r.status,
 			"date": str(r.posting_date),
 			"pos_profile": r.pos_profile,
@@ -1492,7 +1498,7 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 			continue
 		extra = ", outstanding_amount" if doctype == "Sales Invoice" else ", 0 as outstanding_amount"
 		for r in frappe.db.sql(
-			f"""select name, owner, pos_profile, base_grand_total, base_net_total, base_total_taxes_and_charges, is_return{extra}
+			f"""select name, owner, pos_profile, {BILLED} as billed, base_rounding_adjustment, base_net_total, base_total_taxes_and_charges, is_return{extra}
 			    from `tab{doctype}` where name in %s and docstatus=1""",
 			(names,), as_dict=True,
 		):
@@ -1514,7 +1520,7 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 	for i in inv:
 		c = cashiers.setdefault(i.owner, {"cashier": i.owner, "invoices": 0, "total": 0.0})
 		c["invoices"] += 1
-		c["total"] += flt(i.base_grand_total)
+		c["total"] += flt(i.billed)
 	top_items = []
 	for doctype, names in (("POS Invoice", pos_names), ("Sales Invoice", si_names)):
 		if names:
@@ -1534,6 +1540,7 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 		order_by="opened_at asc", limit_page_length=0,
 	)
 	for sh in shifts:
+		sh["invoice_count"], sh["total_sales"] = _shift_sales(sh.name)
 		sh["variance"] = [
 			{"currency": c.currency, "variance": flt(c.variance)}
 			for c in frappe.get_all("XentraERP POS Shift Cash", filters={"parent": sh.name}, fields=["currency", "variance"])
@@ -1547,7 +1554,7 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 	order_counts = {r[0]: {"orders": cint(r[1]), "guests": cint(r[2])} for r in orders}
 	billed = {"orders": sum(order_counts.get(k, {"orders": 0})["orders"] for k in ("Billed", "Part Paid")),
 	          "guests": sum(order_counts.get(k, {"guests": 0})["guests"] for k in ("Billed", "Part Paid"))}
-	gross = flt(sum(flt(i.base_grand_total) for i in sales))
+	gross = flt(sum(flt(i.billed) for i in sales))
 	outstanding = flt(sum(flt(i.outstanding_amount) for i in sales))
 	warnings = []
 	open_shifts = [sh.name for sh in shifts if sh.status == "Open"]
@@ -1567,8 +1574,9 @@ def end_of_day_report(date: str | None = None, location: str | None = None):
 		"gross_sales": gross,
 		"net_sales": flt(sum(flt(i.base_net_total) for i in sales)),
 		"tax": flt(sum(flt(i.base_total_taxes_and_charges) for i in sales)),
+		"rounding": flt(sum(flt(i.base_rounding_adjustment) for i in sales)),
 		"outstanding_balance": outstanding,
-		"returns": {"count": len(returns), "total": flt(sum(flt(i.base_grand_total) for i in returns))},
+		"returns": {"count": len(returns), "total": flt(sum(flt(i.billed) for i in returns))},
 		"average_bill": gross / len(sales) if sales else 0.0,
 		"by_payment": [{"mode": r.mode_of_payment, "currency": r.currency, "tendered": flt(r.tendered), "amount": flt(r.amount)} for r in by_payment],
 		"by_location": [{"location": r.location, "invoices": cint(r.invoices), "received": flt(r.received)} for r in by_location],

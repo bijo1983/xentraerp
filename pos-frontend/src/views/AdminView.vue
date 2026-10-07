@@ -23,6 +23,7 @@ interface Eod {
   gross_sales: number
   net_sales: number
   tax: number
+  rounding?: number
   average_bill: number
   outstanding_balance?: number
   location?: string | null
@@ -415,6 +416,7 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
             <div class="stat"><div class="v tabular">{{ fmt(eod.gross_sales) }}</div><div class="l">Gross sales ({{ eod.invoice_count }} bills)</div></div>
             <div class="stat"><div class="v tabular">{{ fmt(eod.net_sales) }}</div><div class="l">Net sales</div></div>
             <div class="stat"><div class="v tabular">{{ fmt(eod.tax) }}</div><div class="l">Tax</div></div>
+            <div v-if="eod.rounding" class="stat"><div class="v tabular">{{ fmt(eod.rounding) }}</div><div class="l">Rounding adjustment</div></div>
             <div class="stat"><div class="v tabular">{{ fmt(eod.average_bill) }}</div><div class="l">Average bill</div></div>
             <div v-if="eod.outstanding_balance" class="stat"><div class="v tabular" style="color: var(--warning)">{{ fmt(eod.outstanding_balance) }}</div><div class="l">Part-paid — still to collect</div></div>
             <div v-if="pos.isFnb" class="stat"><div class="v tabular">{{ eod.fnb.covers }}</div><div class="l">Covers · {{ fmt(eod.fnb.average_per_cover) }} each</div></div>

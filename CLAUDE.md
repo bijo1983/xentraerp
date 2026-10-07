@@ -662,6 +662,59 @@ error logs) will show it happening.
 - Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), `roles_takeaway_reservations_suite.py` (118), all rolled back, plus `e2e_http.py` (71, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after — it only removes ZZ rows). The UI screens were type-checked and built, and every API they call
   is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
 
+## ScheduleVerse (deployed 2026-09-24) — separate app, same box
+
+**Live at `https://schedule.xentraerp.net`** — independent product (FastAPI + Vue 3 + Postgres 16 + Redis 7),
+repo `bijo1983/ScheduleVerse`, checked out at **`/home/scheduleverse`** (cloned read-only over HTTPS: no deploy
+key yet, so it can pull but not push). Everything runs in Docker via **`docker-compose.server.yml`** (this box's
+variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and registry images):
+`cd /home/scheduleverse && docker compose -f docker-compose.server.yml --env-file .env.server <cmd>`.
+- Containers `scheduleverse-{postgres,redis,mailpit,api,worker,web}-1`, all with `mem_limit` (~180 MB total
+  at idle) so they can't starve the ERP/POS. Only `web` is published: `127.0.0.1:8480`; Mailpit UI
+  `127.0.0.1:8425`. Host nginx site `sites-available/schedule.xentraerp.net` terminates TLS (Let's Encrypt
+  cert, webroot) and adds HSTS; DNS A record `schedule` in the DigitalOcean `xentraerp.net` zone.
+- **Data lives in the folder**: `data/postgres`, `data/redis`, `backups/`. Secrets in `.env.server` (mode 600,
+  gitignored). `TRUSTED_PROXY_COUNT=2` (host nginx + container nginx).
+- **Email is caught by Mailpit, not delivered**, until real SMTP settings go into `.env.server`.
+- Update: `git pull`, then `$C build api && $C build web && $C run --rm migrate && $C up -d`, then
+  `scripts/smoke-test.sh https://schedule.xentraerp.net`. Build api and web one at a time (memory).
+- Local fix not in the repo: `apps/backend/scripts/manage.py` computed the monorepo root at import time, which
+  crashed every command inside the image (`IndexError`) including `migrate`. The worker also needs its own
+  healthcheck (`arq --check`; set in the compose file) because the image's check probes the API's `:8000`.
+- Local fix not in the repo (2026-09-24): Organization settings / Branding / Plans pages seeded their forms with
+  `structuredClone(queryData)`, which throws `DataCloneError` on Vue reactive proxies — the form stayed empty and
+  every save 422'd (no `version`). Replaced with `utils/clone.ts` `cloneData` (toRaw + JSON round-trip).
+- Platform admin: `innovegicconsultancy@gmail.com` (password set by the user 2026-09-24; bootstrap password
+  removed from `.env.server`). There's no reset command: hash with `app.core.security.hash_password` in the api
+  container and `UPDATE users` as the owner role in postgres (sessions table is `sessions`). No backup cron is scheduled yet (`scripts/backup-database.sh`).
+
+## Reports (added 2026-10-07)
+
+- **ERP Reports page** (`erp-frontend/src/app/(erp)/reports/`): every standard ERPNext Script/Query report,
+  grouped by module (Accounting, Selling, CRM, Buying, Stock, Point of Sale, Manufacturing, Projects, Assets,
+  Quality, Support), plus XentraERP's own **POS End of Day** (`reports/pos-end-of-day`, = `pos_core.end_of_day_report`).
+  The old page linked to `/app/query-report/<name>`, a route that never existed — every card was a dead link.
+- **One generic runner** (`reports/[slug]`) runs any report through Frappe's own `xentraerp.desk.query_report.run`
+  (filters, auto-rerun on change, totals row, tree indent, links to documents, search, CSV, print).
+- **Filters come from `erp-frontend/src/lib/reports/catalog.json`**, generated offline by
+  `node scripts/generate-report-catalog.mjs /home/frappe/innovegic-bench/apps` — it evaluates each report's own
+  `<report>.js` against a stub `frappe` and records the filters; session-dependent defaults become tokens
+  (`@today|m-1`, `@company`, `@fiscal_year`, ...) resolved in `lib/reports/catalog.ts` with values from
+  `custom_erp.api.reports.report_context` (which also returns the reports the user may run — Frappe's own two
+  checks). **Re-run the generator after an ERPNext upgrade.** Excluded on purpose: India TDS, stock-ledger
+  diagnostics, Report Builder reports, Regional/Loan/Core modules, and "Review" (broken in ERPNext v14).
+- **Check**: `bench --site 197349.xentraerp.local console < scripts/report-checks/run_all_reports.py` runs every
+  catalog report with its defaults as the tenant admin (rolled back). 2026-10-07: 123 ok, 0 failed, 15 need a
+  user choice first (a BOM, bank account, customer, ...), Production Plan Summary hidden (ERPNext grants no role
+  report permission on Production Plan). The console is IPython: feed it as one `exec(...)` or blank lines inside
+  functions break it.
+- **POS reports used `base_grand_total`, but the POS charges the rounded total** (`rounded_total` — ERPNext rounds
+  to a whole unit when rounding is on and the currency has no smallest-fraction value: tenant 197349 has BHD with
+  `smallest_currency_fraction_value = 0` and `disable_rounded_total = 0`, so 2.500 was billed as 2.000). Gross
+  sales therefore didn't match money received. Shift totals, the EOD report, and open balances now use
+  `pos_core.BILLED` (rounded total when set) and the EOD shows the rounding adjustment. The rounding setting
+  itself was left as is.
+
 ## Incident log
 
 - **2026-09-13, ~11:33 AM**: entire `innovegic-bench` supervisor group (Redis

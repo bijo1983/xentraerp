@@ -1,0 +1,8050 @@
+[
+ {
+  "name": "Account Balance",
+  "slug": "account_balance",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Bank Account",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "report_date",
+    "label": "Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "root_type",
+    "label": "Root Type",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Asset",
+      "label": "Asset"
+     },
+     {
+      "value": "Liability",
+      "label": "Liability"
+     },
+     {
+      "value": "Income",
+      "label": "Income"
+     },
+     {
+      "value": "Expense",
+      "label": "Expense"
+     },
+     {
+      "value": "Equity",
+      "label": "Equity"
+     }
+    ]
+   },
+   {
+    "fieldname": "account_type",
+    "label": "Account Type",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Accumulated Depreciation",
+      "label": "Accumulated Depreciation"
+     },
+     {
+      "value": "Asset Received But Not Billed",
+      "label": "Asset Received But Not Billed"
+     },
+     {
+      "value": "Bank",
+      "label": "Bank"
+     },
+     {
+      "value": "Cash",
+      "label": "Cash"
+     },
+     {
+      "value": "Chargeble",
+      "label": "Chargeble"
+     },
+     {
+      "value": "Capital Work in Progress",
+      "label": "Capital Work in Progress"
+     },
+     {
+      "value": "Cost of Goods Sold",
+      "label": "Cost of Goods Sold"
+     },
+     {
+      "value": "Depreciation",
+      "label": "Depreciation"
+     },
+     {
+      "value": "Equity",
+      "label": "Equity"
+     },
+     {
+      "value": "Expense Account",
+      "label": "Expense Account"
+     },
+     {
+      "value": "Expenses Included In Asset Valuation",
+      "label": "Expenses Included In Asset Valuation"
+     },
+     {
+      "value": "Expenses Included In Valuation",
+      "label": "Expenses Included In Valuation"
+     },
+     {
+      "value": "Fixed Asset",
+      "label": "Fixed Asset"
+     },
+     {
+      "value": "Income Account",
+      "label": "Income Account"
+     },
+     {
+      "value": "Payable",
+      "label": "Payable"
+     },
+     {
+      "value": "Receivable",
+      "label": "Receivable"
+     },
+     {
+      "value": "Round Off",
+      "label": "Round Off"
+     },
+     {
+      "value": "Stock",
+      "label": "Stock"
+     },
+     {
+      "value": "Stock Adjustment",
+      "label": "Stock Adjustment"
+     },
+     {
+      "value": "Stock Received But Not Billed",
+      "label": "Stock Received But Not Billed"
+     },
+     {
+      "value": "Tax",
+      "label": "Tax"
+     },
+     {
+      "value": "Temporary",
+      "label": "Temporary"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Accounts Payable",
+  "slug": "accounts_payable",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "report_date",
+    "label": "Posting Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier"
+   },
+   {
+    "fieldname": "party_account",
+    "label": "Payable Account",
+    "fieldtype": "Link",
+    "options": "Account"
+   },
+   {
+    "fieldname": "ageing_based_on",
+    "label": "Ageing Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Posting Date",
+     "Due Date",
+     "Supplier Invoice Date"
+    ],
+    "default": "Due Date"
+   },
+   {
+    "fieldname": "range1",
+    "label": "Ageing Range 1",
+    "fieldtype": "Int",
+    "default": "30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range2",
+    "label": "Ageing Range 2",
+    "fieldtype": "Int",
+    "default": "60",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range3",
+    "label": "Ageing Range 3",
+    "fieldtype": "Int",
+    "default": "90",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range4",
+    "label": "Ageing Range 4",
+    "fieldtype": "Int",
+    "default": "120",
+    "reqd": 1
+   },
+   {
+    "fieldname": "payment_terms_template",
+    "label": "Payment Terms Template",
+    "fieldtype": "Link",
+    "options": "Payment Terms Template"
+   },
+   {
+    "fieldname": "supplier_group",
+    "label": "Supplier Group",
+    "fieldtype": "Link",
+    "options": "Supplier Group"
+   },
+   {
+    "fieldname": "group_by_party",
+    "label": "Group By Supplier",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "based_on_payment_terms",
+    "label": "Based On Payment Terms",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_remarks",
+    "label": "Show Remarks",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "tax_id",
+    "label": "Tax Id",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "show_future_payments",
+    "label": "Show Future Payments",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Accounts Payable Summary",
+  "slug": "accounts_payable_summary",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "report_date",
+    "label": "Posting Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "ageing_based_on",
+    "label": "Ageing Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Posting Date",
+     "Due Date"
+    ],
+    "default": "Due Date"
+   },
+   {
+    "fieldname": "range1",
+    "label": "Ageing Range 1",
+    "fieldtype": "Int",
+    "default": "30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range2",
+    "label": "Ageing Range 2",
+    "fieldtype": "Int",
+    "default": "60",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range3",
+    "label": "Ageing Range 3",
+    "fieldtype": "Int",
+    "default": "90",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range4",
+    "label": "Ageing Range 4",
+    "fieldtype": "Int",
+    "default": "120",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier"
+   },
+   {
+    "fieldname": "payment_terms_template",
+    "label": "Payment Terms Template",
+    "fieldtype": "Link",
+    "options": "Payment Terms Template"
+   },
+   {
+    "fieldname": "supplier_group",
+    "label": "Supplier Group",
+    "fieldtype": "Link",
+    "options": "Supplier Group"
+   },
+   {
+    "fieldname": "based_on_payment_terms",
+    "label": "Based On Payment Terms",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Accounts Receivable",
+  "slug": "accounts_receivable",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "report_date",
+    "label": "Posting Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "party_account",
+    "label": "Receivable Account",
+    "fieldtype": "Link",
+    "options": "Account"
+   },
+   {
+    "fieldname": "ageing_based_on",
+    "label": "Ageing Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Posting Date",
+     "Due Date"
+    ],
+    "default": "Due Date"
+   },
+   {
+    "fieldname": "range1",
+    "label": "Ageing Range 1",
+    "fieldtype": "Int",
+    "default": "30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range2",
+    "label": "Ageing Range 2",
+    "fieldtype": "Int",
+    "default": "60",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range3",
+    "label": "Ageing Range 3",
+    "fieldtype": "Int",
+    "default": "90",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range4",
+    "label": "Ageing Range 4",
+    "fieldtype": "Int",
+    "default": "120",
+    "reqd": 1
+   },
+   {
+    "fieldname": "customer_group",
+    "label": "Customer Group",
+    "fieldtype": "Link",
+    "options": "Customer Group"
+   },
+   {
+    "fieldname": "payment_terms_template",
+    "label": "Payment Terms Template",
+    "fieldtype": "Link",
+    "options": "Payment Terms Template"
+   },
+   {
+    "fieldname": "sales_partner",
+    "label": "Sales Partner",
+    "fieldtype": "Link",
+    "options": "Sales Partner"
+   },
+   {
+    "fieldname": "sales_person",
+    "label": "Sales Person",
+    "fieldtype": "Link",
+    "options": "Sales Person"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   },
+   {
+    "fieldname": "group_by_party",
+    "label": "Group By Customer",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "based_on_payment_terms",
+    "label": "Based On Payment Terms",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_future_payments",
+    "label": "Show Future Payments",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_delivery_notes",
+    "label": "Show Linked Delivery Notes",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_sales_person",
+    "label": "Show Sales Person",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "tax_id",
+    "label": "Tax Id",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "show_remarks",
+    "label": "Show Remarks",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "customer_name",
+    "label": "Customer Name",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "payment_terms",
+    "label": "Payment Tems",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "credit_limit",
+    "label": "Credit Limit",
+    "fieldtype": "Currency",
+    "hidden": 1
+   }
+  ]
+ },
+ {
+  "name": "Accounts Receivable Summary",
+  "slug": "accounts_receivable_summary",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "report_date",
+    "label": "Posting Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "ageing_based_on",
+    "label": "Ageing Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Posting Date",
+     "Due Date"
+    ],
+    "default": "Due Date"
+   },
+   {
+    "fieldname": "range1",
+    "label": "Ageing Range 1",
+    "fieldtype": "Int",
+    "default": "30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range2",
+    "label": "Ageing Range 2",
+    "fieldtype": "Int",
+    "default": "60",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range3",
+    "label": "Ageing Range 3",
+    "fieldtype": "Int",
+    "default": "90",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range4",
+    "label": "Ageing Range 4",
+    "fieldtype": "Int",
+    "default": "120",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "customer_group",
+    "label": "Customer Group",
+    "fieldtype": "Link",
+    "options": "Customer Group"
+   },
+   {
+    "fieldname": "payment_terms_template",
+    "label": "Payment Terms Template",
+    "fieldtype": "Link",
+    "options": "Payment Terms Template"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   },
+   {
+    "fieldname": "sales_partner",
+    "label": "Sales Partner",
+    "fieldtype": "Link",
+    "options": "Sales Partner"
+   },
+   {
+    "fieldname": "sales_person",
+    "label": "Sales Person",
+    "fieldtype": "Link",
+    "options": "Sales Person"
+   },
+   {
+    "fieldname": "based_on_payment_terms",
+    "label": "Based On Payment Terms",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_future_payments",
+    "label": "Show Future Payments",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_gl_balance",
+    "label": "Show GL Balance",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Asset Depreciation Ledger",
+  "slug": "asset_depreciation_ledger",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Asset",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "asset",
+    "label": "Asset",
+    "fieldtype": "Link",
+    "options": "Asset"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "asset_category",
+    "label": "Asset Category",
+    "fieldtype": "Link",
+    "options": "Asset Category"
+   }
+  ]
+ },
+ {
+  "name": "Asset Depreciations and Balances",
+  "slug": "asset_depreciations_and_balances",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Asset",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "asset_category",
+    "label": "Asset Category",
+    "fieldtype": "Link",
+    "options": "Asset Category"
+   }
+  ]
+ },
+ {
+  "name": "Balance Sheet",
+  "slug": "balance_sheet",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Filter Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "periodicity",
+    "label": "Periodicity",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Yearly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "presentation_currency",
+    "label": "Currency",
+    "fieldtype": "Select",
+    "options": []
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "MultiSelectList",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "accumulated_values",
+    "label": "Accumulated Values",
+    "fieldtype": "Check",
+    "default": 1
+   },
+   {
+    "fieldname": "include_default_book_entries",
+    "label": "Include Default Book Entries",
+    "fieldtype": "Check",
+    "default": 1
+   }
+  ]
+ },
+ {
+  "name": "Bank Clearance Summary",
+  "slug": "bank_clearance_summary",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Journal Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "account",
+    "label": "Bank Account",
+    "fieldtype": "Link",
+    "options": "Account",
+    "default": "@company_bank_account",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Bank Reconciliation Statement",
+  "slug": "bank_reconciliation_statement",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Journal Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "account",
+    "label": "Bank Account",
+    "fieldtype": "Link",
+    "options": "Account",
+    "default": "@company_bank_account",
+    "reqd": 1
+   },
+   {
+    "fieldname": "report_date",
+    "label": "Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "include_pos_transactions",
+    "label": "Include POS Transactions",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Billed Items To Be Received",
+  "slug": "billed_items_to_be_received",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "posting_date",
+    "label": "As on Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "purchase_invoice",
+    "label": "Purchase Invoice",
+    "fieldtype": "Link",
+    "options": "Purchase Invoice"
+   }
+  ]
+ },
+ {
+  "name": "Budget Variance Report",
+  "slug": "budget_variance_report",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Cost Center",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "From Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "To Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Yearly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "budget_against",
+    "label": "Budget Against",
+    "fieldtype": "Select",
+    "options": [
+     "Cost Center",
+     "Project"
+    ],
+    "default": "Cost Center",
+    "reqd": 1
+   },
+   {
+    "fieldname": "budget_against_filter",
+    "label": "Dimension Filter",
+    "fieldtype": "MultiSelectList"
+   },
+   {
+    "fieldname": "show_cumulative",
+    "label": "Show Cumulative Amount",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Cash Flow",
+  "slug": "cash_flow",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Filter Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "periodicity",
+    "label": "Periodicity",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Yearly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "MultiSelectList",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "include_default_book_entries",
+    "label": "Include Default Book Entries",
+    "fieldtype": "Check",
+    "default": 1
+   }
+  ]
+ },
+ {
+  "name": "Consolidated Financial Statement",
+  "slug": "consolidated_financial_statement",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Account",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Filter Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "hidden": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "hidden": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'",
+    "default": "@year_end"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "report",
+    "label": "Report",
+    "fieldtype": "Select",
+    "options": [
+     "Profit and Loss Statement",
+     "Balance Sheet",
+     "Cash Flow"
+    ],
+    "default": "Balance Sheet",
+    "reqd": 1
+   },
+   {
+    "fieldname": "presentation_currency",
+    "label": "Currency",
+    "fieldtype": "Select",
+    "options": [],
+    "default": "@currency"
+   },
+   {
+    "fieldname": "accumulated_in_group_company",
+    "label": "Accumulated Values in Group Company",
+    "fieldtype": "Check",
+    "default": 0
+   },
+   {
+    "fieldname": "include_default_book_entries",
+    "label": "Include Default Book Entries",
+    "fieldtype": "Check",
+    "default": 1
+   },
+   {
+    "fieldname": "show_zero_values",
+    "label": "Show zero values",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Customer Ledger Summary",
+  "slug": "customer_ledger_summary",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "party",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "customer_group",
+    "label": "Customer Group",
+    "fieldtype": "Link",
+    "options": "Customer Group"
+   },
+   {
+    "fieldname": "payment_terms_template",
+    "label": "Payment Terms Template",
+    "fieldtype": "Link",
+    "options": "Payment Terms Template"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   },
+   {
+    "fieldname": "sales_partner",
+    "label": "Sales Partner",
+    "fieldtype": "Link",
+    "options": "Sales Partner"
+   },
+   {
+    "fieldname": "sales_person",
+    "label": "Sales Person",
+    "fieldtype": "Link",
+    "options": "Sales Person"
+   },
+   {
+    "fieldname": "tax_id",
+    "label": "Tax Id",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "customer_name",
+    "label": "Customer Name",
+    "fieldtype": "Data",
+    "hidden": 1
+   }
+  ]
+ },
+ {
+  "name": "Deferred Revenue and Expense",
+  "slug": "deferred_revenue_and_expense",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Filter Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "hidden": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "hidden": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'",
+    "default": "@year_end"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "periodicity",
+    "label": "Periodicity",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "type",
+    "label": "Invoice Type",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Revenue",
+      "label": "Revenue"
+     },
+     {
+      "value": "Expense",
+      "label": "Expense"
+     }
+    ],
+    "default": "Revenue",
+    "reqd": 1
+   },
+   {
+    "fieldname": "with_upcoming_postings",
+    "label": "Show with upcoming revenue/expense",
+    "fieldtype": "Check",
+    "default": 1
+   }
+  ]
+ },
+ {
+  "name": "Delivered Items To Be Billed",
+  "slug": "delivered_items_to_be_billed",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": []
+ },
+ {
+  "name": "Dimension-wise Accounts Balance Report",
+  "slug": "dimension_wise_accounts_balance_report",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "dimension",
+    "label": "Select Dimension",
+    "fieldtype": "Select",
+    "options": [
+     "Cost Center",
+     "Project"
+    ],
+    "default": "Cost Center",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "General Ledger",
+  "slug": "general_ledger",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "account",
+    "label": "Account",
+    "fieldtype": "MultiSelectList",
+    "options": "Account"
+   },
+   {
+    "fieldname": "voucher_no",
+    "label": "Voucher No",
+    "fieldtype": "Data"
+   },
+   {
+    "fieldname": "party_type",
+    "label": "Party Type",
+    "fieldtype": "Link",
+    "options": "Party Type"
+   },
+   {
+    "fieldname": "party",
+    "label": "Party",
+    "fieldtype": "MultiSelectList"
+   },
+   {
+    "fieldname": "party_name",
+    "label": "Party Name",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group by",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Group by Voucher",
+      "label": "Group by Voucher"
+     },
+     {
+      "value": "Group by Voucher (Consolidated)",
+      "label": "Group by Voucher (Consolidated)"
+     },
+     {
+      "value": "Group by Account",
+      "label": "Group by Account"
+     },
+     {
+      "value": "Group by Party",
+      "label": "Group by Party"
+     }
+    ],
+    "default": "Group by Voucher (Consolidated)"
+   },
+   {
+    "fieldname": "tax_id",
+    "label": "Tax Id",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "presentation_currency",
+    "label": "Currency",
+    "fieldtype": "Select",
+    "options": []
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "MultiSelectList",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "MultiSelectList",
+    "options": "Project"
+   },
+   {
+    "fieldname": "include_dimensions",
+    "label": "Consider Accounting Dimensions",
+    "fieldtype": "Check",
+    "default": 1
+   },
+   {
+    "fieldname": "show_opening_entries",
+    "label": "Show Opening Entries",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "include_default_book_entries",
+    "label": "Include Default Book Entries",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_cancelled_entries",
+    "label": "Show Cancelled Entries",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_net_values_in_party_account",
+    "label": "Show Net Values in Party Account",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Gross and Net Profit Report",
+  "slug": "gross_and_net_profit_report",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Filter Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "periodicity",
+    "label": "Periodicity",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Yearly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "presentation_currency",
+    "label": "Currency",
+    "fieldtype": "Select",
+    "options": []
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "MultiSelectList",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "MultiSelectList",
+    "options": "Project"
+   },
+   {
+    "fieldname": "accumulated_values",
+    "label": "Accumulated Values",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Gross Profit",
+  "slug": "gross_profit",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "sales_invoice",
+    "label": "Sales Invoice",
+    "fieldtype": "Link",
+    "options": "Sales Invoice"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "Invoice",
+     "Item Code",
+     "Item Group",
+     "Brand",
+     "Warehouse",
+     "Customer",
+     "Customer Group",
+     "Territory",
+     "Sales Person",
+     "Project",
+     "Monthly",
+     "Payment Term"
+    ],
+    "default": "Invoice"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "sales_person",
+    "label": "Sales Person",
+    "fieldtype": "Link",
+    "options": "Sales Person"
+   }
+  ]
+ },
+ {
+  "name": "Inactive Sales Items",
+  "slug": "inactive_sales_items",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory",
+    "reqd": 1
+   },
+   {
+    "fieldname": "item",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "days",
+    "label": "Days Since Last order",
+    "fieldtype": "Select",
+    "options": [
+     "30",
+     "60",
+     "90"
+    ],
+    "default": 30
+   }
+  ]
+ },
+ {
+  "name": "Item-wise Purchase Register",
+  "slug": "item_wise_purchase_register",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "mode_of_payment",
+    "label": "Mode of Payment",
+    "fieldtype": "Link",
+    "options": "Mode of Payment"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "Supplier",
+     "Item Group",
+     "Item",
+     "Invoice"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Item-wise Sales Register",
+  "slug": "item_wise_sales_register",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "mode_of_payment",
+    "label": "Mode of Payment",
+    "fieldtype": "Link",
+    "options": "Mode of Payment"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "Customer Group",
+     "Customer",
+     "Item Group",
+     "Item",
+     "Territory",
+     "Invoice"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Payment Ledger",
+  "slug": "payment_ledger",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Payment Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "account",
+    "label": "Account",
+    "fieldtype": "MultiSelectList",
+    "options": "Account"
+   },
+   {
+    "fieldname": "voucher_no",
+    "label": "Voucher No",
+    "fieldtype": "Data"
+   },
+   {
+    "fieldname": "against_voucher_no",
+    "label": "Against Voucher No",
+    "fieldtype": "Data"
+   }
+  ]
+ },
+ {
+  "name": "Payment Period Based On Invoice Date",
+  "slug": "payment_period_based_on_invoice_date",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Journal Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "payment_type",
+    "label": "Payment Type",
+    "fieldtype": "Select",
+    "options": [
+     "Incoming",
+     "Outgoing"
+    ],
+    "default": "Incoming"
+   },
+   {
+    "fieldname": "party_type",
+    "label": "Party Type",
+    "fieldtype": "Link",
+    "options": "DocType"
+   },
+   {
+    "fieldname": "party",
+    "label": "Party",
+    "fieldtype": "Dynamic Link"
+   }
+  ]
+ },
+ {
+  "name": "Profit and Loss Statement",
+  "slug": "profit_and_loss_statement",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Filter Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval:doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "periodicity",
+    "label": "Periodicity",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Yearly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "presentation_currency",
+    "label": "Currency",
+    "fieldtype": "Select",
+    "options": []
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "MultiSelectList",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "MultiSelectList",
+    "options": "Project"
+   },
+   {
+    "fieldname": "include_default_book_entries",
+    "label": "Include Default Book Entries",
+    "fieldtype": "Check",
+    "default": 1
+   }
+  ]
+ },
+ {
+  "name": "Profitability Analysis",
+  "slug": "profitability_analysis",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Cost Center",
+     "Project"
+    ],
+    "default": "Cost Center",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end"
+   },
+   {
+    "fieldname": "show_zero_values",
+    "label": "Show zero values",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Purchase Invoice Trends",
+  "slug": "purchase_invoice_trends",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "period_based_on",
+    "label": "Period based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "posting_date",
+      "label": "Posting Date"
+     },
+     {
+      "value": "bill_date",
+      "label": "Billing Date"
+     }
+    ],
+    "default": "posting_date"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Supplier",
+      "label": "Supplier"
+     },
+     {
+      "value": "Supplier Group",
+      "label": "Supplier Group"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Supplier",
+      "label": "Supplier"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Purchase Register",
+  "slug": "purchase_register",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "mode_of_payment",
+    "label": "Mode of Payment",
+    "fieldtype": "Link",
+    "options": "Mode of Payment"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   }
+  ]
+ },
+ {
+  "name": "Received Items To Be Billed",
+  "slug": "received_items_to_be_billed",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": []
+ },
+ {
+  "name": "Sales Invoice Trends",
+  "slug": "sales_invoice_trends",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     },
+     {
+      "value": "Customer Group",
+      "label": "Customer Group"
+     },
+     {
+      "value": "Territory",
+      "label": "Territory"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     }
+    ]
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   }
+  ]
+ },
+ {
+  "name": "Sales Partners Commission",
+  "slug": "sales_partners_commission",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Sales Register",
+  "slug": "sales_register",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "mode_of_payment",
+    "label": "Mode of Payment",
+    "fieldtype": "Link",
+    "options": "Mode of Payment"
+   },
+   {
+    "fieldname": "owner",
+    "label": "Owner",
+    "fieldtype": "Link",
+    "options": "User"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   }
+  ]
+ },
+ {
+  "name": "Share Balance",
+  "slug": "share_balance",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Share Transfer",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "date",
+    "label": "Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "shareholder",
+    "label": "Shareholder",
+    "fieldtype": "Link",
+    "options": "Shareholder"
+   }
+  ]
+ },
+ {
+  "name": "Share Ledger",
+  "slug": "share_ledger",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Share Transfer",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "date",
+    "label": "Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "shareholder",
+    "label": "Shareholder",
+    "fieldtype": "Link",
+    "options": "Shareholder"
+   }
+  ]
+ },
+ {
+  "name": "Supplier Ledger Summary",
+  "slug": "supplier_ledger_summary",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "Purchase Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "party",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier"
+   },
+   {
+    "fieldname": "supplier_group",
+    "label": "Supplier Group",
+    "fieldtype": "Link",
+    "options": "Supplier Group"
+   },
+   {
+    "fieldname": "payment_terms_template",
+    "label": "Payment Terms Template",
+    "fieldtype": "Link",
+    "options": "Payment Terms Template"
+   },
+   {
+    "fieldname": "tax_id",
+    "label": "Tax Id",
+    "fieldtype": "Data",
+    "hidden": 1
+   },
+   {
+    "fieldname": "supplier_name",
+    "label": "Supplier Name",
+    "fieldtype": "Data",
+    "hidden": 1
+   }
+  ]
+ },
+ {
+  "name": "Tax Detail",
+  "slug": "tax_detail",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@month_end",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "report_name",
+    "label": "Report Name",
+    "fieldtype": "Read Only",
+    "reqd": 1,
+    "hidden": 1
+   },
+   {
+    "fieldname": "mode",
+    "label": "Mode",
+    "fieldtype": "Read Only",
+    "default": "edit",
+    "reqd": 1,
+    "hidden": 1
+   }
+  ]
+ },
+ {
+  "name": "Trial Balance",
+  "slug": "trial_balance",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "presentation_currency",
+    "label": "Currency",
+    "fieldtype": "Select",
+    "options": []
+   },
+   {
+    "fieldname": "with_period_closing_entry",
+    "label": "Period Closing Entry",
+    "fieldtype": "Check",
+    "default": 1
+   },
+   {
+    "fieldname": "show_zero_values",
+    "label": "Show zero values",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_unclosed_fy_pl_balances",
+    "label": "Show unclosed fiscal year's P&L balances",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "include_default_book_entries",
+    "label": "Include Default Book Entries",
+    "fieldtype": "Check",
+    "default": 1
+   }
+  ]
+ },
+ {
+  "name": "Trial Balance (Simple)",
+  "slug": "trial_balance_simple",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Query Report",
+  "add_total_row": 1,
+  "filters": []
+ },
+ {
+  "name": "Trial Balance for Party",
+  "slug": "trial_balance_for_party",
+  "section": "Accounting",
+  "module": "Accounts",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end"
+   },
+   {
+    "fieldname": "party_type",
+    "label": "Party Type",
+    "fieldtype": "Link",
+    "options": "Party Type",
+    "default": "Customer",
+    "reqd": 1
+   },
+   {
+    "fieldname": "party",
+    "label": "Party",
+    "fieldtype": "Dynamic Link"
+   },
+   {
+    "fieldname": "account",
+    "label": "Account",
+    "fieldtype": "Link",
+    "options": "Account"
+   },
+   {
+    "fieldname": "show_zero_values",
+    "label": "Show zero values",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Fixed Asset Register",
+  "slug": "fixed_asset_register",
+  "section": "Assets",
+  "module": "Assets",
+  "ref_doctype": "Asset",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "In Location",
+     "Disposed"
+    ],
+    "default": "In Location"
+   },
+   {
+    "fieldname": "filter_based_on",
+    "label": "Period Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Fiscal Year",
+     "Date Range"
+    ],
+    "default": "Fiscal Year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "default": "@today|m-12",
+    "reqd": 1,
+    "depends_on": "eval: doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "depends_on": "eval: doc.filter_based_on == 'Date Range'"
+   },
+   {
+    "fieldname": "from_fiscal_year",
+    "label": "Start Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval: doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "to_fiscal_year",
+    "label": "End Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1,
+    "depends_on": "eval: doc.filter_based_on == 'Fiscal Year'"
+   },
+   {
+    "fieldname": "date_based_on",
+    "label": "Date Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Purchase Date",
+     "Available For Use Date"
+    ],
+    "default": "Purchase Date",
+    "reqd": 1
+   },
+   {
+    "fieldname": "asset_category",
+    "label": "Asset Category",
+    "fieldtype": "Link",
+    "options": "Asset Category"
+   },
+   {
+    "fieldname": "finance_book",
+    "label": "Finance Book",
+    "fieldtype": "Link",
+    "options": "Finance Book"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "--Select a group--",
+     "Asset Category",
+     "Location"
+    ],
+    "default": "--Select a group--",
+    "reqd": 1
+   },
+   {
+    "fieldname": "is_existing_asset",
+    "label": "Is Existing Asset",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Item-wise Purchase History",
+  "slug": "item_wise_purchase_history",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Purchase Order",
+  "report_type": "Query Report",
+  "add_total_row": 1,
+  "filters": []
+ },
+ {
+  "name": "Procurement Tracker",
+  "slug": "procurement_tracker",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Purchase Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "cost_center",
+    "label": "Cost Center",
+    "fieldtype": "Link",
+    "options": "Cost Center"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end"
+   }
+  ]
+ },
+ {
+  "name": "Purchase Analytics",
+  "slug": "purchase_analytics",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Purchase Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "tree_type",
+    "label": "Tree Type",
+    "fieldtype": "Select",
+    "options": [
+     "Supplier Group",
+     "Supplier",
+     "Item Group",
+     "Item"
+    ],
+    "default": "Supplier",
+    "reqd": 1
+   },
+   {
+    "fieldname": "doc_type",
+    "label": "based_on",
+    "fieldtype": "Select",
+    "options": [
+     "Purchase Order",
+     "Purchase Receipt",
+     "Purchase Invoice"
+    ],
+    "default": "Purchase Invoice",
+    "reqd": 1
+   },
+   {
+    "fieldname": "value_quantity",
+    "label": "Value Or Qty",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Value",
+      "label": "Value"
+     },
+     {
+      "value": "Quantity",
+      "label": "Quantity"
+     }
+    ],
+    "default": "Value",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Weekly",
+      "label": "Weekly"
+     },
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Purchase Order Analysis",
+  "slug": "purchase_order_analysis",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Purchase Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project",
+    "width": "80"
+   },
+   {
+    "fieldname": "name",
+    "label": "Purchase Order",
+    "fieldtype": "Link",
+    "options": "Purchase Order",
+    "width": "80"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "MultiSelectList",
+    "width": "80"
+   },
+   {
+    "fieldname": "group_by_po",
+    "label": "Group by Purchase Order",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Purchase Order Trends",
+  "slug": "purchase_order_trends",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Purchase Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "period_based_on",
+    "label": "Period based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "posting_date",
+      "label": "Posting Date"
+     },
+     {
+      "value": "bill_date",
+      "label": "Billing Date"
+     }
+    ],
+    "default": "posting_date"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Supplier",
+      "label": "Supplier"
+     },
+     {
+      "value": "Supplier Group",
+      "label": "Supplier Group"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Supplier",
+      "label": "Supplier"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Requested Items to Order and Receive",
+  "slug": "requested_items_to_order_and_receive",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Material Request",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "material_request",
+    "label": "Material Request",
+    "fieldtype": "Link",
+    "options": "Material Request",
+    "width": "80"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item",
+    "width": "80"
+   },
+   {
+    "fieldname": "group_by_mr",
+    "label": "Group by Material Request",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Subcontract Order Summary",
+  "slug": "subcontract_order_summary",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Subcontracting Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "order_type",
+    "label": "Order Type",
+    "fieldtype": "Select",
+    "options": [
+     "Purchase Order",
+     "Subcontracting Order"
+    ],
+    "default": "Subcontracting Order"
+   },
+   {
+    "fieldname": "name",
+    "label": "Subcontract Order",
+    "fieldtype": "Data"
+   }
+  ]
+ },
+ {
+  "name": "Subcontracted Item To Be Received",
+  "slug": "subcontracted_item_to_be_received",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Subcontracting Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "order_type",
+    "label": "Order Type",
+    "fieldtype": "Select",
+    "options": [
+     "Purchase Order",
+     "Subcontracting Order"
+    ],
+    "default": "Subcontracting Order"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@month_start|d-1",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Subcontracted Raw Materials To Be Transferred",
+  "slug": "subcontracted_raw_materials_to_be_transferred",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Subcontracting Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "order_type",
+    "label": "Order Type",
+    "fieldtype": "Select",
+    "options": [
+     "Purchase Order",
+     "Subcontracting Order"
+    ],
+    "default": "Subcontracting Order"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@month_start|d-1",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Supplier Quotation Comparison",
+  "slug": "supplier_quotation_comparison",
+  "section": "Buying",
+  "module": "Buying",
+  "ref_doctype": "Supplier Quotation",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "MultiSelectList",
+    "options": "Supplier"
+   },
+   {
+    "fieldname": "supplier_quotation",
+    "label": "Supplier Quotation",
+    "fieldtype": "MultiSelectList",
+    "options": "Supplier Quotation"
+   },
+   {
+    "fieldname": "request_for_quotation",
+    "label": "Request for Quotation",
+    "fieldtype": "Link",
+    "options": "Request for Quotation"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group by",
+    "fieldtype": "Select",
+    "options": [
+     "Group by Supplier",
+     "Group by Item"
+    ],
+    "default": "Group by Supplier"
+   },
+   {
+    "fieldname": "include_expired",
+    "label": "Include Expired",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Campaign Efficiency",
+  "slug": "campaign_efficiency",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Lead",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end"
+   }
+  ]
+ },
+ {
+  "name": "First Response Time for Opportunity",
+  "slug": "first_response_time_for_opportunity",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Opportunity",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|d-30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Lead Conversion Time",
+  "slug": "lead_conversion_time",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Communication",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|d-30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Lead Details",
+  "slug": "lead_details",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Lead",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-12",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Lead",
+      "label": "Lead"
+     },
+     {
+      "value": "Open",
+      "label": "Open"
+     },
+     {
+      "value": "Replied",
+      "label": "Replied"
+     },
+     {
+      "value": "Opportunity",
+      "label": "Opportunity"
+     },
+     {
+      "value": "Quotation",
+      "label": "Quotation"
+     },
+     {
+      "value": "Lost Quotation",
+      "label": "Lost Quotation"
+     },
+     {
+      "value": "Interested",
+      "label": "Interested"
+     },
+     {
+      "value": "Converted",
+      "label": "Converted"
+     },
+     {
+      "value": "Do Not Contact",
+      "label": "Do Not Contact"
+     }
+    ]
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   }
+  ]
+ },
+ {
+  "name": "Lead Owner Efficiency",
+  "slug": "lead_owner_efficiency",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Lead",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end"
+   }
+  ]
+ },
+ {
+  "name": "Lost Opportunity",
+  "slug": "lost_opportunity",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Opportunity",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-12",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "lost_reason",
+    "label": "Lost Reason",
+    "fieldtype": "Link",
+    "options": "Opportunity Lost Reason"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   },
+   {
+    "fieldname": "opportunity_from",
+    "label": "Opportunity From",
+    "fieldtype": "Link",
+    "options": "DocType"
+   },
+   {
+    "fieldname": "party_name",
+    "label": "Party",
+    "fieldtype": "Dynamic Link",
+    "options": "opportunity_from"
+   }
+  ]
+ },
+ {
+  "name": "Opportunity Summary by Sales Stage",
+  "slug": "opportunity_summary_by_sales_stage",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Opportunity",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Opportunity Owner",
+     "Source",
+     "Opportunity Type"
+    ],
+    "default": "Opportunity Owner"
+   },
+   {
+    "fieldname": "data_based_on",
+    "label": "Data Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Number",
+     "Amount"
+    ],
+    "default": "Number"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "MultiSelectList"
+   },
+   {
+    "fieldname": "opportunity_source",
+    "label": "Opportunity Source",
+    "fieldtype": "Link",
+    "options": "Lead Source"
+   },
+   {
+    "fieldname": "opportunity_type",
+    "label": "Opportunity Type",
+    "fieldtype": "Link",
+    "options": "Opportunity Type"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   }
+  ]
+ },
+ {
+  "name": "Prospects Engaged But Not Converted",
+  "slug": "prospects_engaged_but_not_converted",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Lead",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "lead",
+    "label": "Lead",
+    "fieldtype": "Link",
+    "options": "Lead"
+   },
+   {
+    "fieldname": "no_of_interaction",
+    "label": "Number of Interaction",
+    "fieldtype": "Int",
+    "default": 1
+   },
+   {
+    "fieldname": "lead_age",
+    "label": "Minimum Lead Age (Days)",
+    "fieldtype": "Int",
+    "default": 60
+   }
+  ]
+ },
+ {
+  "name": "Sales Pipeline Analytics",
+  "slug": "sales_pipeline_analytics",
+  "section": "CRM",
+  "module": "CRM",
+  "ref_doctype": "Opportunity",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "pipeline_by",
+    "label": "Pipeline By",
+    "fieldtype": "Select",
+    "options": [
+     "Owner",
+     "Sales Stage"
+    ],
+    "default": "Owner"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     "Monthly",
+     "Quarterly"
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "assigned_to",
+    "label": "Assigned To",
+    "fieldtype": "Link",
+    "options": "User"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "Open",
+     "Quotation",
+     "Converted",
+     "Replied"
+    ]
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Number",
+     "Amount"
+    ],
+    "default": "Number"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "opportunity_source",
+    "label": "Opportunity Source",
+    "fieldtype": "Link",
+    "options": "Lead Source"
+   },
+   {
+    "fieldname": "opportunity_type",
+    "label": "Opportunity Type",
+    "fieldtype": "Link",
+    "options": "Opportunity Type"
+   }
+  ]
+ },
+ {
+  "name": "BOM Explorer",
+  "slug": "bom_explorer",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "BOM",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "bom",
+    "label": "BOM",
+    "fieldtype": "Link",
+    "options": "BOM",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "BOM Operations Time",
+  "slug": "bom_operations_time",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "BOM",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "item_code",
+    "label": "Item Code",
+    "fieldtype": "Link",
+    "options": "Item",
+    "width": "100"
+   },
+   {
+    "fieldname": "bom_id",
+    "label": "BOM ID",
+    "fieldtype": "MultiSelectList",
+    "options": "BOM",
+    "width": "100"
+   },
+   {
+    "fieldname": "workstation",
+    "label": "Workstation",
+    "fieldtype": "Link",
+    "options": "Workstation",
+    "width": "100"
+   }
+  ]
+ },
+ {
+  "name": "BOM Stock Calculated",
+  "slug": "bom_stock_calculated",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "BOM",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "bom",
+    "label": "BOM",
+    "fieldtype": "Link",
+    "options": "BOM",
+    "reqd": 1
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "qty_to_make",
+    "label": "Quantity to Make",
+    "fieldtype": "Float",
+    "default": "1.0",
+    "reqd": 1
+   },
+   {
+    "fieldname": "show_exploded_view",
+    "label": "Show exploded view",
+    "fieldtype": "Check",
+    "default": false
+   }
+  ]
+ },
+ {
+  "name": "BOM Stock Report",
+  "slug": "bom_stock_report",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "BOM",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "bom",
+    "label": "BOM",
+    "fieldtype": "Link",
+    "options": "BOM",
+    "reqd": 1
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse",
+    "reqd": 1
+   },
+   {
+    "fieldname": "show_exploded_view",
+    "label": "Show exploded view",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "qty_to_produce",
+    "label": "Quantity to Produce",
+    "fieldtype": "Int",
+    "default": "1"
+   }
+  ]
+ },
+ {
+  "name": "BOM Variance Report",
+  "slug": "bom_variance_report",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Stock Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "bom_no",
+    "label": "BOM No",
+    "fieldtype": "Link",
+    "options": "BOM"
+   },
+   {
+    "fieldname": "work_order",
+    "label": "Work Order",
+    "fieldtype": "Link",
+    "options": "Work Order"
+   }
+  ]
+ },
+ {
+  "name": "Completed Work Orders",
+  "slug": "completed_work_orders",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Cost of Poor Quality Report",
+  "slug": "cost_of_poor_quality_report",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Job Card",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Datetime",
+    "default": "@now|m-1"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Datetime",
+    "default": "@now"
+   },
+   {
+    "fieldname": "name",
+    "label": "Job Card",
+    "fieldtype": "Link",
+    "options": "Job Card"
+   },
+   {
+    "fieldname": "work_order",
+    "label": "Work Order",
+    "fieldtype": "Link",
+    "options": "Work Order"
+   },
+   {
+    "fieldname": "operation",
+    "label": "Operation",
+    "fieldtype": "Link",
+    "options": "Operation"
+   },
+   {
+    "fieldname": "workstation",
+    "label": "Workstation",
+    "fieldtype": "Link",
+    "options": "Workstation"
+   },
+   {
+    "fieldname": "production_item",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "serial_no",
+    "label": "Serial No",
+    "fieldtype": "Link",
+    "options": "Serial No",
+    "depends_on": "eval: doc.production_item"
+   },
+   {
+    "fieldname": "batch_no",
+    "label": "Batch No",
+    "fieldtype": "Link",
+    "options": "Batch No",
+    "depends_on": "eval: doc.production_item"
+   }
+  ]
+ },
+ {
+  "name": "Downtime Analysis",
+  "slug": "downtime_analysis",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Downtime Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Datetime",
+    "default": "@now|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Datetime",
+    "default": "@now",
+    "reqd": 1
+   },
+   {
+    "fieldname": "workstation",
+    "label": "Machine",
+    "fieldtype": "Link",
+    "options": "Workstation"
+   }
+  ]
+ },
+ {
+  "name": "Exponential Smoothing Forecasting",
+  "slug": "exponential_smoothing_forecasting",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today|m12",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on_document",
+    "label": "Based On Document",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Quotation"
+    ],
+    "default": "Sales Order",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on_field",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Qty",
+     "Amount"
+    ],
+    "default": "Qty",
+    "reqd": 1
+   },
+   {
+    "fieldname": "no_of_years",
+    "label": "Based On Data ( in years )",
+    "fieldtype": "Select",
+    "options": [
+     "3",
+     "6",
+     "9"
+    ],
+    "default": 3,
+    "reqd": 1
+   },
+   {
+    "fieldname": "periodicity",
+    "label": "Periodicity",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Yearly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "smoothing_constant",
+    "label": "Smoothing Constant",
+    "fieldtype": "Select",
+    "options": [
+     "0",
+     "0.1",
+     "0.2",
+     "0.3",
+     "0.4",
+     "0.5",
+     "0.6",
+     "0.7",
+     "0.8",
+     "0.9",
+     "1"
+    ],
+    "default": 0.3,
+    "reqd": 1
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item Code",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   }
+  ]
+ },
+ {
+  "name": "Issued Items Against Work Order",
+  "slug": "issued_items_against_work_order",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Job Card Summary",
+  "slug": "job_card_summary",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Job Card",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Posting Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Posting Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Open",
+     "Work In Progress",
+     "Completed",
+     "On Hold"
+    ]
+   },
+   {
+    "fieldname": "work_order",
+    "label": "Work Orders",
+    "fieldtype": "MultiSelectList",
+    "options": "Work Order"
+   },
+   {
+    "fieldname": "production_item",
+    "label": "Production Item",
+    "fieldtype": "MultiSelectList",
+    "options": "Item"
+   },
+   {
+    "fieldname": "workstation",
+    "label": "Workstation",
+    "fieldtype": "Link",
+    "options": "Workstation"
+   },
+   {
+    "fieldname": "operation",
+    "label": "Operation",
+    "fieldtype": "Link",
+    "options": "Operation"
+   }
+  ]
+ },
+ {
+  "name": "Open Work Orders",
+  "slug": "open_work_orders",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Process Loss Report",
+  "slug": "process_loss_report",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "item",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "work_order",
+    "label": "Work Order",
+    "fieldtype": "Link",
+    "options": "Work Order"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   }
+  ]
+ },
+ {
+  "name": "Production Analytics",
+  "slug": "production_analytics",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Weekly",
+      "label": "Weekly"
+     },
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Production Plan Summary",
+  "slug": "production_plan_summary",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Production Plan",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "production_plan",
+    "label": "Production Plan",
+    "fieldtype": "Link",
+    "options": "Production Plan",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Production Planning Report",
+  "slug": "production_planning_report",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Material Request",
+     "Work Order"
+    ],
+    "default": "Sales Order",
+    "reqd": 1
+   },
+   {
+    "fieldname": "docnames",
+    "label": "Document Name",
+    "fieldtype": "MultiSelectList"
+   },
+   {
+    "fieldname": "raw_material_warehouse",
+    "label": "Raw Material Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse",
+    "depends_on": "eval: doc.based_on != 'Work Order'"
+   },
+   {
+    "fieldname": "order_by",
+    "label": "Order By",
+    "fieldtype": "Select",
+    "options": [
+     "Delivery Date",
+     "Total Amount"
+    ],
+    "default": "Delivery Date"
+   },
+   {
+    "fieldname": "include_subassembly_raw_materials",
+    "label": "Include Sub-assembly Raw Materials",
+    "fieldtype": "Check",
+    "default": 0,
+    "depends_on": "eval: doc.based_on != 'Work Order'"
+   }
+  ]
+ },
+ {
+  "name": "Quality Inspection Summary",
+  "slug": "quality_inspection_summary",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Quality Inspection",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-12",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Accepted",
+     "Rejected"
+    ]
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item Code",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "inspected_by",
+    "label": "Inspected By",
+    "fieldtype": "Link",
+    "options": "User"
+   }
+  ]
+ },
+ {
+  "name": "Work Order Consumed Materials",
+  "slug": "work_order_consumed_materials",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "name",
+    "label": "Work Order",
+    "fieldtype": "Link",
+    "options": "Work Order"
+   },
+   {
+    "fieldname": "production_item",
+    "label": "Production Item",
+    "fieldtype": "Link",
+    "options": "Item",
+    "depends_on": "eval: !doc.name"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "In Process",
+     "Completed",
+     "Stopped"
+    ]
+   },
+   {
+    "fieldname": "show_extra_consumed_materials",
+    "label": "Excess Materials Consumed",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Work Order Stock Report",
+  "slug": "work_order_stock_report",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   }
+  ]
+ },
+ {
+  "name": "Work Order Summary",
+  "slug": "work_order_summary",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Creation Date",
+     "Planned Date",
+     "Actual Date"
+    ],
+    "default": "Creation Date"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Posting Date",
+    "fieldtype": "Date",
+    "default": "@today|m-3",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Posting Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Not Started",
+     "In Process",
+     "Completed",
+     "Stopped",
+     "Closed"
+    ]
+   },
+   {
+    "fieldname": "sales_order",
+    "label": "Sales Orders",
+    "fieldtype": "MultiSelectList",
+    "options": "Sales Order"
+   },
+   {
+    "fieldname": "production_item",
+    "label": "Production Item",
+    "fieldtype": "MultiSelectList",
+    "options": "Item"
+   },
+   {
+    "fieldname": "age",
+    "label": "Age",
+    "fieldtype": "Int",
+    "default": "0"
+   },
+   {
+    "fieldname": "charts_based_on",
+    "label": "Charts Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Status",
+     "Age",
+     "Quantity"
+    ],
+    "default": "Status"
+   }
+  ]
+ },
+ {
+  "name": "Work Orders in Progress",
+  "slug": "work_orders_in_progress",
+  "section": "Manufacturing",
+  "module": "Manufacturing",
+  "ref_doctype": "Work Order",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "POS Register",
+  "slug": "pos_register",
+  "section": "Point of Sale",
+  "module": "Accounts",
+  "ref_doctype": "POS Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "60px"
+   },
+   {
+    "fieldname": "pos_profile",
+    "label": "POS Profile",
+    "fieldtype": "Link",
+    "options": "POS Profile"
+   },
+   {
+    "fieldname": "cashier",
+    "label": "Cashier",
+    "fieldtype": "Link",
+    "options": "User"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "mode_of_payment",
+    "label": "Payment Method",
+    "fieldtype": "Link",
+    "options": "Mode of Payment"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group by",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "POS Profile",
+     "Cashier",
+     "Payment Method",
+     "Customer"
+    ],
+    "default": "POS Profile"
+   },
+   {
+    "fieldname": "is_return",
+    "label": "Is Return",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Sales Payment Summary",
+  "slug": "sales_payment_summary",
+  "section": "Point of Sale",
+  "module": "Accounts",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "owner",
+    "label": "Owner",
+    "fieldtype": "Link",
+    "options": "User"
+   },
+   {
+    "fieldname": "is_pos",
+    "label": "Show only POS",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "payment_detail",
+    "label": "Show Payment Details",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Daily Timesheet Summary",
+  "slug": "daily_timesheet_summary",
+  "section": "Projects",
+  "module": "Projects",
+  "ref_doctype": "Timesheet",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   }
+  ]
+ },
+ {
+  "name": "Delayed Tasks Summary",
+  "slug": "delayed_tasks_summary",
+  "section": "Projects",
+  "module": "Projects",
+  "ref_doctype": "Task",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "priority",
+    "label": "Priority",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Low",
+     "Medium",
+     "High",
+     "Urgent"
+    ]
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Open",
+     "Working",
+     "Pending Review",
+     "Overdue",
+     "Completed"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Employee Billing Summary",
+  "slug": "employee_billing_summary",
+  "section": "Projects",
+  "module": "Projects",
+  "ref_doctype": "Timesheet",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "employee",
+    "label": "Employee",
+    "fieldtype": "Link",
+    "options": "Employee",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@month_start|d-1",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Project Billing Summary",
+  "slug": "project_billing_summary",
+  "section": "Projects",
+  "module": "Projects",
+  "ref_doctype": "Timesheet",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@month_start|d-1",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Project Summary",
+  "slug": "project_summary",
+  "section": "Projects",
+  "module": "Projects",
+  "ref_doctype": "Project",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "is_active",
+    "label": "Is Active",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Yes",
+     "No"
+    ],
+    "default": "Yes"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Open",
+     "Completed",
+     "Cancelled"
+    ],
+    "default": "Open"
+   },
+   {
+    "fieldname": "project_type",
+    "label": "Project Type",
+    "fieldtype": "Link",
+    "options": "Project Type"
+   },
+   {
+    "fieldname": "priority",
+    "label": "Priority",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     "Low",
+     "Medium",
+     "High"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Project wise Stock Tracking",
+  "slug": "project_wise_stock_tracking",
+  "section": "Projects",
+  "module": "Projects",
+  "ref_doctype": "Project",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Address And Contacts",
+  "slug": "address_and_contacts",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Address",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "party_type",
+    "label": "Party Type",
+    "fieldtype": "Link",
+    "options": "DocType",
+    "reqd": 1
+   },
+   {
+    "fieldname": "party_name",
+    "label": "Party Name",
+    "fieldtype": "Dynamic Link"
+   }
+  ]
+ },
+ {
+  "name": "Available Stock for Packing Items",
+  "slug": "available_stock_for_packing_items",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Product Bundle",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Customer Acquisition and Loyalty",
+  "slug": "customer_acquisition_and_loyalty",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Customer",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "view_type",
+    "label": "View Type",
+    "fieldtype": "Select",
+    "options": [
+     "Monthly",
+     "Territory Wise"
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Customer Credit Balance",
+  "slug": "customer_credit_balance",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Customer",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   }
+  ]
+ },
+ {
+  "name": "Customer-wise Item Price",
+  "slug": "customer_wise_item_price",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Customer",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer",
+    "reqd": 1
+   },
+   {
+    "fieldname": "item",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   }
+  ]
+ },
+ {
+  "name": "Customers Without Any Sales Transactions",
+  "slug": "customers_without_any_sales_transactions",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Invoice",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Inactive Customers",
+  "slug": "inactive_customers",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "days_since_last_order",
+    "label": "Days Since Last Order",
+    "fieldtype": "Int",
+    "default": 60
+   },
+   {
+    "fieldname": "doctype",
+    "label": "Doctype",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   }
+  ]
+ },
+ {
+  "name": "Item-wise Sales History",
+  "slug": "item_wise_sales_history",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   }
+  ]
+ },
+ {
+  "name": "Payment Terms Status for Sales Order",
+  "slug": "payment_terms_status_for_sales_order",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_start_date",
+    "label": "Start Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period_end_date",
+    "label": "End Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "customer_group",
+    "label": "Customer Group",
+    "fieldtype": "Link",
+    "options": "Customer Group"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "item",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "from_due_date",
+    "label": "From Due Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "to_due_date",
+    "label": "To Due Date",
+    "fieldtype": "Date"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "MultiSelectList"
+   },
+   {
+    "fieldname": "only_immediate_upcoming_term",
+    "label": "Show only the Immediate Upcoming Term",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Pending SO Items For Purchase Request",
+  "slug": "pending_so_items_for_purchase_request",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Quotation Trends",
+  "slug": "quotation_trends",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Quotation",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     },
+     {
+      "value": "Customer Group",
+      "label": "Customer Group"
+     },
+     {
+      "value": "Territory",
+      "label": "Territory"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     }
+    ]
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   }
+  ]
+ },
+ {
+  "name": "Sales Analytics",
+  "slug": "sales_analytics",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "tree_type",
+    "label": "Tree Type",
+    "fieldtype": "Select",
+    "options": [
+     "Customer Group",
+     "Customer",
+     "Item Group",
+     "Item",
+     "Territory",
+     "Order Type",
+     "Project"
+    ],
+    "default": "Customer",
+    "reqd": 1
+   },
+   {
+    "fieldname": "doc_type",
+    "label": "based_on",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Invoice",
+    "reqd": 1
+   },
+   {
+    "fieldname": "value_quantity",
+    "label": "Value Or Qty",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Value",
+      "label": "Value"
+     },
+     {
+      "value": "Quantity",
+      "label": "Quantity"
+     }
+    ],
+    "default": "Value",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Weekly",
+      "label": "Weekly"
+     },
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Sales Order Analysis",
+  "slug": "sales_order_analysis",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "sales_order",
+    "label": "Sales Order",
+    "fieldtype": "MultiSelectList",
+    "options": "Sales Order",
+    "width": "80"
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "MultiSelectList",
+    "width": "80"
+   },
+   {
+    "fieldname": "group_by_so",
+    "label": "Group by Sales Order",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Sales Order Trends",
+  "slug": "sales_order_trends",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     },
+     {
+      "value": "Customer Group",
+      "label": "Customer Group"
+     },
+     {
+      "value": "Territory",
+      "label": "Territory"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     }
+    ]
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   }
+  ]
+ },
+ {
+  "name": "Sales Partner Commission Summary",
+  "slug": "sales_partner_commission_summary",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "sales_partner",
+    "label": "Sales Partner",
+    "fieldtype": "Link",
+    "options": "Sales Partner"
+   },
+   {
+    "fieldname": "doctype",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   }
+  ]
+ },
+ {
+  "name": "Sales Partner Target Variance based on Item Group",
+  "slug": "sales_partner_target_variance_based_on_item_group",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "doctype",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "target_on",
+    "label": "Target On",
+    "fieldtype": "Select",
+    "options": [
+     "Quantity",
+     "Amount"
+    ],
+    "default": "Quantity"
+   }
+  ]
+ },
+ {
+  "name": "Sales Partner Transaction Summary",
+  "slug": "sales_partner_transaction_summary",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "sales_partner",
+    "label": "Sales Partner",
+    "fieldtype": "Link",
+    "options": "Sales Partner"
+   },
+   {
+    "fieldname": "doctype",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   },
+   {
+    "fieldname": "show_return_entries",
+    "label": "Show Return Entries",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Sales Person Commission Summary",
+  "slug": "sales_person_commission_summary",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "sales_person",
+    "label": "Sales Person",
+    "fieldtype": "Link",
+    "options": "Sales Person"
+   },
+   {
+    "fieldname": "doc_type",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   }
+  ]
+ },
+ {
+  "name": "Sales Person Target Variance Based On Item Group",
+  "slug": "sales_person_target_variance_based_on_item_group",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "doctype",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "target_on",
+    "label": "Target On",
+    "fieldtype": "Select",
+    "options": [
+     "Quantity",
+     "Amount"
+    ],
+    "default": "Quantity"
+   }
+  ]
+ },
+ {
+  "name": "Sales Person-wise Transaction Summary",
+  "slug": "sales_person_wise_transaction_summary",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "sales_person",
+    "label": "Sales Person",
+    "fieldtype": "Link",
+    "options": "Sales Person"
+   },
+   {
+    "fieldname": "doc_type",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "territory",
+    "label": "Territory",
+    "fieldtype": "Link",
+    "options": "Territory"
+   },
+   {
+    "fieldname": "show_return_entries",
+    "label": "Show Return Entries",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Territory Target Variance Based On Item Group",
+  "slug": "territory_target_variance_based_on_item_group",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Sales Order",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "doctype",
+    "label": "Document Type",
+    "fieldtype": "Select",
+    "options": [
+     "Sales Order",
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Order"
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "target_on",
+    "label": "Target On",
+    "fieldtype": "Select",
+    "options": [
+     "Quantity",
+     "Amount"
+    ],
+    "default": "Quantity"
+   }
+  ]
+ },
+ {
+  "name": "Territory-wise Sales",
+  "slug": "territory_wise_sales",
+  "section": "Selling",
+  "module": "Selling",
+  "ref_doctype": "Opportunity",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "transaction_date",
+    "label": "Transaction Date",
+    "fieldtype": "DateRange",
+    "default": "@today|m-1"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company"
+   }
+  ]
+ },
+ {
+  "name": "Batch Item Expiry Status",
+  "slug": "batch_item_expiry_status",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "width": "80"
+   }
+  ]
+ },
+ {
+  "name": "Batch-Wise Balance History",
+  "slug": "batch_wise_balance_history",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item Code",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "batch_no",
+    "label": "Batch No",
+    "fieldtype": "Link",
+    "options": "Batch"
+   }
+  ]
+ },
+ {
+  "name": "BOM Search",
+  "slug": "bom_search",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "BOM",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "item1",
+    "label": "Item 1",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item2",
+    "label": "Item 2",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item3",
+    "label": "Item 3",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item4",
+    "label": "Item 4",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item5",
+    "label": "Item 5",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "search_sub_assemblies",
+    "label": "Search Sub Assemblies",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "COGS By Item Group",
+  "slug": "cogs_by_item_group",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   }
+  ]
+ },
+ {
+  "name": "Delayed Item Report",
+  "slug": "delayed_item_report",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Delivery Note",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "sales_order",
+    "label": "Sales Order",
+    "fieldtype": "Link",
+    "options": "Sales Order"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "customer_group",
+    "label": "Customer Group",
+    "fieldtype": "Link",
+    "options": "Customer Group"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Invoice",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Delayed Order Report",
+  "slug": "delayed_order_report",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Delivery Note",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "sales_order",
+    "label": "Sales Order",
+    "fieldtype": "Link",
+    "options": "Sales Order"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "customer_group",
+    "label": "Customer Group",
+    "fieldtype": "Link",
+    "options": "Customer Group"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Delivery Note",
+     "Sales Invoice"
+    ],
+    "default": "Sales Invoice",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Delivery Note Trends",
+  "slug": "delivery_note_trends",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Delivery Note",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     },
+     {
+      "value": "Customer Group",
+      "label": "Customer Group"
+     },
+     {
+      "value": "Territory",
+      "label": "Territory"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Customer",
+      "label": "Customer"
+     }
+    ]
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   }
+  ]
+ },
+ {
+  "name": "Item Balance (Simple)",
+  "slug": "item_balance_simple",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Bin",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Item Price Stock",
+  "slug": "item_price_stock",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Item",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   }
+  ]
+ },
+ {
+  "name": "Item Prices",
+  "slug": "item_prices",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "items",
+    "label": "Items Filter",
+    "fieldtype": "Select",
+    "options": [
+     "Enabled Items only",
+     "Disabled Items only",
+     "All Items"
+    ],
+    "default": "Enabled Items only"
+   }
+  ]
+ },
+ {
+  "name": "Item Shortage Report",
+  "slug": "item_shortage_report",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Bin",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "MultiSelectList",
+    "options": "Warehouse",
+    "width": "100"
+   }
+  ]
+ },
+ {
+  "name": "Item Variant Details",
+  "slug": "item_variant_details",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Item",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "item",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Items To Be Requested",
+  "slug": "items_to_be_requested",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Material Request",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Itemwise Recommended Reorder Level",
+  "slug": "itemwise_recommended_reorder_level",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Item",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group",
+    "reqd": 1
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   }
+  ]
+ },
+ {
+  "name": "Material Requests for which Supplier Quotations are not created",
+  "slug": "material_requests_for_which_supplier_quotations_are_not_created",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Material Request",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Product Bundle Balance",
+  "slug": "product_bundle_balance",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "date",
+    "label": "Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item",
+    "width": "80"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group",
+    "width": "80"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse",
+    "width": "80"
+   }
+  ]
+ },
+ {
+  "name": "Purchase Receipt Trends",
+  "slug": "purchase_receipt_trends",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Purchase Receipt",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "period",
+    "label": "Period",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Half-Yearly",
+      "label": "Half-Yearly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly"
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year"
+   },
+   {
+    "fieldname": "period_based_on",
+    "label": "Period based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "posting_date",
+      "label": "Posting Date"
+     },
+     {
+      "value": "bill_date",
+      "label": "Billing Date"
+     }
+    ],
+    "default": "posting_date"
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Item Group",
+      "label": "Item Group"
+     },
+     {
+      "value": "Supplier",
+      "label": "Supplier"
+     },
+     {
+      "value": "Supplier Group",
+      "label": "Supplier Group"
+     },
+     {
+      "value": "Project",
+      "label": "Project"
+     }
+    ],
+    "default": "Item"
+   },
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Item",
+      "label": "Item"
+     },
+     {
+      "value": "Supplier",
+      "label": "Supplier"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Requested Items To Be Transferred",
+  "slug": "requested_items_to_be_transferred",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Entry",
+  "report_type": "Query Report",
+  "add_total_row": 1,
+  "filters": []
+ },
+ {
+  "name": "Serial No Ledger",
+  "slug": "serial_no_ledger",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "item_code",
+    "label": "Item Code",
+    "fieldtype": "Link",
+    "options": "Item",
+    "reqd": 1
+   },
+   {
+    "fieldname": "serial_no",
+    "label": "Serial No",
+    "fieldtype": "Link",
+    "options": "Serial No",
+    "reqd": 1
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "posting_date",
+    "label": "As On Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   }
+  ]
+ },
+ {
+  "name": "Stock Ageing",
+  "slug": "stock_ageing",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Item",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "As On Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "range1",
+    "label": "Ageing Range 1",
+    "fieldtype": "Int",
+    "default": "30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range2",
+    "label": "Ageing Range 2",
+    "fieldtype": "Int",
+    "default": "60",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range3",
+    "label": "Ageing Range 3",
+    "fieldtype": "Int",
+    "default": "90",
+    "reqd": 1
+   },
+   {
+    "fieldname": "show_warehouse_wise_stock",
+    "label": "Show Warehouse-wise Stock",
+    "fieldtype": "Check",
+    "default": 0
+   }
+  ]
+ },
+ {
+  "name": "Stock Analytics",
+  "slug": "stock_analytics",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "value_quantity",
+    "label": "Value Or Qty",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Value",
+      "label": "Value"
+     },
+     {
+      "value": "Quantity",
+      "label": "Quantity"
+     }
+    ],
+    "default": "Value",
+    "reqd": 1
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Weekly",
+      "label": "Weekly"
+     },
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Stock Balance",
+  "slug": "stock_balance",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "width": "80"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group",
+    "width": "80"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item",
+    "width": "80"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse",
+    "width": "80"
+   },
+   {
+    "fieldname": "warehouse_type",
+    "label": "Warehouse Type",
+    "fieldtype": "Link",
+    "options": "Warehouse Type",
+    "width": "80"
+   },
+   {
+    "fieldname": "include_uom",
+    "label": "Include UOM",
+    "fieldtype": "Link",
+    "options": "UOM"
+   },
+   {
+    "fieldname": "show_variant_attributes",
+    "label": "Show Variant Attributes",
+    "fieldtype": "Check"
+   },
+   {
+    "fieldname": "show_stock_ageing_data",
+    "label": "Show Stock Ageing Data",
+    "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "Stock Ledger",
+  "slug": "stock_ledger",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "batch_no",
+    "label": "Batch No",
+    "fieldtype": "Link",
+    "options": "Batch"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "voucher_no",
+    "label": "Voucher #",
+    "fieldtype": "Data"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project"
+   },
+   {
+    "fieldname": "include_uom",
+    "label": "Include UOM",
+    "fieldtype": "Link",
+    "options": "UOM"
+   }
+  ]
+ },
+ {
+  "name": "Stock Projected Qty",
+  "slug": "stock_projected_qty",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Item",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "fieldname": "brand",
+    "label": "Brand",
+    "fieldtype": "Link",
+    "options": "Brand"
+   },
+   {
+    "fieldname": "include_uom",
+    "label": "Include UOM",
+    "fieldtype": "Link",
+    "options": "UOM"
+   }
+  ]
+ },
+ {
+  "name": "Supplier-Wise Sales Analytics",
+  "slug": "supplier_wise_sales_analytics",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "supplier",
+    "label": "Supplier",
+    "fieldtype": "Link",
+    "options": "Supplier",
+    "width": "80"
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@month_start",
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@month_end",
+    "width": "80"
+   }
+  ]
+ },
+ {
+  "name": "Total Stock Summary",
+  "slug": "total_stock_summary",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "group_by",
+    "label": "Group By",
+    "fieldtype": "Select",
+    "options": [
+     "Warehouse",
+     "Company"
+    ],
+    "default": "Warehouse",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1,
+    "depends_on": "eval: doc.group_by != 'Company'",
+    "width": "80"
+   }
+  ]
+ },
+ {
+  "name": "Warehouse wise Item Balance Age and Value",
+  "slug": "warehouse_wise_item_balance_age_and_value",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-1",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group",
+    "width": "80"
+   },
+   {
+    "fieldname": "item_code",
+    "label": "Item",
+    "fieldtype": "Link",
+    "options": "Item",
+    "width": "80"
+   },
+   {
+    "fieldname": "warehouse",
+    "label": "Warehouse",
+    "fieldtype": "Link",
+    "options": "Warehouse",
+    "width": "80"
+   },
+   {
+    "fieldname": "filter_total_zero_qty",
+    "label": "Filter Total Zero Qty",
+    "fieldtype": "Check",
+    "default": 1
+   }
+  ]
+ },
+ {
+  "name": "Warehouse Wise Stock Balance",
+  "slug": "warehouse_wise_stock_balance",
+  "section": "Stock",
+  "module": "Stock",
+  "ref_doctype": "Stock Ledger Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "First Response Time for Issues",
+  "slug": "first_response_time_for_issues",
+  "section": "Support",
+  "module": "Support",
+  "ref_doctype": "Issue",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|d-30",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Issue Analytics",
+  "slug": "issue_analytics",
+  "section": "Support",
+  "module": "Support",
+  "ref_doctype": "Issue",
+  "report_type": "Script Report",
+  "add_total_row": 1,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Customer",
+     "Issue Type",
+     "Issue Priority",
+     "Assigned To"
+    ],
+    "default": "Customer",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Weekly",
+      "label": "Weekly"
+     },
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     },
+     {
+      "value": "Quarterly",
+      "label": "Quarterly"
+     },
+     {
+      "value": "Yearly",
+      "label": "Yearly"
+     }
+    ],
+    "default": "Monthly",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Open",
+      "label": "Open"
+     },
+     {
+      "value": "Replied",
+      "label": "Replied"
+     },
+     {
+      "value": "Resolved",
+      "label": "Resolved"
+     },
+     {
+      "value": "Closed",
+      "label": "Closed"
+     }
+    ]
+   },
+   {
+    "fieldname": "priority",
+    "label": "Issue Priority",
+    "fieldtype": "Link",
+    "options": "Issue Priority"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project"
+   },
+   {
+    "fieldname": "assigned_to",
+    "label": "Assigned To",
+    "fieldtype": "Link",
+    "options": "User"
+   }
+  ]
+ },
+ {
+  "name": "Issue Summary",
+  "slug": "issue_summary",
+  "section": "Support",
+  "module": "Support",
+  "ref_doctype": "Issue",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "based_on",
+    "label": "Based On",
+    "fieldtype": "Select",
+    "options": [
+     "Customer",
+     "Issue Type",
+     "Issue Priority",
+     "Assigned To"
+    ],
+    "default": "Customer",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@year_start",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@year_end",
+    "reqd": 1
+   },
+   {
+    "fieldname": "status",
+    "label": "Status",
+    "fieldtype": "Select",
+    "options": [
+     "",
+     {
+      "value": "Open",
+      "label": "Open"
+     },
+     {
+      "value": "Replied",
+      "label": "Replied"
+     },
+     {
+      "value": "On Hold",
+      "label": "On Hold"
+     },
+     {
+      "value": "Resolved",
+      "label": "Resolved"
+     },
+     {
+      "value": "Closed",
+      "label": "Closed"
+     }
+    ]
+   },
+   {
+    "fieldname": "priority",
+    "label": "Issue Priority",
+    "fieldtype": "Link",
+    "options": "Issue Priority"
+   },
+   {
+    "fieldname": "customer",
+    "label": "Customer",
+    "fieldtype": "Link",
+    "options": "Customer"
+   },
+   {
+    "fieldname": "project",
+    "label": "Project",
+    "fieldtype": "Link",
+    "options": "Project"
+   },
+   {
+    "fieldname": "assigned_to",
+    "label": "Assigned To",
+    "fieldtype": "Link",
+    "options": "User"
+   }
+  ]
+ },
+ {
+  "name": "Maintenance Schedules",
+  "slug": "maintenance_schedules",
+  "section": "Support",
+  "module": "Support",
+  "ref_doctype": "Maintenance Schedule",
+  "report_type": "Query Report",
+  "add_total_row": 0,
+  "filters": []
+ },
+ {
+  "name": "Support Hour Distribution",
+  "slug": "support_hour_distribution",
+  "section": "Support",
+  "module": "Support",
+  "ref_doctype": "Issue",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "from_date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "to_date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   }
+  ]
+ }
+]
