@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import brandMark from '@/assets/brand-mark.png'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -62,7 +63,7 @@ async function submitPin() {
   <div class="signin">
     <div class="signin-card">
       <div class="signin-mark">
-        <div class="glyph">X</div>
+        <img class="glyph" :src="brandMark" alt="XentraERP" />
         <div class="word">Xentra<span>ERP</span> POS</div>
       </div>
 

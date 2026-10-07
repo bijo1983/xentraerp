@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import brandMark from '@/assets/brand-mark.png'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -253,7 +254,7 @@ async function printLastReceipt() {
   <div class="terminal">
     <div class="term-main">
       <div class="term-topbar">
-        <div class="brand"><span class="glyph">X</span> {{ profile.name }}</div>
+        <div class="brand"><img class="glyph" :src="brandMark" alt="XentraERP" /> {{ profile.name }}</div>
         <div class="term-search">
           <span class="icn">⌕</span>
           <input v-model="search" type="text" placeholder="Search items…" />

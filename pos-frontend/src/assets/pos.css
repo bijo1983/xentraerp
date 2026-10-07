@@ -13,6 +13,9 @@
   --text-muted: #5b6480;
   --text-faint: #8d96b0;
   --accent: #4f46e5;
+  /* Logo colours: fixed brand blue, deliberately not tied to the theme accent */
+  --brand-blue: #1776ff;
+  --brand-blue-deep: #0b4fc4;
   --accent-soft: #eef0ff;
   --accent-text: #4338ca;
   --success: #16a34a;
@@ -228,24 +231,24 @@ h3,
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), #3730a3);
-  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
+  background: #fff;
+  object-fit: contain;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 700;
   color: #fff;
   font-size: 16px;
 }
 .signin-mark .word {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 600;
   font-size: 17px;
   color: var(--text);
 }
 .signin-mark .word span {
-  color: var(--accent-text);
+  color: var(--brand-blue);
   font-weight: 700;
 }
 .signin-steps {
@@ -508,7 +511,7 @@ h3,
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 600;
   color: var(--text);
   font-size: 14.5px;
@@ -517,7 +520,8 @@ h3,
   width: 24px;
   height: 24px;
   border-radius: 7px;
-  background: linear-gradient(135deg, var(--accent), #3730a3);
+  background: #fff;
+  object-fit: contain;
   display: flex;
   align-items: center;
   justify-content: center;
