@@ -204,6 +204,14 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 			frappe.db.set_single_value("Global Defaults", "default_currency", currency)
 		if country:
 			frappe.db.set_single_value("Global Defaults", "country", country)
+		# New tenants bill exact amounts. ERPNext's default (rounding on) rounds to a whole
+		# unit for currencies with no smallest fraction set — BHD 2.500 was billed 2.000.
+		# Only on first setup: a tenant's own choice (Settings → Bill rounding) survives re-runs.
+		from custom_erp.api.rounding import set_rounding_off_for_new_tenant
+
+		set_rounding_off_for_new_tenant()
+
+	_ensure_fiscal_year()
 
 	# ERPNext's print engine (frappe.get_print, used by every "Print"
 	# button and the PDF download endpoint) draws the company header block
@@ -269,6 +277,32 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 	frappe.db.commit()
 
 
+def _ensure_fiscal_year():
+	"""A Fiscal Year covering today, set as Global Defaults' Current Fiscal Year —
+	normally done by the Setup Wizard, which we skip. Without it, saving Global
+	Defaults fails as mandatory and fiscal-year report filters start empty.
+	Idempotent: uses an existing year that covers today if there is one."""
+	from frappe.utils import getdate, today
+
+	t = getdate(today())
+	fy = frappe.db.get_value("Fiscal Year", {"year_start_date": ["<=", t], "year_end_date": [">=", t], "disabled": 0}, "name")
+	if not fy:
+		fy = str(t.year)
+		if not frappe.db.exists("Fiscal Year", fy):
+			frappe.get_doc({
+				"doctype": "Fiscal Year",
+				"year": fy,
+				"year_start_date": f"{t.year}-01-01",
+				"year_end_date": f"{t.year}-12-31",
+			}).insert(ignore_permissions=True)
+	if not frappe.db.get_single_value("Global Defaults", "current_fiscal_year"):
+		start, end = frappe.db.get_value("Fiscal Year", fy, ["year_start_date", "year_end_date"])
+		frappe.db.set_single_value("Global Defaults", "current_fiscal_year", fy)
+		frappe.db.set_default("fiscal_year", fy)
+		frappe.db.set_default("year_start_date", str(start))
+		frappe.db.set_default("year_end_date", str(end))
+
+
 def _run_default_setup_on_site(site_name: str, company_name: str, country: str | None, time_zone: str | None):
 	"""Run run_default_setup on the target site as an isolated `bench
 	execute` subprocess, guaranteeing the correct site context."""
@@ -301,6 +335,7 @@ def get_default_setup_status():
 		"price_list": bool(frappe.db.get_single_value("Selling Settings", "selling_price_list"))
 		and bool(frappe.db.get_single_value("Buying Settings", "buying_price_list")),
 		"letter_head": bool(frappe.db.get_value("Letter Head", {"is_default": 1})),
+		"fiscal_year": bool(frappe.db.get_single_value("Global Defaults", "current_fiscal_year")),
 	}
 
 

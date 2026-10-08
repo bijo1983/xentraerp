@@ -23,6 +23,7 @@ interface Eod {
   gross_sales: number
   net_sales: number
   tax: number
+  rounding?: number
   average_bill: number
   outstanding_balance?: number
   location?: string | null
@@ -45,12 +46,12 @@ const auth = useAuthStore()
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const busy = ref(false)
-type Tab = 'mode' | 'hours' | 'staff' | 'menu' | 'locations' | 'rates' | 'tables' | 'eod'
+type Tab = 'mode' | 'hours' | 'menu' | 'locations' | 'rates' | 'tables' | 'eod'
 const tab = ref<Tab>('mode')
 // Each tab needs a capability of the signed-in role (the server enforces the same rules).
 const tabOk = computed<Record<Tab, boolean>>(() => ({
   mode: pos.can('settings'), hours: pos.can('settings'), locations: pos.can('settings'), rates: pos.can('settings'),
-  staff: pos.can('staff'), menu: pos.can('menu'), tables: pos.can('tables') && pos.isFnb, eod: pos.can('reports'),
+  menu: pos.can('menu'), tables: pos.can('tables') && pos.isFnb, eod: pos.can('reports'),
 }))
 
 async function run(fn: () => Promise<unknown>, ok?: string) {
@@ -119,10 +120,31 @@ const removeTable = (t: Table) =>
     await loadTables()
   })
 
+// --- bill rounding (tenant-wide: ERPNext rounded totals, custom_erp.api.rounding)
+interface Rounding { enabled: boolean; currency: string; step: number; steps: number[] }
+const rounding = ref<Rounding | null>(null)
+const roundOn = ref(false)
+const roundStep = ref(1)
+const loadRounding = () =>
+  run(async () => {
+    const r = await api.call<Rounding>('custom_erp.api.rounding.get_rounding')
+    rounding.value = r
+    roundOn.value = r.enabled
+    roundStep.value = r.step
+  })
+const saveRounding = () =>
+  run(async () => {
+    const r = await api.call<Rounding>('custom_erp.api.rounding.set_rounding', { enabled: roundOn.value ? 1 : 0, step: roundStep.value })
+    rounding.value = r
+    roundOn.value = r.enabled
+    roundStep.value = r.step
+  }, 'Saved — new bills use this from now on')
+const stepLabel = (v: number) => (v === 1 ? `whole ${rounding.value?.currency || 'unit'}` : `${v} ${rounding.value?.currency || ''}`)
+
 function openTab(t: Tab) {
   tab.value = t
-  if (t === 'staff') loadStaff()
-  else if (t === 'locations') loadLocations()
+  if (t === 'hours') loadRounding()
+  if (t === 'locations') loadLocations()
   else if (t === 'tables') loadTables()
   else if (t === 'menu') loadMenu()
 }
@@ -130,39 +152,10 @@ function openTab(t: Tab) {
 // --- checkout document
 const setCheckout = (v: 'POS Invoice' | 'Draft Invoice + Receipt') => run(() => pos.saveSettings({ checkout_document: v }), 'Saved')
 
-// --- staff & PINs
-interface Staff { user: string; full_name: string; has_pin: boolean; active: boolean; pos_profile: string | null; pos_role: string | null; level: string | null; role_label: string; is_cashier_role: boolean; is_admin: boolean }
+// --- registers (used by Locations)
 interface Register { name: string; location?: string | null; location_name?: string | null }
 const PIN = 'custom_erp.api.pos.'
-const staff = ref<Staff[]>([])
 const registers = ref<Register[]>([])
-const ROLES = [{ v: 'POS Waiter', l: 'Waiter — orders only' }, { v: 'POS Cashier', l: 'Cashier — modify, bill, close' }, { v: 'POS Supervisor', l: 'Supervisor — tables, menu, void, reports' }, { v: 'POS Kitchen', l: 'Kitchen — board only' }]
-// A supervisor manages waiters, cashiers and kitchen staff; only an administrator creates supervisors.
-const assignable = computed(() => (pos.settings?.level === 'admin' ? ROLES : ROLES.filter((r) => r.v !== 'POS Supervisor')))
-const ns = ref({ email: '', name: '', pin: '', profile: '', role: 'POS Waiter' })
-const pinFor = ref<Record<string, string>>({})
-async function loadStaff() {
-  try {
-    ;[staff.value, registers.value] = await Promise.all([api.call<Staff[]>(PIN + 'list_pos_users'), api.call<Register[]>(PIN + 'list_pos_profiles')])
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  }
-}
-const addStaff = () =>
-  run(async () => {
-    await api.call(PIN + 'create_pos_user', { email: ns.value.email, full_name: ns.value.name, pin: ns.value.pin, pos_profile: ns.value.profile || undefined, pos_role: ns.value.role })
-    ns.value = { email: '', name: '', pin: '', profile: ns.value.profile, role: ns.value.role }
-    await loadStaff()
-  }, 'Staff member added — they can sign in to the POS with their PIN')
-const savePin = (u: Staff) =>
-  run(async () => {
-    await api.call(PIN + 'set_pin', { user: u.user, pin: pinFor.value[u.user], pos_profile: u.pos_profile || undefined })
-    pinFor.value[u.user] = ''
-    await loadStaff()
-  }, `PIN saved for ${u.full_name}`)
-const changeRole = (u: Staff, role: string) => run(async () => { await api.call(PIN + 'set_pos_role', { user: u.user, pos_role: role }); await loadStaff() }, `${u.full_name} is now ${role.replace('POS ', '')}`)
-const canEditStaff = (u: Staff) => pos.settings?.level === 'admin' || !['admin', 'supervisor'].includes(u.level || '')
-const togglePin = (u: Staff) => run(async () => { await api.call(PIN + 'set_pin_active', { user: u.user, active: u.active ? 0 : 1 }); await loadStaff() })
 
 // --- menu
 interface MenuRow { item_code: string; item_name: string; item_group: string; rate: number; hidden: boolean; is_stock_item: number }
@@ -210,11 +203,12 @@ async function openNotes(m: MenuRow, refresh = false) {
 const saveNotes = () => run(async () => { if (notesFor.value) { await api.call(CORE + 'set_item_notes', { item_code: notesFor.value.item_code, notes: JSON.stringify(notesText.value.split('\n')) }); notesSource.value = 'Manual' } }, 'Notes saved')
 
 // --- locations
-interface Loc { code: string; name: string; cost_center: string | null; warehouse: string | null; disabled: number; profiles: string[] }
+interface Loc { code: string; name: string; cost_center: string | null; warehouse: string | null; disabled: number; profiles: string[]; enable_retail: number; enable_fnb: number }
 const locs = ref<Loc[]>([])
 const costCenters = ref<string[]>([])
 const warehouses = ref<string[]>([])
-const nl = ref({ code: '', name: '', cost_center: '', warehouse: '', profiles: [] as string[] })
+const blankLoc = () => ({ code: '', name: '', cost_center: '', warehouse: '', profiles: [] as string[], enable_retail: 1, enable_fnb: 0 })
+const nl = ref(blankLoc())
 async function loadLocations() {
   try {
     ;[locs.value, registers.value] = await Promise.all([api.call<Loc[]>(CORE + 'list_locations'), api.call<Register[]>(PIN + 'list_pos_profiles')])
@@ -224,13 +218,13 @@ async function loadLocations() {
     error.value = e instanceof Error ? e.message : String(e)
   }
 }
-const saveLoc = (l: { code: string; name: string; cost_center: string | null; warehouse: string | null; profiles: string[]; disabled?: number }) =>
+const saveLoc = (l: { code: string; name: string; cost_center: string | null; warehouse: string | null; profiles: string[]; disabled?: number; enable_retail: number; enable_fnb: number }) =>
   run(async () => {
     await api.call(CORE + 'save_location', {
       location_code: l.code, location_name: l.name, cost_center: l.cost_center || undefined, warehouse: l.warehouse || undefined,
-      profiles: JSON.stringify(l.profiles), disabled: l.disabled || 0,
+      profiles: JSON.stringify(l.profiles), disabled: l.disabled || 0, enable_retail: l.enable_retail ? 1 : 0, enable_fnb: l.enable_fnb ? 1 : 0,
     })
-    nl.value = { code: '', name: '', cost_center: '', warehouse: '', profiles: [] }
+    nl.value = blankLoc()
     await loadLocations()
   }, 'Location saved — its bills are numbered with its code')
 const delLoc = (l: Loc) => run(async () => { if (!window.confirm(`Delete location ${l.code}?`)) return; await api.call(CORE + 'delete_location', { location_code: l.code }); await loadLocations() })
@@ -256,7 +250,6 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
     <div class="seg" style="margin-bottom: 16px">
       <button v-if="tabOk.mode" :class="{ on: tab === 'mode' }" @click="openTab('mode')">Mode</button>
       <button v-if="tabOk.hours" :class="{ on: tab === 'hours' }" @click="openTab('hours')">Hours &amp; kitchen</button>
-      <button v-if="tabOk.staff" :class="{ on: tab === 'staff' }" @click="openTab('staff')">Staff &amp; PINs</button>
       <button v-if="tabOk.menu" :class="{ on: tab === 'menu' }" @click="openTab('menu')">Menu</button>
       <button v-if="tabOk.tables" :class="{ on: tab === 'tables' }" @click="openTab('tables')">Tables</button>
       <button v-if="tabOk.locations" :class="{ on: tab === 'locations' }" @click="openTab('locations')">Locations</button>
@@ -268,9 +261,10 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
 
     <div v-if="tab === 'mode'" class="card">
       <h4>What kind of POS is this?</h4>
+      <p style="color: var(--text-muted); margin-top: 0">This is the default for registers that aren't in a location. A location chooses its own — Retail, F&amp;B or both — under <b>Locations</b>.</p>
       <div class="seg">
-        <button :class="{ on: pos.mode === 'Retail' }" :disabled="busy" @click="switchMode('Retail')">Retail</button>
-        <button :class="{ on: pos.mode === 'F&B' }" :disabled="busy" @click="switchMode('F&B')">F&amp;B (restaurant)</button>
+        <button :class="{ on: pos.settings?.global_mode === 'Retail' }" :disabled="busy" @click="switchMode('Retail')">Retail</button>
+        <button :class="{ on: pos.settings?.global_mode === 'F&B' }" :disabled="busy" @click="switchMode('F&B')">F&amp;B (restaurant)</button>
       </div>
       <p style="color: var(--text-muted)">
         <b>Retail</b> — fast counter sales: scan or tap items, take payment. No tables, no kitchen tickets.<br />
@@ -291,6 +285,16 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
       </p>
     </div>
     <div v-if="tab === 'hours'" class="card">
+      <h4>Bill rounding</h4>
+      <label class="row"><input v-model="roundOn" type="checkbox" :disabled="busy || !rounding" /> Round bill totals
+        <select v-if="roundOn" v-model.number="roundStep" class="fld" :disabled="busy">
+          <option v-for="v in rounding?.steps || []" :key="v" :value="v">to {{ stepLabel(v) }}</option>
+        </select>
+        <button class="btn btn-primary mini" :disabled="busy || !rounding || (rounding.enabled === roundOn && (!roundOn || rounding.step === roundStep))" @click="saveRounding">Save</button>
+      </label>
+      <p style="color: var(--text-muted)">Off bills the exact amount. On rounds every new bill's total to the chosen step — e.g. 2.345 to 0.05 is 2.350. This is the organization-wide setting, so it also applies to sales and purchase documents in the ERP.</p>
+    </div>
+    <div v-if="tab === 'hours'" class="card">
       <h4>Kitchen &amp; order notes</h4>
       <label class="row"><input type="checkbox" :checked="!!s?.auto_kot" @change="run(() => pos.saveSettings({ auto_kot: s?.auto_kot ? 0 : 1 }), 'Saved')" /> Saving an order sends it to the kitchen automatically (no separate Send to kitchen step)</label>
       <label class="row" style="margin-top: 8px"><input type="checkbox" :checked="!!s?.item_notes_prompt" @change="run(() => pos.saveSettings({ item_notes_prompt: s?.item_notes_prompt ? 0 : 1 }), 'Saved')" /> Ask for a note when an item is added — suggestions like <i>well done, crunchy, deep fried</i> plus free text</label>
@@ -306,45 +310,6 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
         With the last option on, sales rung up between 00:00 and the time above are posted to the previous business day, and a table opened before midnight is settled on its own day.
         Without 24/7, a shift left open past the day change must be closed before billing continues.
       </p>
-    </div>
-
-    <div v-if="tab === 'staff'">
-      <div class="card">
-        <h4>Add a team member</h4>
-        <p style="color: var(--text-muted); margin-top: 0">They sign in to the POS with the organization code and a PIN (6-8 digits) — no password. Their <b>role</b> decides what they can do:
-          <b>Waiter</b> takes orders (adds items, sends to the kitchen) but can't reduce items, close bills or take payment · <b>Cashier</b> also modifies orders, closes the bill and takes payment · <b>Supervisor</b> also manages tables and the menu, voids and sees reports · <b>Kitchen</b> only sees the kitchen board.</p>
-        <div class="row">
-          <input v-model="ns.email" class="fld" placeholder="Email" type="email" />
-          <input v-model="ns.name" class="fld" placeholder="Full name" />
-          <input v-model="ns.pin" class="fld tabular" placeholder="PIN" inputmode="numeric" maxlength="8" style="width: 100px" />
-          <select v-model="ns.role" class="fld"><option v-for="r in assignable" :key="r.v" :value="r.v">{{ r.l }}</option></select>
-          <select v-model="ns.profile" class="fld"><option value="">Any register</option><option v-for="r in registers" :key="r.name" :value="r.name">{{ r.name }}{{ r.location_name ? ` · ${r.location_name}` : '' }}</option></select>
-          <button class="btn btn-primary mini" :disabled="busy || !ns.email || !ns.name || ns.pin.length < 6" @click="addStaff">Add</button>
-        </div>
-      </div>
-      <div class="card">
-        <h4>Team</h4>
-        <table class="simple-table">
-          <thead><tr><th>Person</th><th>Role</th><th>PIN</th><th>Register</th><th>Set / reset PIN</th><th /></tr></thead>
-          <tbody>
-            <tr v-for="u in staff" :key="u.user">
-              <td>{{ u.full_name }}<div class="sub2">{{ u.user }}</div></td>
-              <td>
-                <span v-if="u.is_admin" class="pill ok">Administrator</span>
-                <select v-else-if="canEditStaff(u)" class="fld" :value="u.pos_role || ''" @change="changeRole(u, ($event.target as HTMLSelectElement).value)">
-                  <option v-if="!u.pos_role" value="" disabled>{{ u.has_pin ? 'Waiter (default)' : '—' }}</option>
-                  <option v-for="r in assignable" :key="r.v" :value="r.v">{{ r.l.split(' — ')[0] }}</option>
-                </select>
-                <span v-else class="pill">{{ u.role_label }}</span>
-              </td>
-              <td><span class="pill" :class="!u.has_pin ? '' : u.active ? 'ok' : 'bad'">{{ !u.has_pin ? 'none' : u.active ? 'active' : 'off' }}</span></td>
-              <td>{{ u.pos_profile || (u.has_pin ? 'any' : '—') }}</td>
-              <td><div v-if="canEditStaff(u)" class="row"><input v-model="pinFor[u.user]" class="fld tabular" placeholder="new PIN" inputmode="numeric" maxlength="8" style="width: 100px" /><button class="btn btn-primary mini" :disabled="busy || (pinFor[u.user] || '').length < 6" @click="savePin(u)">Save</button></div></td>
-              <td class="num"><button v-if="u.has_pin && canEditStaff(u)" class="btn btn-ghost mini" @click="togglePin(u)">{{ u.active ? 'Switch off' : 'Switch on' }}</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </div>
 
     <div v-if="tab === 'menu'">
@@ -393,25 +358,35 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
         <div class="row" style="margin-bottom: 8px">
           <input v-model="nl.code" class="fld" placeholder="Code (MAIN)" maxlength="8" style="width: 110px; text-transform: uppercase" />
           <input v-model="nl.name" class="fld" placeholder="Name (Main Restaurant)" />
-          <select v-model="nl.cost_center" class="fld"><option value="">Cost center…</option><option v-for="c in costCenters" :key="c" :value="c">{{ c }}</option></select>
+          <select v-model="nl.cost_center" class="fld"><option value="">Cost center (required)…</option><option v-for="c in costCenters" :key="c" :value="c">{{ c }}</option></select>
           <select v-model="nl.warehouse" class="fld"><option value="">Warehouse…</option><option v-for="w in warehouses" :key="w" :value="w">{{ w }}</option></select>
         </div>
         <div class="row" style="margin-bottom: 8px"><span class="sub2">Registers:</span>
           <label v-for="r in registers" :key="r.name" class="pill" style="cursor: pointer"><input type="checkbox" :checked="nl.profiles.includes(r.name)" @change="toggleProfile(nl, r.name)" /> {{ r.name }}</label>
         </div>
-        <button class="btn btn-primary mini" :disabled="busy || !nl.code || !nl.name" @click="saveLoc({ code: nl.code, name: nl.name, cost_center: nl.cost_center, warehouse: nl.warehouse, profiles: nl.profiles })">Save location</button>
+        <div class="row" style="margin-bottom: 8px"><span class="sub2">POS here:</span>
+          <label class="pill" style="cursor: pointer"><input type="checkbox" :checked="!!nl.enable_retail" @change="nl.enable_retail = ($event.target as HTMLInputElement).checked ? 1 : 0" /> Retail (counter sales)</label>
+          <label class="pill" style="cursor: pointer"><input type="checkbox" :checked="!!nl.enable_fnb" @change="nl.enable_fnb = ($event.target as HTMLInputElement).checked ? 1 : 0" /> F&amp;B (table service)</label>
+          <span class="sub2">Tick both to run counter sales and table service at the same location.</span>
+        </div>
+        <button class="btn btn-primary mini" :disabled="busy || !nl.code || !nl.name || !nl.cost_center || (!nl.enable_retail && !nl.enable_fnb)" @click="saveLoc({ code: nl.code, name: nl.name, cost_center: nl.cost_center, warehouse: nl.warehouse, profiles: nl.profiles, enable_retail: nl.enable_retail, enable_fnb: nl.enable_fnb })">Save location</button>
       </div>
       <div v-for="l in locs" :key="l.code" class="card">
         <div class="row">
           <b style="flex: 1">{{ l.code }} · {{ l.name }}</b>
-          <span class="pill">{{ l.cost_center || 'no cost center' }}</span><span class="pill">{{ l.warehouse || 'no warehouse' }}</span>
+          <span class="pill" :class="l.cost_center ? '' : 'bad'">{{ l.cost_center || 'no cost center — set one' }}</span><span class="pill">{{ l.warehouse || 'no warehouse' }}</span>
           <span v-if="l.disabled" class="pill bad">disabled</span>
         </div>
         <div class="row" style="margin: 8px 0"><span class="sub2">Registers:</span>
           <label v-for="r in registers" :key="r.name" class="pill" style="cursor: pointer"><input type="checkbox" :checked="l.profiles.includes(r.name)" @change="toggleProfile(l, r.name)" /> {{ r.name }}</label>
         </div>
+        <div class="row" style="margin: 8px 0"><span class="sub2">POS here:</span>
+          <label class="pill" style="cursor: pointer"><input type="checkbox" :checked="!!l.enable_retail" @change="l.enable_retail = ($event.target as HTMLInputElement).checked ? 1 : 0" /> Retail</label>
+          <label class="pill" style="cursor: pointer"><input type="checkbox" :checked="!!l.enable_fnb" @change="l.enable_fnb = ($event.target as HTMLInputElement).checked ? 1 : 0" /> F&amp;B</label>
+          <span v-if="!l.enable_retail && !l.enable_fnb" class="pill bad">enable at least one</span>
+        </div>
         <div class="row">
-          <button class="btn btn-primary mini" :disabled="busy" @click="saveLoc(l)">Save registers</button>
+          <button class="btn btn-primary mini" :disabled="busy || !l.cost_center || (!l.enable_retail && !l.enable_fnb)" @click="saveLoc(l)">Save location</button>
           <button class="btn btn-ghost mini" :disabled="busy" @click="saveLoc({ ...l, disabled: l.disabled ? 0 : 1 })">{{ l.disabled ? 'Enable' : 'Disable' }}</button>
           <button class="btn btn-ghost mini" style="color: var(--danger)" @click="delLoc(l)">Delete</button>
         </div>
@@ -473,6 +448,7 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
             <div class="stat"><div class="v tabular">{{ fmt(eod.gross_sales) }}</div><div class="l">Gross sales ({{ eod.invoice_count }} bills)</div></div>
             <div class="stat"><div class="v tabular">{{ fmt(eod.net_sales) }}</div><div class="l">Net sales</div></div>
             <div class="stat"><div class="v tabular">{{ fmt(eod.tax) }}</div><div class="l">Tax</div></div>
+            <div v-if="eod.rounding" class="stat"><div class="v tabular">{{ fmt(eod.rounding) }}</div><div class="l">Rounding adjustment</div></div>
             <div class="stat"><div class="v tabular">{{ fmt(eod.average_bill) }}</div><div class="l">Average bill</div></div>
             <div v-if="eod.outstanding_balance" class="stat"><div class="v tabular" style="color: var(--warning)">{{ fmt(eod.outstanding_balance) }}</div><div class="l">Part-paid — still to collect</div></div>
             <div v-if="pos.isFnb" class="stat"><div class="v tabular">{{ eod.fnb.covers }}</div><div class="l">Covers · {{ fmt(eod.fnb.average_per_cover) }} each</div></div>

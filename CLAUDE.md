@@ -575,6 +575,9 @@ error logs) will show it happening.
 `pos.xentraerp.net` = `scripts/nginx-pos.xentraerp.net.conf`; static Vue build from
 `/home/xentraerp/pos-frontend/dist`, `/api/*` proxied to the same Next.js process on `:8083`). Rebuild with
 `cd pos-frontend && npm ci && npm run build` — no restart needed, nginx serves the new `dist` directly.
+**Vite needs Node 22** (`/root/.nvm/versions/node/v22.23.1/bin`; under v18 it crashes at startup). The POS is
+used live, so build beside it and swap: `npx vite build --outDir dist-new --emptyOutDir`, and only if that
+succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tail` still "succeeds" in a `&&` chain).
 
 - **Backend code is live-linked**: `bench/apps/custom_erp/custom_erp` is a symlink into
   `/home/xentraerp/custom_erp_app`, so whatever is checked out there IS production. Never leave it on a
@@ -661,6 +664,97 @@ error logs) will show it happening.
   to a kitchen printer (KOTs show on the kitchen screen), customer-specific pricing rules at the POS.
 - Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), `roles_takeaway_reservations_suite.py` (118), all rolled back, plus `e2e_http.py` (71, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after — it only removes ZZ rows). The UI screens were type-checked and built, and every API they call
   is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
+
+## ScheduleVerse (deployed 2026-09-24) — separate app, same box
+
+**Live at `https://schedule.xentraerp.net`** — independent product (FastAPI + Vue 3 + Postgres 16 + Redis 7),
+repo `bijo1983/ScheduleVerse`, checked out at **`/home/scheduleverse`** (cloned read-only over HTTPS: no deploy
+key yet, so it can pull but not push). Everything runs in Docker via **`docker-compose.server.yml`** (this box's
+variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and registry images):
+`cd /home/scheduleverse && docker compose -f docker-compose.server.yml --env-file .env.server <cmd>`.
+- Containers `scheduleverse-{postgres,redis,mailpit,api,worker,web}-1`, all with `mem_limit` (~180 MB total
+  at idle) so they can't starve the ERP/POS. Only `web` is published: `127.0.0.1:8480`; Mailpit UI
+  `127.0.0.1:8425`. Host nginx site `sites-available/schedule.xentraerp.net` terminates TLS (Let's Encrypt
+  cert, webroot) and adds HSTS; DNS A record `schedule` in the DigitalOcean `xentraerp.net` zone.
+- **Data lives in the folder**: `data/postgres`, `data/redis`, `backups/`. Secrets in `.env.server` (mode 600,
+  gitignored). `TRUSTED_PROXY_COUNT=2` (host nginx + container nginx).
+- **Email is caught by Mailpit, not delivered**, until real SMTP settings go into `.env.server`.
+- Update: `git pull`, then `$C build api && $C build web && $C run --rm migrate && $C up -d`, then
+  `scripts/smoke-test.sh https://schedule.xentraerp.net`. Build api and web one at a time (memory).
+- Local fix not in the repo: `apps/backend/scripts/manage.py` computed the monorepo root at import time, which
+  crashed every command inside the image (`IndexError`) including `migrate`. The worker also needs its own
+  healthcheck (`arq --check`; set in the compose file) because the image's check probes the API's `:8000`.
+- Local fix not in the repo (2026-09-24): Organization settings / Branding / Plans pages seeded their forms with
+  `structuredClone(queryData)`, which throws `DataCloneError` on Vue reactive proxies — the form stayed empty and
+  every save 422'd (no `version`). Replaced with `utils/clone.ts` `cloneData` (toRaw + JSON round-trip).
+- Platform admin: `innovegicconsultancy@gmail.com` (password set by the user 2026-09-24; bootstrap password
+  removed from `.env.server`). There's no reset command: hash with `app.core.security.hash_password` in the api
+  container and `UPDATE users` as the owner role in postgres (sessions table is `sessions`). No backup cron is scheduled yet (`scripts/backup-database.sh`).
+
+## Reports (added 2026-10-07)
+
+- **ERP Reports page** (`erp-frontend/src/app/(erp)/reports/`): every standard ERPNext Script/Query report,
+  grouped by module (Accounting, Selling, CRM, Buying, Stock, Point of Sale, Manufacturing, Projects, Assets,
+  Quality, Support), plus XentraERP's own **POS End of Day** (`reports/pos-end-of-day`, = `pos_core.end_of_day_report`).
+  The old page linked to `/app/query-report/<name>`, a route that never existed — every card was a dead link.
+- **One generic runner** (`reports/[slug]`) runs any report through Frappe's own `xentraerp.desk.query_report.run`;
+  results render in `components/reports/result-grid.tsx`: sortable headers, per-column filters (text contains;
+  numbers take `>`, `<`, `=`...), tree expand/collapse for `indent` reports, Table / Group view (group by any text
+  column with subtotals), drill-down menus on Link cells (`drillsFor` in `lib/reports/catalog.ts`: Account →
+  General Ledger, Customer → GL/AR/Sales Register, Item → Stock Ledger/Balance, ...; opens the target report with
+  `?filters=<json>` over its defaults), and a Columns dialog (show/hide/reorder, and add a field from a Link
+  column's record — fetched client-side with `get_list`, because Frappe v14's `custom_columns` argument isn't
+  JSON-decoded over HTTP). Column layout is per report in localStorage. The Reports index is a compact grouped list.
+- **Filters come from `erp-frontend/src/lib/reports/catalog.json`**, generated offline by
+  `node scripts/generate-report-catalog.mjs /home/frappe/innovegic-bench/apps` — it evaluates each report's own
+  `<report>.js` against a stub `frappe` and records the filters; session-dependent defaults become tokens
+  (`@today|m-1`, `@company`, `@fiscal_year`, ...) resolved in `lib/reports/catalog.ts` with values from
+  `custom_erp.api.reports.report_context` (which also returns the reports the user may run — Frappe's own two
+  checks). **Re-run the generator after an ERPNext upgrade.** Excluded on purpose: India TDS, stock-ledger
+  diagnostics, Report Builder reports, Regional/Loan/Core modules, and "Review" (broken in ERPNext v14).
+- **Check**: `bench --site 197349.xentraerp.local console < scripts/report-checks/run_all_reports.py` runs every
+  catalog report with its defaults as the tenant admin (rolled back). 2026-10-07: 123 ok, 0 failed, 15 need a
+  user choice first (a BOM, bank account, customer, ...), Production Plan Summary hidden (ERPNext grants no role
+  report permission on Production Plan). The console is IPython: feed it as one `exec(...)` or blank lines inside
+  functions break it.
+- **POS reports used `base_grand_total`, but the POS charges the rounded total** (`rounded_total` — ERPNext rounds
+  to a whole unit when rounding is on and the currency has no smallest-fraction value: tenant 197349 has BHD with
+  `smallest_currency_fraction_value = 0` and `disable_rounded_total = 0`, so 2.500 was billed as 2.000). Gross
+  sales therefore didn't match money received. Shift totals, the EOD report, and open balances now use
+  `pos_core.BILLED` (rounded total when set) and the EOD shows the rounding adjustment.
+- **Bill rounding is a tenant setting** (`custom_erp/api/rounding.py`, `get_rounding`/`set_rounding`, System
+  Manager): off, or on to a step (0.005 … 1). It keeps Global Defaults `disable_rounded_total`, every POS Profile's
+  `disable_rounded_total` and the company currency's `smallest_currency_fraction_value` (0 = whole unit) in step,
+  and the POS stamps it on every invoice it builds (`rounding.apply_to`). UI: ERP Settings → Bill rounding, and
+  POS app Settings → Hours & kitchen. Changing it affects new documents only.
+  It does NOT `save()` Global Defaults: tenants provisioned without the setup wizard have no Current Fiscal Year,
+  so a full save fails as mandatory (seen as HTTP 417 on 197349). It sets the field + default and calls
+  `toggle_rounded_total()` itself.
+- **ERP rebuilds: keep the old build's `/_next/static` chunks.** Browser tabs open during a rebuild still request the
+  old hashed chunks (`ChunkLoadError ... 400/404`). After `npm run build`, `cp -rn .next-old-*/static/. .next/static/`
+  before `pm2 restart` and deleting `.next-old-*`.
+
+## Subscription gating & new-tenant defaults (added 2026-10-07)
+
+- **Reports follow the tenant's package**: `custom_erp.api.pos.tenant_modules()` reads `XentraERP Tenant.enabled_modules`
+  from the control plane (internal HTTP, cached 60s, **fails open** — None = unknown = everything). `reports.report_context`
+  only lists reports whose module is in the package (`reports.MODULE_OF`: Accounts→accounting, Selling/CRM→selling,
+  Stock→inventory, Support→support/maintenance, POS Register & Sales Payment Summary→pos, ...), and the frontend runs
+  reports through `reports.run_report`, which refuses a report outside the package before calling Frappe's
+  `query_report.run`. POS End of Day shows only with `pos`. Module codes are `xentraerp_tenant.ALL_MODULES`
+  (note: `inventory`, not `stock`).
+- **New tenants** (`provisioning.run_default_setup`, idempotent, also via the admin "Manage" re-run):
+  `_ensure_fiscal_year()` creates/uses a Fiscal Year covering today and sets Global Defaults' Current Fiscal Year (the
+  Setup Wizard normally does; without it Global Defaults can't be saved); bill rounding is set **off** when the company
+  is first created (`rounding.set_rounding_off_for_new_tenant`) — a re-run never overrides the tenant's own choice; new
+  POS Profiles follow the tenant setting (`hooks.py` POS Profile before_insert). Tenant admin roles (incl. Quality
+  Manager / Support Team / Maintenance Manager) come from `tenants.TENANT_ADMIN_ROLES`. Reports catalog/UI is shared code.
+- **POS location warehouse**: a group warehouse ("All Warehouses") can't take stock entries ("Group node warehouse is not
+  allowed to select for transactions" — broke billing a stock item on 197349). `save_location` refuses one and
+  `pos_core.location_warehouse()` ignores one (falls back to the register's warehouse).
+- **Tenant 197349 data still to fix (DB writes were blocked for the assistant)**: Global Defaults Current Fiscal Year is
+  empty (its only FY is named `20226`, covering 2026); locations SEHLA and 1001 point at the group "All Warehouses - JC";
+  Cola and Blue Pen are still stock items with zero stock.
 
 ## Incident log
 

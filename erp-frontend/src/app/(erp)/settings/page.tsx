@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTenantCode, withTenant } from '@/lib/tenant';
+import { RoundingCard } from '@/components/settings/rounding-card';
 
 // href: null means Single doctype → form at /app/DocType/DocType
 // href: '/route' means list doctype with a dedicated list page
@@ -29,6 +30,13 @@ const sections = [
       { label: 'Users', list: 'User', desc: 'User accounts' },
       { label: 'Roles', list: 'Role', desc: 'Permission roles' },
       { label: 'Role Profile', list: 'Role Profile', desc: 'Role bundles for users' },
+    ],
+  },
+  {
+    title: 'Point of Sale',
+    items: [
+      { label: 'POS Locations', list: 'XentraERP POS Location', desc: 'Sites and the cost center each one posts to' },
+      { label: 'POS Registers', list: 'POS Profile', desc: 'Tills, payment modes and defaults' },
     ],
   },
   {
@@ -92,6 +100,9 @@ export default function SettingsPage() {
       <div>
         <h2 className="text-2xl font-bold">Settings</h2>
         <p className="text-sm text-muted-foreground mt-1">System configuration and master data setup</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <RoundingCard />
       </div>
       {sections.map((s) => (
         <div key={s.title}>

@@ -31,8 +31,10 @@ onMounted(async () => {
   }
 })
 
-function select(profile: POSProfileSummary) {
+async function select(profile: POSProfileSummary) {
   auth.posProfile = profile
+  // Which kinds of POS run here depends on the register's location.
+  await pos.load(profile.name)
   // The route guard sends the cashier to open a shift first if one is required.
   router.push(pos.settings?.level === 'kitchen' ? '/kitchen' : pos.isFnb ? '/floor' : '/terminal')
 }

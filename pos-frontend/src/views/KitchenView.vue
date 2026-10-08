@@ -5,7 +5,9 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { usePosStore } from '@/stores/pos'
 import { usePrinterStore } from '@/stores/printer'
+import SessionMenu from '@/components/SessionMenu.vue'
 
 interface Kot {
   name: string
@@ -27,6 +29,7 @@ const NEXT: Record<string, { to: string; label: string }> = {
 
 const router = useRouter()
 const auth = useAuthStore()
+const pos = usePosStore()
 const printer = usePrinterStore()
 // Tickets already seen on this screen: the first load only records them (no printing a backlog);
 // after that, each NEW ticket is printed if this device is set to.
@@ -86,7 +89,8 @@ function age(k: Kot) {
       <h2>Kitchen</h2>
       <span class="pill">{{ kots.length }} open</span>
       <label class="pill" style="cursor: pointer"><input type="checkbox" :checked="printer.autoKotKitchen" @change="printer.setAutoKot('kitchen', ($event.target as HTMLInputElement).checked)" /> Auto-print new tickets here</label>
-      <button class="btn btn-ghost mini" @click="router.push('/floor')">← Tables</button>
+      <button v-if="pos.can('order') || pos.can('bill')" class="btn btn-ghost mini" @click="router.push('/floor')">← Tables</button>
+      <SessionMenu style="margin-left: auto" />
     </div>
     <p v-if="error" class="error-box">{{ error }}</p>
     <p v-if="printMsg" class="error-box">{{ printMsg }}</p>

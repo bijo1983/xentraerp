@@ -13,7 +13,15 @@ export default function NewDocPage() {
   const fromKey = searchParams.get('from');
   // Read once on mount — popMappedDoc removes the sessionStorage entry as it
   // reads it, so this must not re-run on every render.
-  const [initialDoc] = useState<Record<string, unknown> | undefined>(() => (fromKey ? popMappedDoc(fromKey) || undefined : undefined));
+  const [initialDoc] = useState<Record<string, unknown> | undefined>(() => {
+    if (fromKey) return popMappedDoc(fromKey) || undefined;
+    // Coming from a filtered list (`?purpose=Opening Stock`) — start the new document with those values.
+    const preset: Record<string, unknown> = {};
+    searchParams.forEach((value, key) => {
+      if (key !== 'from') preset[key] = value;
+    });
+    return Object.keys(preset).length ? preset : undefined;
+  });
 
   return (
     <div className="w-full">

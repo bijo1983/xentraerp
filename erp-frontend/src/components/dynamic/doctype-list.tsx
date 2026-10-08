@@ -479,7 +479,7 @@ export function DoctypeList({
           {newLabel && (
             <Button
               className="shadow-elevation-xs"
-              onClick={() => router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new`, tenantCode))}
+              onClick={() => router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new${searchParams.toString() ? `?${searchParams.toString()}` : ''}`, tenantCode))}
             >
               {newLabel}
             </Button>
@@ -678,7 +678,7 @@ export function DoctypeList({
                 <Button
                   variant="link"
                   size="sm"
-                  onClick={() => router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new`, tenantCode))}
+                  onClick={() => router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new${searchParams.toString() ? `?${searchParams.toString()}` : ''}`, tenantCode))}
                 >
                   {newLabel}
                 </Button>

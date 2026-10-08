@@ -61,7 +61,7 @@ try:
                      ("run a counter sale", lambda: core.retail_checkout("ZZ Reg", [{"item_code": "Blue Pen", "qty": 1}], [{"mode_of_payment": "Cash", "tendered": 5}])),
                      ("list pending balances", lambda: core.list_open_balances()), ("add a table", lambda: fnb.save_table("ZZ-X")), ("hide a menu item", lambda: core.set_item_hidden("Cola", 1)),
                      ("run the day-end report", lambda: core.end_of_day_report()), ("list staff", lambda: pos.list_pos_users())):
-        denied(f"waiter can't {name}", fn)
+        denied(f"waiter can't {name}", fn, "administrator" if name == "list staff" else "can't do this")
     denied("waiter can't cancel an order that has items", lambda: fnb.cancel_order(OID), "only cancel an order that has no items")
     e = fnb.open_order("ZZ-B", "ZZ Reg", 1); fnb.cancel_order(e["name"]); check("waiter can cancel an order opened by mistake (empty)", frappe.db.get_value("XentraERP POS Order", e["name"], "status") == "Cancelled")
     check("waiter can see tables, the menu and the kitchen board", len(fnb.list_tables("ZZ Reg")) == 3 and len(core.list_menu("ZZ Reg")) > 0 and len(fnb.list_kots()) >= 1)
@@ -86,24 +86,28 @@ try:
     cb = fnb.close_bill(o2); check("cashier can close the bill", cb["order"]["bill_closed"] == 1)
     check("…and take payment", fnb.bill_order(o2, "Cash")["invoice"] is not None)
     for name, fn in (("add a table", lambda: fnb.save_table("ZZ-Y")), ("hide a menu item", lambda: core.set_item_hidden("Cola", 1)), ("run the day-end report", lambda: core.end_of_day_report()),
-                     ("create a supervisor", lambda: pos.create_pos_user("zz.x@example.com", "X", "777888", None, "POS Supervisor"))):
-        denied(f"cashier can't {name}", fn)
+                     ("create staff", lambda: pos.create_pos_user("zz.x@example.com", "X", "777888", None, "POS Waiter"))):
+        denied(f"cashier can't {name}", fn, "administrator" if name == "create staff" else "can't do this")
     as_user(W); o3 = fnb.open_order("ZZ-C", "ZZ Reg", 1)["name"]; fnb.set_order_items(o3, [{"item_code": "Blue Pen", "qty": 1}])
     as_user(C); denied("cashier can't cancel food already in the kitchen", lambda: fnb.cancel_order(o3), "manager"); denied("cashier can't re-open another person's bill", lambda: (fnb.close_bill(o3), fnb.reopen_bill(o3)), "only the waiter")
     as_user("Administrator")
 
-    print("== supervisor: tables, menu, void, reports, staff")
+    print("== supervisor: tables, menu, void, reports (staff & PINs belong to the administrator)")
     as_user(S_)
     fnb.save_table("ZZ-D", "Terrace", 6); check("supervisor adds a table", any(t["name"] == "ZZ-D" for t in fnb.list_tables()))
     fnb.delete_table("ZZ-D"); check("…and removes it", not any(t["name"] == "ZZ-D" for t in fnb.list_tables()))
     check("supervisor may cancel food already in the kitchen (void)", fnb.cancel_order(o3)["success"])
     check("supervisor runs the day-end report", "gross_sales" in core.end_of_day_report())
-    check("supervisor creates a waiter", pos.create_pos_user("zz.new.w@example.com", "New W", "888999", None, "POS Waiter")["pos_role"] == "POS Waiter")
-    denied("supervisor can't create a supervisor", lambda: pos.create_pos_user("zz.new.s@example.com", "New S", "999000", None, "POS Supervisor"), "administrator")
-    denied("supervisor can't change another supervisor's PIN", lambda: pos.set_pin(S_, "333444"), "administrator") if False else None
-    check("supervisor changes a cashier to waiter", pos.set_pos_role(C, "POS Waiter")["pos_role"] == "POS Waiter" and core.pos_level(C) == "waiter")
+    denied("supervisor can't create staff", lambda: pos.create_pos_user("zz.new.w@example.com", "New W", "888999", None, "POS Waiter"), "administrator")
+    denied("supervisor can't change a role", lambda: pos.set_pos_role(C, "POS Waiter"), "administrator")
+    denied("supervisor can't set or reset a PIN", lambda: pos.set_pin(C, "333444"), "administrator")
+    denied("supervisor can't switch a PIN off", lambda: pos.set_pin_active(C, 0), "administrator")
+    denied("supervisor can't list the team", pos.list_pos_users, "administrator")
+    as_user("Administrator")
+    check("the administrator creates a waiter", pos.create_pos_user("zz.new.w@example.com", "New W", "888999", None, "POS Waiter")["pos_role"] == "POS Waiter")
+    check("…and changes a cashier to waiter", pos.set_pos_role(C, "POS Waiter")["pos_role"] == "POS Waiter" and core.pos_level(C) == "waiter")
     pos.set_pos_role(C, "POS Cashier")
-    denied("supervisor can't touch an administrator", lambda: pos.set_pin_active("Administrator", 0) if frappe.db.exists("XentraERP POS PIN", "Administrator") else (_ for _ in ()).throw(Exception("can't do this — only an administrator")), "administrator")
+    as_user(S_)
     denied("supervisor can't switch the POS mode or change settings", lambda: core.set_pos_mode("Retail"), "administrator")
     denied("…nor define locations", lambda: core.save_location("ZZQ", "x"), "administrator")
     roles_held = [r.role for r in frappe.get_doc("User", C).roles if r.role in pos.POS_ROLES]
@@ -182,7 +186,7 @@ try:
     check("…the menu manager still sees it, flagged", {i["item_code"]: i for i in core.list_menu("ZZ Reg", 1)}["Cola"]["hidden"] is True)
     check("…ERPNext itself is untouched (item still enabled and sellable)", frappe.db.get_value("Item", "Cola", "disabled") == 0 and frappe.db.get_value("Item", "Cola", "is_sales_item") == 1)
     core.set_item_hidden("Cola", 0); check("…and shows it again", "Cola" in {i["item_code"] for i in core.list_menu("ZZ Reg")})
-    as_user("Administrator"); core.save_location("ZZL", "L", None, None, ["ZZ Reg"]); as_user(S_)
+    as_user("Administrator"); core.save_location("ZZL", "L", "Main - JC", None, ["ZZ Reg"]); as_user(S_)
     core.set_item_hidden("Cola", 1, "ZZL"); check("a dish can be hidden at one location only", "Cola" not in {i["item_code"] for i in core.list_menu("ZZ Reg")} and frappe.db.exists("XentraERP POS Hidden Item", {"item_code": "Cola", "location": "ZZL"}))
     core.set_item_hidden("Cola", 0, "ZZL")
     groups = core.list_item_groups(); check("item groups listed", "Products" in groups, groups[:5])

@@ -35,6 +35,11 @@ TENANT_ADMIN_ROLES = [
 	"HR User",
 	"HR Manager",
 	"Website Manager",
+	# Report access on their modules' doctypes (Quality Inspection, Issue,
+	# Maintenance Schedule) is granted only to these.
+	"Quality Manager",
+	"Support Team",
+	"Maintenance Manager",
 ]
 
 

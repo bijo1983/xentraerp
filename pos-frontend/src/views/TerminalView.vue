@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import brandMark from '@/assets/brand-mark.png'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -7,6 +8,7 @@ import { api } from '@/lib/api'
 import { usePosStore } from '@/stores/pos'
 import PayDialog from '@/components/PayDialog.vue'
 import type { ReceiptData } from '@/lib/receipt'
+import SessionMenu from '@/components/SessionMenu.vue'
 
 interface Item {
   name: string
@@ -246,37 +248,31 @@ async function printLastReceipt() {
   }
 }
 
-async function switchRegister() {
-  auth.posProfile = null
-  router.push('/registers')
-}
-async function signOut() {
-  await auth.logout()
-  router.push('/login')
-}
 </script>
 
 <template>
   <div class="terminal">
     <div class="term-main">
       <div class="term-topbar">
-        <div class="brand"><span class="glyph">X</span> {{ profile.name }}</div>
-        <span class="reg-pill">● {{ auth.user?.full_name }}</span>
+        <div class="brand"><img class="glyph" :src="brandMark" alt="XentraERP" /> {{ profile.name }}</div>
         <div class="term-search">
           <span class="icn">⌕</span>
           <input v-model="search" type="text" placeholder="Search items…" />
         </div>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="printerSettingsOpen = !printerSettingsOpen">
-          🖨️ Printer
-        </button>
-        <button v-if="pos.draftMode" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="openBalances">Pending balances</button>
-        <button v-if="pos.isFnb" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/floor')">Tables</button>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/shift')">Shift</button>
-        <button v-if="pos.canManage" class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="router.push('/admin')">Settings</button>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="switchRegister">
-          Switch register
-        </button>
-        <button class="btn btn-ghost" style="padding: 8px 14px; font-size: 12.5px" @click="signOut">Sign out</button>
+        <div class="topbar-actions">
+          <button
+            class="btn-icon"
+            :class="{ on: printerSettingsOpen }"
+            title="Printer settings"
+            aria-label="Printer settings"
+            @click="printerSettingsOpen = !printerSettingsOpen"
+          >
+            🖨️
+          </button>
+          <button v-if="pos.draftMode" class="btn btn-ghost" @click="openBalances">💳 Pending balances</button>
+          <button v-if="pos.isFnb" class="btn btn-ghost" @click="router.push('/floor')">🍽️ Tables</button>
+        </div>
+        <SessionMenu />
       </div>
 
       <div v-if="printerSettingsOpen" style="padding: 14px 22px; border-bottom: 1px solid var(--border-soft); background: var(--surface)">
@@ -303,7 +299,7 @@ async function signOut() {
             :disabled="printer.connecting"
             @click="printer.connectBluetoothPrinter()"
           >
-            {{ printer.connected ? `Connected: ${printer.connected.device.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
+            {{ printer.connected ? `Connected: ${printer.connected.name || 'printer'}` : printer.connecting ? 'Connecting…' : 'Connect printer' }}
           </button>
         </div>
         <p v-if="printer.method === 'bluetooth' && !printer.bluetoothSupported" style="margin: 8px 0 0; font-size: 11.5px; color: var(--warning)">
