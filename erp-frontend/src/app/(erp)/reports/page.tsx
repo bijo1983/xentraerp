@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Wallet, ShoppingCart, Users, ShoppingBag, Warehouse, CreditCard, Factory,
-  FolderKanban, HardDrive, ShieldCheck, LifeBuoy, Search, FileBarChart,
+  FolderKanban, HardDrive, ShieldCheck, LifeBuoy, Globe, Search, FileBarChart,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useTenantCode, withTenant } from '@/lib/tenant';
@@ -12,7 +12,7 @@ import { REPORTS, SECTIONS, useReportContext } from '@/lib/reports/catalog';
 const SECTION_ICONS: Record<string, typeof Wallet> = {
   Accounting: Wallet, Selling: ShoppingCart, CRM: Users, Buying: ShoppingBag, Stock: Warehouse,
   'Point of Sale': CreditCard, Manufacturing: Factory, Projects: FolderKanban, Assets: HardDrive,
-  Quality: ShieldCheck, Support: LifeBuoy,
+  Quality: ShieldCheck, Support: LifeBuoy, Website: Globe,
 };
 
 // XentraERP's own reports (not ERPNext reports), listed first in their section.

@@ -1541,6 +1541,33 @@
   ]
  },
  {
+  "name": "Fichier des Ecritures Comptables [FEC]",
+  "slug": "fichier_des_ecritures_comptables_fec",
+  "section": "Accounting",
+  "module": "Regional",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   }
+  ]
+ },
+ {
   "name": "General Ledger",
   "slug": "general_ledger",
   "section": "Accounting",
@@ -1919,6 +1946,39 @@
      "90"
     ],
     "default": 30
+   }
+  ]
+ },
+ {
+  "name": "IRS 1099",
+  "slug": "irs_1099",
+  "section": "Accounting",
+  "module": "Regional",
+  "ref_doctype": "Supplier",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "fiscal_year",
+    "label": "Fiscal Year",
+    "fieldtype": "Link",
+    "options": "Fiscal Year",
+    "default": "@fiscal_year",
+    "reqd": 1
+   },
+   {
+    "fieldname": "supplier_group",
+    "label": "Supplier Group",
+    "fieldtype": "Link",
+    "options": "Supplier Group"
    }
   ]
  },
@@ -3015,6 +3075,73 @@
     "fieldname": "show_zero_values",
     "label": "Show zero values",
     "fieldtype": "Check"
+   }
+  ]
+ },
+ {
+  "name": "UAE VAT 201",
+  "slug": "uae_vat_201",
+  "section": "Accounting",
+  "module": "Regional",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-3",
+    "reqd": 1
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "VAT Audit Report",
+  "slug": "vat_audit_report",
+  "section": "Accounting",
+  "module": "Regional",
+  "ref_doctype": "GL Entry",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "company",
+    "label": "Company",
+    "fieldtype": "Link",
+    "options": "Company",
+    "default": "@company",
+    "reqd": 1
+   },
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|m-2",
+    "reqd": 1,
+    "width": "80"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today",
+    "reqd": 1
    }
   ]
  },
@@ -8043,6 +8170,50 @@
     "label": "to_date",
     "fieldtype": "Date",
     "default": "@today",
+    "reqd": 1
+   }
+  ]
+ },
+ {
+  "name": "Website Analytics",
+  "slug": "website_analytics",
+  "section": "Website",
+  "module": "Website",
+  "ref_doctype": "Web Page View",
+  "report_type": "Script Report",
+  "add_total_row": 0,
+  "filters": [
+   {
+    "fieldname": "from_date",
+    "label": "From Date",
+    "fieldtype": "Date",
+    "default": "@today|d-100"
+   },
+   {
+    "fieldname": "to_date",
+    "label": "To Date",
+    "fieldtype": "Date",
+    "default": "@today"
+   },
+   {
+    "fieldname": "range",
+    "label": "Range",
+    "fieldtype": "Select",
+    "options": [
+     {
+      "value": "Daily",
+      "label": "Daily"
+     },
+     {
+      "value": "Weekly",
+      "label": "Weekly"
+     },
+     {
+      "value": "Monthly",
+      "label": "Monthly"
+     }
+    ],
+    "default": "Daily",
     "reqd": 1
    }
   ]

@@ -28,6 +28,8 @@ MODULE_OF = {
 	"Assets": ("assets",),
 	"Quality Management": ("quality",),
 	"Support": ("support", "maintenance"),
+	"Regional": ("accounting",),  # country tax/VAT reports
+	"Website": ("website",),
 }
 # Reports that belong to a different package than their ERPNext module.
 REPORT_MODULE = {"POS Register": ("pos",), "Sales Payment Summary": ("pos",)}
