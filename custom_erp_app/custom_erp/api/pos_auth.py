@@ -142,6 +142,9 @@ def _bump(key: str, free: int, ttl: int = sec.IP_WINDOW_SECONDS) -> int:
 	n = cint(state.get("n") if isinstance(state, dict) else 0) + 1
 	delay = sec.lockout_seconds(n, free=free)
 	_cache().set_value(key, {"n": n, "until": time.time() + delay if delay else 0}, expires_in_sec=max(ttl, delay + 60))
+	# Frappe's get_value memoises a miss (None) in frappe.local.cache for the rest of the
+	# request and set_value with an expiry doesn't refresh it, so drop the stale entry.
+	frappe.local.cache.pop(_cache().make_key(key), None)
 	return n
 
 
@@ -797,6 +800,12 @@ def _end_record(name: str, status: str, reason: str):
 	frappe.db.set_value(SESSION, name, {"status": status, "ended_at": now_datetime(), "end_reason": (reason or "")[:140]}, update_modified=False)
 
 
+def _frappe_session_ids(user: str) -> list[str]:
+	"""The user's Frappe session ids. `tabSessions` is a plain table in Frappe v14, not a
+	DocType, so frappe.get_all("Sessions") raises DoesNotExistError."""
+	return [r[0] for r in frappe.db.sql("select sid from `tabSessions` where user = %s", (user,))]
+
+
 def _kill_frappe_session(session_key: str, reason: str):
 	"""Delete the Frappe session whose sid hashes to `session_key`."""
 	from frappe.sessions import delete_session
@@ -804,7 +813,7 @@ def _kill_frappe_session(session_key: str, reason: str):
 	user = frappe.db.get_value(SESSION, {"session_key": session_key}, "user")
 	if not user:
 		return
-	for sid in frappe.get_all("Sessions", filters={"user": user}, pluck="sid") if frappe.db.table_exists("Sessions") else []:
+	for sid in _frappe_session_ids(user):
 		if _key(sid) == session_key:
 			delete_session(sid, reason=reason)
 	_cache().delete_value(_cache_key(session_key))
@@ -825,7 +834,7 @@ def end_user_sessions(user: str, reason: str):
 	from frappe.sessions import delete_session
 
 	end_sessions({"user": user}, reason)
-	for sid in frappe.get_all("Sessions", filters={"user": user}, pluck="sid"):
+	for sid in _frappe_session_ids(user):
 		delete_session(sid, reason=reason)
 
 
