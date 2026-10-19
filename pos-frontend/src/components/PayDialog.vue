@@ -5,6 +5,11 @@
 // hands the finished list to the caller — the server does the real arithmetic.
 import { ref, computed, onMounted } from 'vue'
 import { api } from '@/lib/api'
+import { formatMoney } from '@/lib/money'
+import { t } from '@/lib/i18n'
+import { useNetworkStore } from '@/stores/network'
+
+const net = useNetworkStore()
 
 interface Currency {
   currency: string
@@ -58,8 +63,9 @@ const short = computed(() => received.value + 0.0005 < props.due)
 // A short payment is only acceptable when the cashier has chosen to leave a balance open.
 const blocked = computed(() => short.value && !partial.value)
 
+// Display only, with the currency's own precision (lib/money.ts).
 function money(n: number, currency = props.currency) {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n)
+  return formatMoney(n, currency)
 }
 
 function addLeg() {
@@ -117,9 +123,10 @@ function submit() {
         <input v-model="partial" type="checkbox" /> Partial payment — invoice is posted as <b>Partly Paid</b> and the balance can be collected later
       </label>
       <p v-if="error" class="error-box" style="margin: 10px 0 0">{{ error }}</p>
+      <p v-if="!net.online" class="error-box" role="alert" style="margin: 10px 0 0">{{ t('offline.blocked') }}</p>
       <div style="display: flex; gap: 10px; margin-top: 14px">
         <button class="btn btn-ghost" style="flex: 1" @click="emit('cancel')">Cancel</button>
-        <button class="btn btn-primary" style="flex: 2" :disabled="busy || blocked || received <= 0" @click="submit">
+        <button class="btn btn-primary" style="flex: 2" :disabled="busy || blocked || received <= 0 || !net.online" @click="submit">
           {{ busy ? 'Posting…' : short && partial ? 'Take part payment' : 'Complete payment' }}
         </button>
       </div>
