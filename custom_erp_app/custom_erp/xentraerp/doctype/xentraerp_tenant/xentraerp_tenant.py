@@ -43,5 +43,10 @@ class XentraERPTenant(Document):
 			self.trial_start_date = self.trial_start_date or today()
 			self.trial_end_date = add_months(self.trial_start_date, 1)
 
+		if not self.enabled_modules and self.plan and frappe.db.exists("XentraERP Plan", self.plan):
+			plan = frappe.get_doc("XentraERP Plan", self.plan)
+			self.enabled_modules = ",".join(m.module_code for m in plan.modules)
+			self.max_users = self.max_users or plan.max_users
+
 		if self.status == "Trial" and not self.enabled_modules:
 			self.enabled_modules = ",".join(ALL_MODULES)

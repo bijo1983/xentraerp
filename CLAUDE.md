@@ -17,7 +17,7 @@ query). **This check silently does nothing (fails open) until
 control-plane site's actual hostname. Until then, every tenant can use POS
 regardless of subscription. Confirm which site is actually the control
 plane in this deployment (CLAUDE.md's "Architecture decisions" section
-below says `erp.badmintonbooking.com` — verify before setting this) before
+below says `xentraerp.net` — verify before setting this) before
 configuring it. Same fail-open error gets logged via `frappe.log_error` on
 every login attempt until it's set, so `bench --site <x> execute
 frappe.get_all --args '["Error Log"]'` (or the admin portal, once it reads
@@ -35,7 +35,9 @@ error logs) will show it happening.
   bench hosting multiple sites via Host header, no per-tenant DNS/site
   isolation beyond the `sites/` folder)
   - `sites/` contains: `197349.xentraerp.local` (a live tenant, admin
-    `admin@jjc.com`), `demo.innovegicit.com`, `erp.badmintonbooking.com`
+    `admin@jjc.com`) and `xentraerp.net` (control plane; renamed from
+    `erp.badmintonbooking.com` 2026-10-08). `demo.innovegicit.com` was dropped
+    2026-10-08 (archived under `archived/sites/`)
   - Backend process: **gunicorn**, listening on `127.0.0.1:8001`
 - `/home/xentraerp` — git checkout of `custom_erp_app` (the Frappe app:
   tenants.py, signup.py, provisioning.py, etc.) and `erp-frontend` (the
@@ -120,11 +122,12 @@ error logs) will show it happening.
     redirect, per user; sole user, still in development). Original config
     backed up at `/root/erp.nginx.bak-1789898088`; its cert
     (`/etc/letsencrypt/live/erp.badmintonbooking.com`) was left in place.
-    **Do NOT confuse with the Frappe *site* of the same name in
-    `sites/`** — that is the control-plane site, and
-    `ERP_BACKEND_HOST=erp.badmintonbooking.com` in `erp-frontend/.env.local`
-    is the internal Host header used to select it, not a public URL. Leave
-    both unchanged.
+    The control-plane Frappe *site* that used to share this name was
+    **renamed to `xentraerp.net` on 2026-10-08** (site folder renamed, DB
+    unchanged); `ERP_BACKEND_HOST=xentraerp.net` in `erp-frontend/.env.local`
+    and `control_plane_host=xentraerp.net` in `common_site_config.json`.
+    These are internal Host headers to 127.0.0.1:8001, not public URLs.
+    Nothing named `erp.badmintonbooking.com` should remain.
   - `badmintonbooking.com` / `www.badmintonbooking.com`
     (`sites-available/badmintonbooking.com`) — **unrelated app**, not
     erp-frontend: `location /api/` and `/health` → `:3001`
@@ -518,8 +521,8 @@ error logs) will show it happening.
   Verified: PDF for `SAL-ORD-2026-00002` generates (valid `%PDF-`, 21 KB).
   **Every new tenant site needs the same `host_name` (`http://<site>:8002`)
   — `provisioning.py` does not set it yet, so new tenants will hit this
-  again until it does.** `erp.badmintonbooking.com` / `demo.innovegicit.com`
-  have no `host_name` set and were not changed.
+  again until it does.** The control-plane site `xentraerp.net`
+  has no `host_name` set and were not changed.
 - **Changed 2026-09-20**: `consolidateTabs` in `dynamic-form.tsx` had folded
   *every* non-table tab (Accounting Dimensions, Terms, Address, More Info,
   ...) into the Items tab. Now only the price sections — Currency and Price
@@ -608,7 +611,7 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
   (8 wrong / 15 min) — this only works because the Next proxies forward nginx's `X-Real-IP` as `X-Forwarded-For`
   (Frappe trusts the first XFF entry, so never forward a client-supplied one). A PIN session carries that user's full
   roles across the API, so cashier users should hold a restricted role.
-- **Module gate**: `common_site_config.json` has `control_plane_host = erp.badmintonbooking.com`; `pin_login` asks the
+- **Module gate**: `common_site_config.json` has `control_plane_host = xentraerp.net`; `pin_login` asks the
   control plane whether the tenant's `enabled_modules` includes `pos`. It fails OPEN (and logs) if the control plane is
   unreachable, by design. `pos` is in tenant 197349's list.
 - **Checkout document (setting `checkout_document`)**: `POS Invoice` (default — one submitted POS Invoice, must be
@@ -743,6 +746,21 @@ variant of the repo's `docker-compose.prod.yml`, which wants ports 80/443 and re
   reports through `reports.run_report`, which refuses a report outside the package before calling Frappe's
   `query_report.run`. POS End of Day shows only with `pos`. Module codes are `xentraerp_tenant.ALL_MODULES`
   (note: `inventory`, not `stock`).
+- **Subscription plans & report bundles (added 2026-10-08)**: `XentraERP Plan` (control plane; child tables
+  `XentraERP Plan Module` = module_code + report_access "All Reports"/"Selected Reports", `XentraERP Plan Report` =
+  module_code + report). Admin UI: `/admin/plans` (plan editor: modules + per-module report picker),
+  `/admin/reports` (reports x plans grid, toggles the bundle), plan dropdown on `/admin/tenants` (`plans.assign_plan`).
+  A tenant's `plan` is still a Data field matched by name; assigning a plan (or saving a plan) copies its modules into
+  every tenant on it (`enabled_modules`, `max_users`) — per-tenant module overrides are overwritten. Tenants whose plan
+  has no `XentraERP Plan` record (e.g. signup's "Free Trial") keep their own `enabled_modules` and get all reports.
+  Tenant sites now call `tenants.get_entitlements` (modules + `reports` bundle) via `pos.tenant_entitlements()`;
+  `tenant_modules()` wraps it. Report gate: `reports._report_in_package`. API: `custom_erp.api.plans`.
+- **Pay-per-module ("Customize Your Plan")**: plan `is_custom` = template; `plans.assign_plan` gives the tenant its own
+  copy (`custom_for` = tenant, named "Custom - <org> (<code>)") to tailor. Template + copies are priced as the sum of
+  `XentraERP Module Price` (edited on `/admin/modules`, `plans.save_module_prices` re-prices all custom plans); annual =
+  10 months. Seeded 2026-10-08: Starter $25 (4 core modules, 35-report bundle), Growth $49, Professional $89,
+  Enterprise $150 (all 20), Customize Your Plan (core 4 = $40 start; all modules = $173). All unlimited users
+  (`max_users` 0). Nothing bills automatically yet — prices are informational until billing is built.
 - **New tenants** (`provisioning.run_default_setup`, idempotent, also via the admin "Manage" re-run):
   `_ensure_fiscal_year()` creates/uses a Fiscal Year covering today and sets Global Defaults' Current Fiscal Year (the
   Setup Wizard normally does; without it Global Defaults can't be saved); bill rounding is set **off** when the company

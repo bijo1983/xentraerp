@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Plus, X, Check, Ban, Copy, CheckCheck, Server, RefreshCw, AlertTriangle, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { type Plan, assignPlan, listPlans } from '@/lib/plans';
 
 interface Tenant {
   name: string;
@@ -38,7 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const FILTERS = ['All', 'Pending Approval', 'Trial', 'Active', 'Suspended', 'Rejected'] as const;
 
-const emptyForm = { organization_name: '', subdomain: '', plan: 'Free', tenant_admin_email: '' };
+const emptyForm = { organization_name: '', subdomain: '', plan: '', tenant_admin_email: '' };
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -52,6 +53,29 @@ export default function TenantsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actingOn, setActingOn] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+
+  useEffect(() => {
+    listPlans().then(setPlans, () => setPlans([]));
+  }, []);
+
+  // Plans a new tenant can start on: active, and not a template or another tenant's custom copy.
+  const activePlans = plans.filter((p) => p.is_active && !p.is_custom && !p.custom_for);
+
+  async function changePlan(t: Tenant, plan: string) {
+    if (!plan || plan === t.plan) return;
+    if (!window.confirm(`Move ${t.organization_name || t.name} to the ${plan} plan? Its modules and report access become that plan's.`)) return;
+    setActingOn(t.name);
+    try {
+      const res = (await assignPlan(t.name, plan)) as { plan: string };
+      if (res.plan !== plan) alert(`Created "${res.plan}" for this tenant. Tailor its modules and reports on the Plans page.`);
+      await Promise.all([load(), listPlans().then(setPlans)]);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to change plan');
+    } finally {
+      setActingOn(null);
+    }
+  }
 
   function copyCode(code: string) {
     navigator.clipboard?.writeText(code).then(() => {
@@ -88,7 +112,7 @@ export default function TenantsPage() {
       await frappe.createDoc('XentraERP Tenant', {
         organization_name: form.organization_name,
         subdomain: form.subdomain.toLowerCase().trim(),
-        plan: form.plan,
+        plan: form.plan || activePlans[0]?.name || 'Free Trial',
         tenant_admin_email: form.tenant_admin_email,
         status: 'Draft',
         provisioning_status: 'Pending',
@@ -218,13 +242,11 @@ export default function TenantsPage() {
               <label className="text-xs font-medium text-muted-foreground">Plan</label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                value={form.plan}
+                value={form.plan || activePlans[0]?.name || ''}
                 onChange={(e) => setForm((f) => ({ ...f, plan: e.target.value }))}
               >
-                <option>Free</option>
-                <option>Starter</option>
-                <option>Professional</option>
-                <option>Enterprise</option>
+                {activePlans.length === 0 && <option value="">No plans yet (all modules)</option>}
+                {activePlans.map((p) => <option key={p.name} value={p.name}>{p.plan_name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
@@ -314,7 +336,24 @@ export default function TenantsPage() {
                   <div>{t.tenant_admin_name || '—'}</div>
                   <div className="text-muted-foreground/70">{t.tenant_admin_email}</div>
                 </td>
-                <td className="px-4 py-3">{t.plan || '—'}</td>
+                <td className="px-4 py-3">
+                  {plans.length === 0 ? (t.plan || '—') : (
+                    <select
+                      className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs"
+                      value={t.plan || ''}
+                      disabled={actingOn === t.name}
+                      onChange={(e) => changePlan(t, e.target.value)}
+                      title="Change plan"
+                    >
+                      {!plans.some((p) => p.name === t.plan) && <option value={t.plan || ''}>{t.plan || '—'} (no plan record)</option>}
+                      {plans.filter((p) => !p.custom_for || p.custom_for === t.name).map((p) => (
+                        <option key={p.name} value={p.name} disabled={!p.is_active && p.name !== t.plan}>
+                          {p.plan_name}{p.is_custom ? ' (pay per module)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status || ''] || 'bg-gray-100 text-gray-700'}`}>
                     {t.status || 'Draft'}

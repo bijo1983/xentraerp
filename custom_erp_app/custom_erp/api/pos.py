@@ -41,19 +41,20 @@ def _validate_pin_format(pin: str):
 		frappe.throw(f"PIN must be {PIN_MIN_LENGTH}-{PIN_MAX_LENGTH} digits (numbers only).")
 
 
-def tenant_modules() -> list[str] | None:
-	"""The module codes this tenant's subscription includes, from the control-plane
-	site's XentraERP Tenant record (custom_erp.api.tenants.get_enabled_modules).
-	That record lives in a different site/database, so this is a plain internal
-	HTTP call to the control-plane site (same box, loopback) — not a cross-site
-	frappe.get_doc (in-process site-switching proved unreliable, see provisioning.py).
-	Cached for a minute per site.
+def tenant_entitlements() -> dict | None:
+	"""This tenant's subscription — {"modules": [codes], "reports": {code: [report names]}} —
+	from the control-plane site's XentraERP Tenant record and its plan
+	(custom_erp.api.tenants.get_entitlements). `reports` lists only the modules the
+	plan limits to a report bundle. That record lives in a different site/database,
+	so this is a plain internal HTTP call to the control-plane site (same box,
+	loopback) — not a cross-site frappe.get_doc (in-process site-switching proved
+	unreliable, see provisioning.py). Cached for a minute per site.
 
 	Returns None when it can't be determined — no `control_plane_host` configured
 	(site config or XENTRAERP_CONTROL_PLANE_HOST) or the request fails. Callers FAIL
 	OPEN on None: a broken check must never lock every tenant out. It is logged.
 	"""
-	cached = frappe.cache().get_value("xentraerp_tenant_modules")
+	cached = frappe.cache().get_value("xentraerp_tenant_entitlements")
 	if cached is not None:
 		return cached
 	control_plane_host = frappe.conf.get("control_plane_host") or os.environ.get("XENTRAERP_CONTROL_PLANE_HOST")
@@ -72,18 +73,25 @@ def tenant_modules() -> list[str] | None:
 		import requests
 
 		resp = requests.get(
-			"http://127.0.0.1:8001/api/method/custom_erp.api.tenants.get_enabled_modules",
+			"http://127.0.0.1:8001/api/method/custom_erp.api.tenants.get_entitlements",
 			params={"tenant_code": tenant_code},
 			headers={"Host": control_plane_host},
 			timeout=3,
 		)
 		resp.raise_for_status()
-		enabled = list(resp.json().get("message") or [])
+		message = resp.json().get("message") or {}
+		entitlements = {"modules": list(message.get("modules") or []), "reports": dict(message.get("reports") or {})}
 	except Exception:
 		frappe.log_error(title="XentraERP module entitlement check failed")
 		return None
-	frappe.cache().set_value("xentraerp_tenant_modules", enabled, expires_in_sec=60)
-	return enabled
+	frappe.cache().set_value("xentraerp_tenant_entitlements", entitlements, expires_in_sec=60)
+	return entitlements
+
+
+def tenant_modules() -> list[str] | None:
+	"""The module codes this tenant's subscription includes (None = unknown, fail open)."""
+	entitlements = tenant_entitlements()
+	return None if entitlements is None else entitlements["modules"]
 
 
 def _tenant_has_module(module_code: str) -> bool:
