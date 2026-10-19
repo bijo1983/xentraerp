@@ -13,7 +13,16 @@
   "require_shift",
   "pos_247",
   "previous_day_billing",
-  "previous_day_until"
+  "previous_day_until",
+  "auth_section",
+  "require_registered_device",
+  "allow_waiter_on_till",
+  "show_staff_list",
+  "legacy_pin_login",
+  "column_break_auth",
+  "require_management_2fa",
+  "idle_lock_minutes",
+  "session_max_hours"
  ],
  "fields": [
   {
@@ -76,10 +85,67 @@
    "label": "Ask for a note when an item is added",
    "default": "1",
    "description": "Shows suggested notes for the dish (well done, crunchy, no onions, ...) plus free text. Suggestions come from Claude when an Anthropic API key is configured, otherwise from a built-in list."
+  },
+  {
+   "fieldname": "auth_section",
+   "fieldtype": "Section Break",
+   "label": "Sign-in & devices"
+  },
+  {
+   "fieldname": "require_registered_device",
+   "fieldtype": "Check",
+   "label": "Only registered devices can take staff PIN sign-ins",
+   "default": "1",
+   "description": "Each till / handheld / kitchen screen is registered once with a one-time approval code from an administrator."
+  },
+  {
+   "fieldname": "allow_waiter_on_till",
+   "fieldtype": "Check",
+   "label": "Waiters may sign in on a till",
+   "default": "1",
+   "description": "They still only take orders there: no register, shift or payments."
+  },
+  {
+   "fieldname": "show_staff_list",
+   "fieldtype": "Check",
+   "label": "Show staff names on registered devices",
+   "default": "1",
+   "description": "Off = staff type their staff number."
+  },
+  {
+   "fieldname": "legacy_pin_login",
+   "fieldtype": "Check",
+   "label": "Allow legacy PIN-only sign-in",
+   "default": "0",
+   "description": "The old flow (PIN with no staff number). Off by default; administrators are refused either way."
+  },
+  {
+   "fieldname": "column_break_auth",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "require_management_2fa",
+   "fieldtype": "Check",
+   "label": "Administrators need an authenticator code",
+   "default": "1"
+  },
+  {
+   "fieldname": "idle_lock_minutes",
+   "fieldtype": "Int",
+   "label": "Lock the screen after (minutes idle)",
+   "default": "5",
+   "description": "0 = never."
+  },
+  {
+   "fieldname": "session_max_hours",
+   "fieldtype": "Int",
+   "label": "Sign everyone out after (hours)",
+   "default": "12",
+   "description": "0 = no limit beyond the system session expiry."
   }
  ],
  "links": [],
- "modified": "2026-09-21 00:00:00.000000",
+ "modified": "2026-10-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Xentraerp",
  "name": "XentraERP POS Settings",

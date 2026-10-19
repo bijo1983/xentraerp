@@ -209,6 +209,7 @@ def get_enabled_modules(tenant_code: str):
 	Frappe sites on the same box, not a browser request. Only exposes the
 	module code list for the given tenant code, nothing else.
 	"""
+	_require_internal_token()
 	tenant = frappe.get_all(
 		"XentraERP Tenant",
 		filters={"tenant_code": tenant_code},
@@ -218,6 +219,43 @@ def get_enabled_modules(tenant_code: str):
 	if not tenant or tenant[0].status not in ("Trial", "Active"):
 		return []
 	return [m for m in (tenant[0].enabled_modules or "").split(",") if m]
+
+
+def _require_internal_token(required: bool = False):
+	"""Server-to-server calls (tenant sites, the Next.js proxy) carry the shared secret
+	`xentraerp_internal_token` (control-plane site config) in X-Xentra-Internal-Token.
+	When the secret is configured a missing/wrong header is refused; when it isn't,
+	only `required` callers are refused."""
+	import hmac
+
+	expected = frappe.conf.get("xentraerp_internal_token")
+	if not expected:
+		if required:
+			frappe.throw("Not configured", frappe.PermissionError)
+		return
+	got = frappe.get_request_header("X-Xentra-Internal-Token") or ""
+	if not hmac.compare_digest(str(expected), str(got)):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+
+@frappe.whitelist(allow_guest=True)
+def resolve_tenant_site(tenant_code: str):
+	"""For the Next.js proxy's tenant allow-list (server-to-server only; requires the
+	internal token): is `tenant_code` an active, provisioned tenant, and which site
+	serves it."""
+	_require_internal_token(required=True)
+	code = str(tenant_code or "").strip().lower()
+	row = frappe.get_all(
+		"XentraERP Tenant",
+		filters={"tenant_code": code},
+		fields=["status", "provisioning_status", "site_name"],
+		limit_page_length=1,
+	)
+	if not row:
+		return {"active": False}
+	r = row[0]
+	active = r.status in ("Trial", "Active") and r.provisioning_status == "Completed" and bool(r.site_name)
+	return {"active": active, "site_name": r.site_name if active else None}
 
 
 @frappe.whitelist()

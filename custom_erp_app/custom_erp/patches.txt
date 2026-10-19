@@ -1,0 +1,5 @@
+[pre_model_sync]
+
+[post_model_sync]
+custom_erp.patches.v1_0.remove_pos_customer_read
+custom_erp.patches.v1_0.assign_pos_staff_codes

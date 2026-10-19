@@ -233,33 +233,42 @@ def complete_signup(
 
 @frappe.whitelist(allow_guest=True)
 def tenant_lookup(tenant_code: str):
-	"""Validate a tenant code and return the admin email to sign in with.
+	"""Validate a tenant code for the sign-in screens and return the organization name.
 
-	No OTP — the follow-up password check against the real Frappe User
-	(created on approval, see custom_erp.api.tenants.approve_tenant) is
-	the actual verification step.
+	Phase 1 (POS upgrade) change: the tenant admin's email is NO LONGER returned to an
+	unauthenticated caller (it let anyone enumerate tenant admin emails); the ERP
+	sign-in now asks for the email. Requests are rate limited per IP and unknown,
+	pending, suspended and cancelled codes get the same generic answer. Set site config
+	`tenant_lookup_legacy_admin_email: 1` on the control-plane site to return
+	`admin_email` again during a transition (old cached ERP login pages).
 	"""
+	from custom_erp.api import pos_security as sec
+
+	ip = frappe.local.request_ip or "unknown"
+	all_key, fail_key = f"xpos:lookup:{ip}", f"xpos:lookupfail:{ip}"
+	cache = frappe.cache()
+	if sec.over_limit(cache.get_value(all_key) or 0, sec.LOOKUP_LIMIT) or sec.over_limit(cache.get_value(fail_key) or 0, sec.LOOKUP_FAIL_LIMIT):
+		frappe.throw("Too many attempts. Please wait a few minutes and try again.", frappe.TooManyRequestsError)
+	cache.set_value(all_key, int(cache.get_value(all_key) or 0) + 1, expires_in_sec=sec.LOOKUP_WINDOW_SECONDS)
+
 	tenant = frappe.get_all(
 		"XentraERP Tenant",
-		filters={"tenant_code": tenant_code},
+		filters={"tenant_code": (tenant_code or "").strip()},
 		fields=["name", "organization_name", "tenant_admin_email", "status", "provisioning_status", "site_name"],
 		limit_page_length=1,
 	)
-	if not tenant:
-		frappe.throw("Tenant code not found.")
-
-	t = tenant[0]
-	if t.status == "Pending Approval":
-		frappe.throw("Your account is awaiting admin approval. You'll be notified by email once it's activated.")
-	if t.status in ("Rejected", "Suspended", "Cancelled", "Expired"):
-		frappe.throw(f"This tenant account is {t.status.lower()}. Contact support.")
-	if not t.site_name or t.provisioning_status != "Completed":
+	t = tenant[0] if tenant else None
+	outcome = sec.lookup_outcome(t.status, t.provisioning_status, t.site_name) if t else "unavailable"
+	if outcome == "unavailable":
+		cache.set_value(fail_key, int(cache.get_value(fail_key) or 0) + 1, expires_in_sec=sec.LOOKUP_WINDOW_SECONDS)
+		frappe.throw("We couldn't find an active organization with that code. Check the code or contact support.")
+	if outcome == "setup":
 		frappe.throw(
 			"Your workspace is still being set up. Please try again in a few minutes, "
 			"or contact support if this persists."
 		)
 
-	return {
-		"organization_name": t.organization_name,
-		"admin_email": t.tenant_admin_email,
-	}
+	out = {"organization_name": t.organization_name}
+	if frappe.conf.get("tenant_lookup_legacy_admin_email"):
+		out["admin_email"] = t.tenant_admin_email
+	return out
