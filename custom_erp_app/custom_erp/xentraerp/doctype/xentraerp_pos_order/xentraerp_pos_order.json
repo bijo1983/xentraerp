@@ -27,7 +27,10 @@
   "bill_closed_at",
   "merged_into",
   "items_section",
-  "items"
+  "items",
+  "bill_requested",
+  "bill_requested_at",
+  "bill_requested_by"
  ],
  "fields": [
   {
@@ -185,10 +188,30 @@
    "fieldname": "guest_phone",
    "fieldtype": "Data",
    "label": "Phone"
+  },
+  {
+   "fieldname": "bill_requested",
+   "fieldtype": "Check",
+   "label": "Bill requested",
+   "default": "0",
+   "description": "Set by the order taker so the cashier knows the table wants to pay."
+  },
+  {
+   "fieldname": "bill_requested_at",
+   "fieldtype": "Datetime",
+   "label": "Bill requested at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bill_requested_by",
+   "fieldtype": "Link",
+   "label": "Bill requested by",
+   "options": "User",
+   "read_only": 1
   }
  ],
  "links": [],
- "modified": "2026-09-21 00:00:00.000000",
+ "modified": "2026-10-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Xentraerp",
  "name": "XentraERP POS Order",

@@ -18,6 +18,8 @@ import os
 import frappe
 from frappe.utils import cint
 
+from custom_erp.api import pos_security
+
 PIN_MIN_LENGTH = 6
 PIN_MAX_LENGTH = 8
 MAX_FAILED_ATTEMPTS = 8
@@ -41,63 +43,82 @@ def _validate_pin_format(pin: str):
 		frappe.throw(f"PIN must be {PIN_MIN_LENGTH}-{PIN_MAX_LENGTH} digits (numbers only).")
 
 
-def tenant_entitlements() -> dict | None:
-	"""This tenant's subscription — {"modules": [codes], "reports": {code: [report names]}} —
-	from the control-plane site's XentraERP Tenant record and its plan
-	(custom_erp.api.tenants.get_entitlements). `reports` lists only the modules the
-	plan limits to a report bundle. That record lives in a different site/database,
-	so this is a plain internal HTTP call to the control-plane site (same box,
-	loopback) — not a cross-site frappe.get_doc (in-process site-switching proved
-	unreliable, see provisioning.py). Cached for a minute per site.
+ENTITLEMENT_CACHE_KEY = "xentraerp_tenant_entitlements"
+ENTITLEMENT_LKG_KEY = "xentraerp_tenant_entitlements_lkg"  # last known good answer
+ENTITLEMENT_FAIL_KEY = "xentraerp_tenant_entitlements_fail"
+ENTITLEMENT_TTL = 60  # seconds a fresh answer is trusted
+ENTITLEMENT_LKG_TTL = 24 * 3600  # how long a last-known-good answer may stand in for an unreachable control plane
+ENTITLEMENT_RETRY_AFTER = 15  # seconds between control-plane retries after a failure
 
-	Returns None when it can't be determined — no `control_plane_host` configured
-	(site config or XENTRAERP_CONTROL_PLANE_HOST) or the request fails. Callers FAIL
-	OPEN on None: a broken check must never lock every tenant out. It is logged.
-	"""
-	cached = frappe.cache().get_value("xentraerp_tenant_entitlements")
-	if cached is not None:
-		return cached
+
+def _fetch_tenant_entitlements() -> dict | None:
+	"""Ask the control-plane site (plain loopback HTTP, see the CLAUDE.md note) for this
+	tenant's subscription: {"modules": [codes], "reports": {code: [report names]}}
+	(custom_erp.api.tenants.get_entitlements; `reports` lists only the modules the plan
+	limits to a report bundle). None = couldn't tell (not configured / request failed)."""
 	control_plane_host = frappe.conf.get("control_plane_host") or os.environ.get("XENTRAERP_CONTROL_PLANE_HOST")
 	if not control_plane_host:
 		frappe.log_error(
 			title="XentraERP module entitlement check not configured",
-			message=(
-				"control_plane_host isn't set — module entitlement is NOT enforced; every "
-				"tenant can use every module regardless of subscription until it is configured."
-			),
+			message="control_plane_host isn't set — POS sign-in is refused (fails closed) until it is, or until site config pos_entitlement_check is set to 'open'/'off'.",
 		)
 		return None
-
 	tenant_code = frappe.local.site.split(".")[0]
+	headers = {"Host": control_plane_host}
+	token = frappe.conf.get("xentraerp_internal_token") or os.environ.get("XENTRAERP_INTERNAL_TOKEN")
+	if token:
+		headers["X-Xentra-Internal-Token"] = token
 	try:
 		import requests
 
 		resp = requests.get(
 			"http://127.0.0.1:8001/api/method/custom_erp.api.tenants.get_entitlements",
 			params={"tenant_code": tenant_code},
-			headers={"Host": control_plane_host},
+			headers=headers,
 			timeout=3,
 		)
 		resp.raise_for_status()
 		message = resp.json().get("message") or {}
-		entitlements = {"modules": list(message.get("modules") or []), "reports": dict(message.get("reports") or {})}
+		return {"modules": list(message.get("modules") or []), "reports": dict(message.get("reports") or {})}
 	except Exception:
 		frappe.log_error(title="XentraERP module entitlement check failed")
 		return None
-	frappe.cache().set_value("xentraerp_tenant_entitlements", entitlements, expires_in_sec=60)
-	return entitlements
+
+
+def tenant_entitlements() -> dict | None:
+	"""This tenant's subscription (see _fetch_tenant_entitlements). Cached for
+	ENTITLEMENT_TTL seconds; when the control plane can't be asked, the last known good
+	answer (kept for a day) is used; with none, returns None. Callers decide what None
+	means: the POS gate fails CLOSED (`_tenant_has_module`), the reports gate keeps its
+	old fail-open behaviour."""
+	cache = frappe.cache()
+	cached = cache.get_value(ENTITLEMENT_CACHE_KEY)
+	if cached is not None:
+		return cached
+	fresh = None if cache.get_value(ENTITLEMENT_FAIL_KEY) else _fetch_tenant_entitlements()
+	if fresh is not None:
+		cache.set_value(ENTITLEMENT_CACHE_KEY, fresh, expires_in_sec=ENTITLEMENT_TTL)
+		cache.set_value(ENTITLEMENT_LKG_KEY, fresh, expires_in_sec=ENTITLEMENT_LKG_TTL)
+		return fresh
+	cache.set_value(ENTITLEMENT_FAIL_KEY, 1, expires_in_sec=ENTITLEMENT_RETRY_AFTER)
+	return cache.get_value(ENTITLEMENT_LKG_KEY)
 
 
 def tenant_modules() -> list[str] | None:
-	"""The module codes this tenant's subscription includes (None = unknown, fail open)."""
+	"""The module codes this tenant's subscription includes (None = unknown)."""
 	entitlements = tenant_entitlements()
-	return None if entitlements is None else entitlements["modules"]
+	return pos_security.effective_modules(None if entitlements is None else entitlements.get("modules"), None)
 
 
 def _tenant_has_module(module_code: str) -> bool:
-	"""Whether this tenant's subscription includes `module_code` (fails open, see tenant_modules)."""
-	enabled = tenant_modules()
-	return True if enabled is None else module_code in enabled
+	"""Whether this tenant's subscription includes `module_code`. Fails CLOSED when the
+	answer is unknown (changed in POS upgrade Phase 1; it used to fail open). Site config
+	`pos_entitlement_check`: "closed" (default) | "open" (old behaviour) | "off" (skip,
+	for development sites without a control plane)."""
+	mode = str(frappe.conf.get("pos_entitlement_check") or "closed").lower()
+	if mode == "off":
+		return True
+	return pos_security.module_allowed(tenant_modules(), module_code, mode)
 
 
 def _throttle_key() -> str:
@@ -129,12 +150,25 @@ def _clear_throttle():
 
 
 @frappe.whitelist(allow_guest=True)
-def pin_login(pin: str):
-	"""Log in whichever active cashier this PIN belongs to, on this site."""
-	if not _tenant_has_module(POS_MODULE_CODE):
-		frappe.throw("The Point of Sale module isn't included in this organization's current plan.")
+def pin_login(pin: str, staff: str | None = None):
+	"""Staff PIN sign-in.
+
+	With `staff` (staff number from the picker) this is `pos_auth.pin_login` — the
+	Phase 1 flow (identity + PIN, device policy, per-user and per-IP lockout, login
+	log). Without it, the legacy PIN-only lookup runs ONLY when POS Settings
+	`legacy_pin_login` is on (default off); it too refuses administrators and logs
+	every attempt."""
+	from custom_erp.api import pos_auth
+
+	if staff:
+		return pos_auth.pin_login(staff, pin)
+	pos_auth.require_pos_entitlement(for_login=True)
+	if not pos_auth.auth_settings()["legacy_pin_login"]:
+		pos_auth.log_attempt("PIN", "Refused", "legacy PIN-only login disabled")
+		frappe.throw("[STAFF_REQUIRED] Choose your name or enter your staff number, then your PIN.", frappe.AuthenticationError)
 
 	_check_not_locked_out()
+	pos_auth.check_ip_lock()
 
 	pin = (pin or "").strip()
 	_validate_pin_format(pin)
@@ -146,38 +180,22 @@ def pin_login(pin: str):
 		fields=["name", "user", "pos_profile"],
 		limit_page_length=1,
 	)
-	if not matches:
+	if not matches or not frappe.db.exists("User", {"name": matches[0].user, "enabled": 1}):
 		_record_failed_attempt()
-		frappe.throw("Incorrect PIN.")
+		pos_auth.record_ip_failure()
+		pos_auth.log_attempt("PIN", "Failed", "legacy: bad PIN")
+		frappe.throw("[BAD_CREDENTIALS] Incorrect PIN.", frappe.AuthenticationError)
 
 	match = matches[0]
-	if not frappe.db.exists("User", {"name": match.user, "enabled": 1}):
-		frappe.throw("This cashier's account is disabled. Contact your administrator.")
+	if _is_system_manager_user(match.user):
+		pos_auth.log_attempt("PIN", "Refused", "legacy: administrator PIN refused", user=match.user)
+		frappe.throw("[ADMIN_USE_MANAGEMENT_LOGIN] Administrators sign in with the management login.", frappe.PermissionError)
 
 	_clear_throttle()
-
-	# Establish a real session without a password check — the PIN itself
-	# was the auth check above. Same technique Frappe's own passwordless
-	# (social/OAuth) login flows use: set the session user directly and run
-	# the normal post-login hooks, rather than calling authenticate().
-	from frappe.auth import LoginManager
-
-	login_manager = LoginManager()
-	login_manager.user = match.user
-	login_manager.post_login()
+	session = pos_auth._start_session(match.user, "PIN", pos_auth.current_device(), core.pos_level(match.user))
+	pos_auth.log_attempt("PIN", "Success", "legacy PIN-only login", user=match.user)
 	frappe.db.commit()
-
-	user = frappe.get_doc("User", frappe.session.user)
-	return {
-		"user": {
-			"name": user.name,
-			"email": user.email,
-			"full_name": user.full_name,
-			"user_image": user.user_image,
-			"roles": [r.role for r in user.roles],
-		},
-		"pos_profile": match.pos_profile or None,
-	}
+	return {"user": pos_auth._user_payload(match.user), "pos_profile": match.pos_profile or None, "session": session}
 
 
 def _require_system_manager():
@@ -208,6 +226,9 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 	_validate_pin_format(pin)
 	if not frappe.db.exists("User", user):
 		frappe.throw(f"No such user: {user}")
+	if _is_system_manager_user(user):
+		# Phase 1: administrators never use a PIN (management login with an authenticator code).
+		frappe.throw("Administrators don't use a PIN — they sign in to the POS with email, password and authenticator code.")
 
 	pin_hash = _hash_pin(pin)
 
@@ -235,6 +256,10 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 		doc.active = 1
 		doc.pos_profile = new_profile
 		doc.location = new_location
+		doc.failed_count = 0
+		doc.locked_until = None
+		if not doc.staff_code:
+			doc.staff_code = _pos_auth().next_staff_code()
 		doc.save(ignore_permissions=True)
 	else:
 		doc = frappe.get_doc(
@@ -245,6 +270,7 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 				"pos_profile": new_profile,
 				"location": new_location,
 				"active": 1,
+				"staff_code": _pos_auth().next_staff_code(),
 			}
 		)
 		doc.insert(ignore_permissions=True)
@@ -255,6 +281,12 @@ def set_pin(user: str, pin: str, pos_profile: str | None = None, assign_role: in
 	frappe.get_doc("User", user).add_comment("Info", f"POS PIN set by {frappe.session.user}.")
 	frappe.db.commit()
 	return {"success": True}
+
+
+def _pos_auth():
+	from custom_erp.api import pos_auth
+
+	return pos_auth
 
 
 def _is_system_manager_user(user: str) -> bool:
@@ -326,7 +358,10 @@ POS_ROLE = "POS Cashier"  # kept for callers that predate the four roles
 # What the POS screens read directly over the REST API (item grid, prices, payment modes,
 # the register). Everything that changes data goes through the server-side POS methods,
 # which check the role themselves — so these roles are read-only on purpose.
-POS_ROLE_READS = ("Item", "Item Price", "Item Group", "POS Profile", "Mode of Payment", "Customer", "Price List", "Currency")
+# Customer is deliberately NOT here (Phase 1, least privilege): checkout runs elevated, and no
+# POS screen lists customers over REST. patches/v1_0/remove_pos_customer_read.py removes the
+# read permission that earlier versions granted.
+POS_ROLE_READS = ("Item", "Item Price", "Item Group", "POS Profile", "Mode of Payment", "Price List", "Currency")
 
 
 def ensure_pos_role(role: str = POS_ROLE) -> str:
@@ -364,7 +399,7 @@ def _require_staff_admin():
 def list_pos_users():
 	"""Everyone who could work the tills: their POS role and whether they have a PIN."""
 	_require_staff_admin()
-	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "location", "active"])}
+	pins = {p.user: p for p in frappe.get_all("XentraERP POS PIN", fields=["user", "pos_profile", "location", "active", "staff_code"])}
 	out = []
 	for u in frappe.get_all("User", filters={"enabled": 1, "name": ["not in", ["Guest", "Administrator"]]}, fields=["name", "full_name"], order_by="full_name asc"):
 		roles = frappe.get_roles(u.name)
@@ -375,6 +410,7 @@ def list_pos_users():
 				"user": u.name,
 				"full_name": u.full_name,
 				"has_pin": bool(p),
+				"staff_code": p.staff_code if p else None,
 				"active": bool(p and p.active),
 				"pos_profile": p.pos_profile if p else None,
 				"location": core.user_location(u.name),
@@ -415,6 +451,9 @@ def set_pin_active(user: str, active: int = 1):
 	if not frappe.db.exists("XentraERP POS PIN", user):
 		frappe.throw("That user has no PIN.")
 	frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
+	if not cint(active):
+		# Phase 1: switching a PIN off also ends that person's open sessions (audit M9).
+		_pos_auth().end_user_sessions(user, "PIN switched off")
 	frappe.db.commit()
 	return {"success": True}
 
@@ -439,7 +478,7 @@ def get_pos_access(user: str):
 	if not frappe.db.exists("User", user):
 		frappe.throw(f"No such user: {user}")
 	roles = frappe.get_roles(user)
-	pin = frappe.db.get_value("XentraERP POS PIN", user, ["pos_profile", "location", "active"], as_dict=True)
+	pin = frappe.db.get_value("XentraERP POS PIN", user, ["pos_profile", "location", "active", "staff_code"], as_dict=True)
 	level = core.pos_level(user)
 	locations = frappe.get_all(
 		"XentraERP POS Location",
@@ -457,6 +496,7 @@ def get_pos_access(user: str):
 	return {
 		"user": user,
 		"has_pin": bool(pin),
+		"staff_code": pin.staff_code if pin else None,
 		"active": bool(pin and pin.active),
 		"pos_profile": pin.pos_profile if pin else None,
 		"location": pin.location if pin else None,
@@ -504,6 +544,8 @@ def save_pos_access(user: str, pos_role: str | None = None, pos_profile: str | N
 		frappe.db.set_value("XentraERP POS PIN", user, {"pos_profile": new_profile, "location": new_location})
 	if active is not None:
 		frappe.db.set_value("XentraERP POS PIN", user, "active", cint(bool(cint(active))))
+		if not cint(active):
+			_pos_auth().end_user_sessions(user, "PIN switched off")
 	frappe.get_doc("User", user).add_comment("Info", f"POS access changed by {frappe.session.user}.")
 	frappe.db.commit()
 	return get_pos_access(user)

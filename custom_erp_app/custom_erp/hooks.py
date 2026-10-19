@@ -13,6 +13,11 @@ website_context = {
 # Allow guest access to login endpoint
 guest_methods = ["custom_erp.api.auth.login"]
 
+# POS sessions (POS upgrade Phase 1): on every request made with a POS session, enforce
+# its maximum age, screen lock and device revocation. Sessions without a POS Session
+# record (ERP logins) are not affected. See custom_erp.api.pos_auth.enforce_pos_session.
+auth_hooks = ["custom_erp.api.pos_auth.enforce_pos_session"]
+
 # CORS settings — configure allowed origins in site_config.json:
 #   "allow_cors": ["http://localhost:3000", "https://your-frontend.com"]
 

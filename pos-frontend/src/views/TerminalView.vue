@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { companyCurrency, formatMoney } from '@/lib/money'
 import brandMark from '@/assets/brand-mark.png'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -152,7 +153,7 @@ const cartLines = computed(() => Object.values(cart.value).filter((l) => l.qty >
 const subtotal = computed(() => cartLines.value.reduce((sum, l) => sum + l.rate * l.qty, 0))
 
 function money(n: number) {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: profile.value.currency || 'USD' }).format(n)
+  return formatMoney(n, profile.value.currency || companyCurrency())
 }
 
 function addItem(it: Item) {

@@ -7,6 +7,8 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePosStore } from '@/stores/pos'
 import ConfirmSheet from '@/components/ConfirmSheet.vue'
+import { formatCompanyMoney } from '@/lib/money'
+import { effectiveMode } from '@/lib/nav'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -21,6 +23,8 @@ const initials = computed(() => name.value.split(/\s+/).filter(Boolean).map((w) 
 const register = computed(() => auth.posProfile?.name || '')
 const shift = computed(() => pos.shift)
 const canShift = computed(() => pos.can('shift'))
+// Order-taking and kitchen sessions have no register of their own to switch (Phase 1).
+const tillSession = computed(() => ['till', 'manager'].includes(effectiveMode({ level: pos.settings?.level ?? null, mode: pos.settings?.session?.mode ?? null })))
 const since = computed(() => {
   const t = shift.value?.opened_at
   if (!t) return ''
@@ -31,7 +35,7 @@ const shiftLine = computed(() => {
   const s = shift.value
   if (!s) return 'Start your shift with the opening cash'
   const bills = `${s.invoice_count} bill${s.invoice_count === 1 ? '' : 's'}`
-  return `Open${since.value ? ` since ${since.value}` : ''} · ${bills} · ${Number(s.total_sales || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })}`
+  return `Open${since.value ? ` since ${since.value}` : ''} · ${bills} · ${formatCompanyMoney(s.total_sales || 0, auth.posProfile?.currency || '')}`
 })
 
 function go(path: string) {
@@ -103,7 +107,7 @@ function closeShiftFirst() {
         <span class="ic">⇄</span>
         <span class="tx"><b>Switch user</b><small>The next person signs in with their PIN</small></span>
       </button>
-      <button class="menu-tile" @click="switchRegister">
+      <button v-if="tillSession" class="menu-tile" @click="switchRegister">
         <span class="ic">▤</span>
         <span class="tx"><b>Switch register</b><small>Pick a different till</small></span>
       </button>

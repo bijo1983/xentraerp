@@ -2,11 +2,14 @@
 // Tenant-admin screen: which kind of POS this organization runs (Retail or
 // F&B), operating-hours behaviour, exchange rates for foreign-currency
 // checkout, the dining tables, and the end-of-day report.
+import { companyCurrency, formatMoney } from '@/lib/money'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePosStore, type PosMode } from '@/stores/pos'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/lib/api'
+import DevicesSecurityPanel from '@/components/admin/DevicesSecurityPanel.vue'
+import { FEATURES } from '@/lib/features'
 
 interface Table {
   name: string
@@ -46,12 +49,14 @@ const auth = useAuthStore()
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const busy = ref(false)
-type Tab = 'mode' | 'hours' | 'menu' | 'locations' | 'rates' | 'tables' | 'eod'
+type Tab = 'mode' | 'hours' | 'menu' | 'locations' | 'rates' | 'tables' | 'eod' | 'security' | 'vat'
 const tab = ref<Tab>('mode')
 // Each tab needs a capability of the signed-in role (the server enforces the same rules).
 const tabOk = computed<Record<Tab, boolean>>(() => ({
   mode: pos.can('settings'), hours: pos.can('settings'), locations: pos.can('settings'), rates: pos.can('settings'),
   menu: pos.can('menu'), tables: pos.can('tables') && pos.isFnb, eod: pos.can('reports'),
+  // Phase 1: devices, sessions, sign-in history (administrators). Tax & VAT is a Phase 2 placeholder (hidden).
+  security: pos.can('settings'), vat: pos.can('settings') && FEATURES.taxVat,
 }))
 
 async function run(fn: () => Promise<unknown>, ok?: string) {
@@ -236,7 +241,7 @@ const eodDate = ref(pos.settings?.business_date || new Date().toISOString().slic
 const eod = ref<Eod | null>(null)
 const runEod = () => run(async () => (eod.value = await api.call<Eod>(CORE + 'end_of_day_report', { date: eodDate.value, location: eodLocation.value || undefined })))
 const printReport = () => window.print()
-const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(n)
+const fmt = (n: number, c = eod.value?.currency || companyCurrency()) => formatMoney(n, c)
 </script>
 
 <template>
@@ -244,7 +249,7 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
     <div class="page-head">
       <h2>POS settings &amp; reports</h2>
       <span class="pill">Business day {{ s?.business_date }}</span>
-      <button class="btn btn-ghost mini" @click="router.push('/registers')">Back</button>
+      <button class="btn btn-ghost mini" @click="router.push('/')">Back</button>
     </div>
 
     <div class="seg" style="margin-bottom: 16px">
@@ -255,7 +260,11 @@ const fmt = (n: number, c = eod.value?.currency || 'USD') => new Intl.NumberForm
       <button v-if="tabOk.locations" :class="{ on: tab === 'locations' }" @click="openTab('locations')">Locations</button>
       <button v-if="tabOk.rates" :class="{ on: tab === 'rates' }" @click="openTab('rates')">Currencies</button>
       <button v-if="tabOk.eod" :class="{ on: tab === 'eod' }" @click="openTab('eod')">End of day</button>
+      <button v-if="tabOk.security" :class="{ on: tab === 'security' }" @click="openTab('security')">{{ $t('admin.securityTab') }}</button>
+      <button v-if="tabOk.vat" :class="{ on: tab === 'vat' }" @click="openTab('vat')">{{ $t('admin.vatTab') }}</button>
     </div>
+    <DevicesSecurityPanel v-if="tab === 'security' && tabOk.security" />
+    <div v-if="tab === 'vat' && tabOk.vat" class="card"><p>{{ $t('admin.vatPlaceholder') }}</p></div>
     <p v-if="error" class="error-box">{{ error }}</p>
     <p v-if="notice" style="color: var(--success)">{{ notice }}</p>
 

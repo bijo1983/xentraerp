@@ -607,13 +607,19 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
   access to the Customer, which a cashier role lacks — hence the elevation, done after the cashier's own checks.
 - **Stock items need stock**: ERPNext refuses to POS-sell a stock item with no stock in the register's warehouse
   ("not available under warehouse …"). The tenant's sample items (Blue Pen, Cola) are stock items with none.
-- **Security**: PIN = 6-8 digits, HMAC-SHA256 keyed with the site encryption key; lockout is per client IP
-  (8 wrong / 15 min) — this only works because the Next proxies forward nginx's `X-Real-IP` as `X-Forwarded-For`
-  (Frappe trusts the first XFF entry, so never forward a client-supplied one). A PIN session carries that user's full
-  roles across the API, so cashier users should hold a restricted role.
-- **Module gate**: `common_site_config.json` has `control_plane_host = xentraerp.net`; `pin_login` asks the
-  control plane whether the tenant's `enabled_modules` includes `pos`. It fails OPEN (and logs) if the control plane is
-  unreachable, by design. `pos` is in tenant 197349's list.
+- **Security (POS upgrade Phase 1, see `pos-frontend/docs/upgrade/06-phase-1-implementation.md`)**: staff sign in with a
+  staff number (or name tile on a registered device) + 6-8 digit PIN (`pos_auth.pin_login`); PIN = HMAC-SHA256 keyed with
+  the site encryption key; progressive lockout per user (DB, hard lock at 10 → admin unlock) and per IP (cache) — the IP
+  key only works because the Next proxies forward nginx's `X-Real-IP` as `X-Forwarded-For` (never forward a
+  client-supplied one). Administrators (System Manager) can't use a PIN: POS management sign-in = password + TOTP
+  (`pos_auth.management_login`, Frappe's per-user OTP secret). Devices (Till / Order Taking / Kitchen Display) are
+  registered once with an admin approval code (HttpOnly cookie `xpos_dev_<tenant>`); the device type limits roles and
+  masks caps. Every attempt goes to `XentraERP POS Login Attempt`; sessions to `XentraERP POS Session` (max age, idle
+  lock, revocation enforced by the `auth_hooks` entry `pos_auth.enforce_pos_session`). POS roles no longer read Customer.
+- **Module gate**: `common_site_config.json` has `control_plane_host = xentraerp.net`; the POS asks the control
+  plane (`tenants.get_entitlements`: modules + report bundle) whether the tenant's modules include `pos` on every POS call (cached 60 s, last-known-good 24 h). It
+  now fails CLOSED (site config `pos_entitlement_check` = `open`/`off` to override on dev sites). `pos` is in tenant
+  197349's list. Server-to-server calls carry `X-Xentra-Internal-Token` = `xentraerp_internal_token` when configured.
 - **Checkout document (setting `checkout_document`)**: `POS Invoice` (default — one submitted POS Invoice, must be
   paid in full) or `Draft Invoice + Receipt` (F&B `close_bill` creates a *Draft Sales Invoice*; on payment it is
   submitted and one Payment Entry receipt per payment leg is created against it, non-cash legs first so change comes out
@@ -629,9 +635,9 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
   belong to a location and each location has its own kitchen; the EOD report can filter/break down by location. A
   register belongs to at most one location; no locations = standard ERPNext numbering. Disabled location = fallback.
 - **Staff & roles**: `POS Cashier` role (created on demand, READ-only on Item/Item Price/Item Group/POS Profile/Mode of
-  Payment/Customer/Price List/Currency — what the POS screens read over REST; everything that writes goes through
+  Payment/Price List/Currency (Customer removed in Phase 1) — what the POS screens read over REST; everything that writes goes through
   server methods). `create_pos_user` / `set_pin` (gives the role) / `set_pin_active` / `list_pos_users`, all
-  System-Manager-only, surfaced in the POS app under Settings → Staff & PINs. Administrators' PINs don't get the role.
+  System-Manager-only, surfaced in the POS app under Settings → Staff & PINs. Administrators can't have a PIN (Phase 1).
 - **Gotchas found while building this**: `default` is a reserved SQL word (the original `list_pos_profiles`
   `order_by="default desc"` crashed as soon as a register existed — backtick it); a document whose owner is changed in
   the DB but not in memory can't be submitted ("Value cannot be changed for Created By"); ERPNext regenerates Payment
