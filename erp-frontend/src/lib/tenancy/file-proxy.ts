@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
-import { resolveTenant } from './registry';
+import { resolveTenant, tenantErrorResponse } from './registry';
 
 function tenantSlug(req: NextRequest): string | undefined {
   return req.headers.get('x-xentra-tenant') || req.cookies.get('xentra_tenant')?.value || undefined;
@@ -13,7 +13,12 @@ function tenantSlug(req: NextRequest): string | undefined {
 // there was previously no route at all for these paths, so any attach/image
 // field value was unviewable even once uploaded.
 export async function proxyFile(req: NextRequest, backendPath: string): Promise<NextResponse> {
-  const tenant = await resolveTenant(tenantSlug(req));
+  let tenant: Awaited<ReturnType<typeof resolveTenant>>;
+  try {
+    tenant = await resolveTenant(tenantSlug(req));
+  } catch (err) {
+    return tenantErrorResponse(err);
+  }
   const { hostIp, port, host } = tenant.backend;
   const cookie = req.headers.get('cookie');
 

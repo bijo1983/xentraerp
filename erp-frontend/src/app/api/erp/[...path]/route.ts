@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
-import { resolveTenant } from '@/lib/tenancy/registry';
+import { resolveTenant, tenantErrorResponse } from '@/lib/tenancy/registry';
 import { toBackendMethod, scrubErrorBody } from '@/lib/method-alias';
 
 function tenantSlug(req: NextRequest): string | undefined {
@@ -8,7 +8,12 @@ function tenantSlug(req: NextRequest): string | undefined {
 }
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
-  const tenant = await resolveTenant(tenantSlug(req));
+  let tenant: Awaited<ReturnType<typeof resolveTenant>>;
+  try {
+    tenant = await resolveTenant(tenantSlug(req));
+  } catch (err) {
+    return tenantErrorResponse(err);
+  }
   const { hostIp, port, host } = tenant.backend;
 
   // `method/<name>` calls use the public `xentraerp.*` alias, translated before forwarding.
