@@ -241,6 +241,36 @@ def assign(user: str, profile: str):
 	clear_request_cache()
 
 
+def keep_pos_role(doc, method=None):
+	"""User validate hook: a save must not silently drop the person's POS role.
+
+	POS roles have no desk access, so the ERP user form never lists them and rebuilds the
+	roles table without them, and a Frappe Role Profile on the user replaces every role on
+	each save. Either way the person fell back to Waiter while still linked to their POS
+	role profile. A save that sets a POS role itself (`pos._give_pos_role`, via
+	`doc.flags.pos_role`) gets exactly that role; otherwise the role comes back from the
+	linked profile, else from before the save."""
+	chosen = doc.flags.get("pos_role")
+	if chosen:
+		# A Frappe Role Profile may have just replaced the roles table again.
+		doc.set("roles", [r for r in doc.roles if r.role not in ROLE_LEVEL])
+		doc.append("roles", {"role": chosen})
+		return
+	if any(r.role in ROLE_LEVEL for r in doc.roles) or any(r.role == "System Manager" for r in doc.roles):
+		return
+	want = None
+	name = doc.get(USER_FIELD) if doc.meta.has_field(USER_FIELD) else None
+	if name and frappe.db.exists(DOCTYPE, name):
+		level, disabled = frappe.db.get_value(DOCTYPE, name, ["access_level", "disabled"])
+		if not cint(disabled):
+			want = LEVEL_ROLE.get((level or "").lower())
+	if not want:
+		before = doc.get_doc_before_save()
+		want = next((r.role for r in (before.roles if before else []) if r.role in ROLE_LEVEL), None)
+	if want:
+		doc.append("roles", {"role": want})
+
+
 def profile_for_legacy_role(role: str | None) -> str | None:
 	"""The standard profile that matches one of the four plain POS roles (old API callers)."""
 	key = LEGACY_ROLE_PROFILE.get(role or "")
