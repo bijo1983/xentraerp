@@ -604,6 +604,8 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
 - **Backend code is live-linked**: `bench/apps/custom_erp/custom_erp` is a symlink into
   `/home/xentraerp/custom_erp_app`, so whatever is checked out there IS production. Never leave it on a
   half-merged/dirty branch. After Python changes: `supervisorctl restart innovegic-bench-web:innovegic-bench-frappe-web`;
+  after a `hooks.py` change also `bench --site <site> clear-cache` (Frappe caches the hooks in Redis — a restart alone
+  leaves new doc_events inactive);
   after DocType changes: `bench --site 197349.xentraerp.local migrate` (then `supervisorctl status`).
   New DocTypes only exist on sites that were migrated (tenant `197349`; `demo.innovegicit.com` doesn't have
   `custom_erp`; the control-plane site was not migrated — the POS Invoice validate hook would error there if a POS
