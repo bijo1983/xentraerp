@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "module_code",
+  "report_access"
+ ],
+ "fields": [
+  {
+   "fieldname": "module_code",
+   "fieldtype": "Data",
+   "label": "Module",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "report_access",
+   "fieldtype": "Select",
+   "label": "Report Access",
+   "options": "All Reports\nSelected Reports",
+   "default": "All Reports",
+   "in_list_view": 1,
+   "description": "Selected Reports: only the reports listed in the plan's Report Bundle for this module."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "name": "XentraERP Plan Module",
+ "istable": 1,
+ "editable_grid": 1
+}

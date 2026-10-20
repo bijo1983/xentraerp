@@ -1,82 +1,82 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+// Till sessions pick their branch (when there is more than one) and register. Skipped
+// automatically when the PIN or this device is tied to one register. Order-taking and
+// kitchen sessions never come here (lib/nav.ts).
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore, type POSProfileSummary } from '@/stores/auth'
-import { api } from '@/lib/api'
+import { api, errorMessage, ApiError } from '@/lib/api'
 import { usePosStore } from '@/stores/pos'
+import { landingRoute } from '@/lib/nav'
+import { t } from '@/lib/i18n'
+import { Receipt } from 'lucide-vue-next'
+import { UiBranchSelector, UiEmptyState, UiErrorState, UiRegisterSelector, UiSkeleton } from '@/ui'
 
 const router = useRouter()
 const auth = useAuthStore()
 const pos = usePosStore()
 const profiles = ref<POSProfileSummary[]>([])
-const loadingProfiles = ref(true)
+const loading = ref(true)
+const failure = ref<{ message: string; ref: string } | null>(null)
+const branch = ref<string | null>(null)
+const register = ref<string | null>(null)
 
-onMounted(async () => {
+const branches = computed(() => {
+  const seen = new Map<string, { code: string; name: string }>()
+  for (const p of profiles.value) if (p.location) seen.set(p.location, { code: p.location, name: p.location_name || p.location })
+  return [...seen.values()]
+})
+const needBranch = computed(() => branches.value.length > 1)
+const shown = computed(() => (needBranch.value && branch.value ? profiles.value.filter((p) => p.location === branch.value) : profiles.value))
+
+async function load() {
+  loading.value = true
+  failure.value = null
   try {
     profiles.value = await api.call<POSProfileSummary[]>('custom_erp.api.pos.list_pos_profiles')
-    // A cashier whose PIN is restricted to one register skips the picker
-    // entirely — go straight to the terminal if that profile still exists
-    // and is enabled.
-    if (auth.restrictedProfile) {
-      const match = profiles.value.find((p) => p.name === auth.restrictedProfile)
-      if (match) {
-        select(match)
-        return
-      }
-    }
-  } catch {
-    profiles.value = []
+    // A PIN or a device tied to one register skips the picker.
+    const fixed = auth.restrictedProfile || auth.session?.device?.register || pos.settings?.session?.device?.register
+    const match = fixed ? profiles.value.find((p) => p.name === fixed) : profiles.value.length === 1 ? profiles.value[0] : undefined
+    if (match) return select(match.name)
+    const deviceBranch = auth.session?.device?.location || pos.settings?.location
+    if (deviceBranch && branches.value.some((b) => b.code === deviceBranch)) branch.value = deviceBranch
+  } catch (e) {
+    failure.value = { message: errorMessage(e), ref: e instanceof ApiError ? e.ref : '' }
   } finally {
-    loadingProfiles.value = false
+    loading.value = false
   }
-})
+}
+onMounted(load)
 
-async function select(profile: POSProfileSummary) {
+async function select(name: string) {
+  const profile = profiles.value.find((p) => p.name === name)
+  if (!profile) return
+  register.value = name
   auth.posProfile = profile
   // Which kinds of POS run here depends on the register's location.
   await pos.load(profile.name)
-  // The route guard sends the cashier to open a shift first if one is required.
-  router.push(pos.settings?.level === 'kitchen' ? '/kitchen' : pos.isFnb ? '/floor' : '/terminal')
-}
-
-async function signOut() {
-  await auth.logout()
-  router.push('/login')
+  router.push(landingRoute({ ...pos.navContext, hasRegister: true }))
 }
 </script>
 
 <template>
-  <div class="regselect">
-    <div class="topline">
-      <div class="whoami">
-        <div class="avatar">{{ (auth.user?.full_name || '?').slice(0, 2).toUpperCase() }}</div>
-        <div>
-          <div class="lbl">Signed in as</div>
-          <div class="name">{{ auth.user?.full_name }}</div>
-        </div>
-      </div>
-      <div class="row">
-        <span class="pill" :class="pos.isFnb ? 'ok' : ''">{{ pos.mode }} mode</span>
-        <span class="pill">{{ pos.roleLabel }}</span>
-        <button v-if="pos.canManage" class="btn btn-ghost" style="padding: 9px 16px" @click="router.push('/admin')">Settings &amp; reports</button>
-        <button class="btn btn-ghost" style="padding: 9px 16px" @click="signOut">Sign Out</button>
-      </div>
-    </div>
+  <main class="regselect">
+    <h2>{{ needBranch && !branch ? t('registers.pickBranch') : t('registers.title') }}</h2>
+    <p class="sub2">{{ auth.orgName || '' }} — {{ t('registers.subtitle') }}</p>
 
-    <h2>Select a register</h2>
-    <p class="sub2">{{ auth.orgName || 'Your organization' }} — choose which register you're working today</p>
-
-    <p v-if="loadingProfiles" style="color: var(--text-muted)">Loading registers…</p>
-    <p v-else-if="profiles.length === 0" style="color: var(--text-muted)">
-      No POS Profiles are set up yet. Ask an administrator to create one in the back office
-      (ERPNext: Selling &gt; POS Profile).
-    </p>
-    <div v-else class="reg-grid">
-      <button v-for="p in profiles" :key="p.name" class="reg-card" @click="select(p)">
-        <div class="icon">🧾</div>
-        <div class="name">{{ p.name }}</div>
-        <div class="meta">{{ p.location_name || p.location ? `${p.location_name || p.location} · ` : '' }}{{ p.company }} · {{ p.currency }}</div>
-      </button>
-    </div>
-  </div>
+    <UiSkeleton v-if="loading" :lines="3" height="72px" />
+    <UiErrorState v-else-if="failure" :message="failure.message" :reference="failure.ref" retry @retry="load" />
+    <UiEmptyState v-else-if="profiles.length === 0" :title="t('registers.noneTitle')" :message="t('registers.noneMessage')" :icon="Receipt" />
+    <template v-else>
+      <UiBranchSelector v-if="needBranch && !branch" v-model="branch" :branches="branches" />
+      <template v-else>
+        <button v-if="needBranch" type="button" class="link" @click="branch = null">← {{ t('registers.otherBranch') }}</button>
+        <UiRegisterSelector :model-value="register" :registers="shown" @update:model-value="select" />
+      </template>
+    </template>
+  </main>
 </template>
+
+<style scoped>
+.link { border: 0; background: none; color: var(--x-primary-text); font: inherit; font-weight: 600; cursor: pointer; margin-block-end: var(--x-space-3); min-height: 40px; }
+</style>

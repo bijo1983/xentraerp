@@ -13,7 +13,7 @@ import json
 import frappe
 from frappe.utils import getdate, today
 
-from custom_erp.api.pos import tenant_modules
+from custom_erp.api.pos import tenant_entitlements
 
 # ERPNext report module -> the subscription module (XentraERP Tenant.enabled_modules)
 # that includes it. A report whose module isn't listed isn't offered.
@@ -28,16 +28,28 @@ MODULE_OF = {
 	"Assets": ("assets",),
 	"Quality Management": ("quality",),
 	"Support": ("support", "maintenance"),
+	"Regional": ("accounting",),  # country tax/VAT reports
+	"Website": ("website",),
 }
 # Reports that belong to a different package than their ERPNext module.
 REPORT_MODULE = {"POS Register": ("pos",), "Sales Payment Summary": ("pos",)}
 
 
-def _report_in_package(name: str, module: str | None, enabled: list[str] | None) -> bool:
-	if enabled is None:  # entitlement unknown: fail open, like the POS login gate
+def report_modules(name: str, module: str | None) -> tuple[str, ...]:
+	"""The subscription modules a standard report is offered under (empty: none)."""
+	return REPORT_MODULE.get(name) or MODULE_OF.get(module or "") or ()
+
+
+def _report_in_package(name: str, module: str | None, entitlements: dict | None) -> bool:
+	"""Whether the subscription covers this report: one of its modules is enabled, and
+	that module either has all its reports or the plan's report bundle includes this one."""
+	if entitlements is None:  # entitlement unknown: fail open, like the POS login gate
 		return True
-	needs = REPORT_MODULE.get(name) or MODULE_OF.get(module or "")
-	return bool(needs) and any(m in enabled for m in needs)
+	bundles = entitlements["reports"]
+	return any(
+		m in entitlements["modules"] and (m not in bundles or name in bundles[m])
+		for m in report_modules(name, module)
+	)
 
 
 @frappe.whitelist()
@@ -63,19 +75,19 @@ def report_context():
 		pass
 
 	# The same two checks frappe.desk.query_report.get_report_doc makes before running one.
-	enabled = tenant_modules()
+	entitlements = tenant_entitlements()
 	permitted = []
 	can_report = {}
 	for name in frappe.get_all("Report", filters={"disabled": 0, "is_standard": "Yes"}, pluck="name"):
 		doc = frappe.get_cached_doc("Report", name)
-		if not _report_in_package(name, doc.module, enabled):
+		if not _report_in_package(name, doc.module, entitlements):
 			continue
 		if doc.ref_doctype not in can_report:
 			can_report[doc.ref_doctype] = bool(doc.ref_doctype) and frappe.has_permission(doc.ref_doctype, "report")
 		if can_report[doc.ref_doctype] and doc.is_permitted():
 			permitted.append(name)
 	ctx["permitted"] = permitted
-	ctx["modules"] = enabled  # None = not known (everything offered)
+	ctx["modules"] = None if entitlements is None else entitlements["modules"]  # None = not known (everything offered)
 	return ctx
 
 
@@ -84,7 +96,7 @@ def run_report(report_name: str, filters=None):
 	"""Run a standard report if the tenant's subscription includes its module, through
 	Frappe's own query_report.run (which applies the user's report permissions)."""
 	module = frappe.db.get_value("Report", report_name, "module")
-	if not _report_in_package(report_name, module, tenant_modules()):
+	if not _report_in_package(report_name, module, tenant_entitlements()):
 		frappe.throw("This report isn't part of your subscription.", frappe.PermissionError)
 	from frappe.desk.query_report import run
 

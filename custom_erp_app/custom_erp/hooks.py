@@ -13,6 +13,11 @@ website_context = {
 # Allow guest access to login endpoint
 guest_methods = ["custom_erp.api.auth.login"]
 
+# POS sessions (POS upgrade Phase 1): on every request made with a POS session, enforce
+# its maximum age, screen lock and device revocation. Sessions without a POS Session
+# record (ERP logins) are not affected. See custom_erp.api.pos_auth.enforce_pos_session.
+auth_hooks = ["custom_erp.api.pos_auth.enforce_pos_session"]
+
 # CORS settings — configure allowed origins in site_config.json:
 #   "allow_cors": ["http://localhost:3000", "https://your-frontend.com"]
 
@@ -28,6 +33,11 @@ doc_events = {
         # A PIN restricted to one register must actually be enforced
         # server-side, not just steered client-side by the POS app.
         "validate": "custom_erp.api.pos.validate_pos_invoice_profile",
+    },
+    "User": {
+        # Frappe v14 crashes building the welcome email when no outgoing email
+        # account exists, and the user is never created.
+        "before_insert": "custom_erp.api.users.skip_welcome_email_without_mail",
     },
     "POS Profile": {
         # A new register follows the tenant's bill-rounding setting (ERPNext defaults it to rounding on).

@@ -37,6 +37,7 @@ const sections = [
     items: [
       { label: 'POS Locations', list: 'XentraERP POS Location', desc: 'Sites and the cost center each one posts to' },
       { label: 'POS Registers', list: 'POS Profile', desc: 'Tills, payment modes and defaults' },
+      { label: 'POS role profiles', href: '/settings/pos-role-profiles', desc: 'Waiter, cashier, manager… and what each can do' },
     ],
   },
   {
@@ -81,6 +82,7 @@ type SectionItem = {
   desc: string;
   single?: string;
   list?: string;
+  href?: string;
 };
 
 export default function SettingsPage() {
@@ -88,7 +90,9 @@ export default function SettingsPage() {
   const tenantCode = useTenantCode();
 
   function navigate(item: SectionItem) {
-    if (item.single) {
+    if (item.href) {
+      router.push(withTenant(item.href, tenantCode));
+    } else if (item.single) {
       router.push(withTenant(`/app/${encodeURIComponent(item.single)}/${encodeURIComponent(item.single)}`, tenantCode));
     } else if (item.list) {
       router.push(withTenant(`/app/${encodeURIComponent(item.list)}`, tenantCode));

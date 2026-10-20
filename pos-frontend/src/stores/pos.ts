@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
 import { api } from '@/lib/api'
+import { setCompanyCurrency } from '@/lib/money'
+import type { NavContext } from '@/lib/nav'
+import type { SessionSummary } from '@/stores/auth'
 
 export type PosMode = 'Retail' | 'F&B'
 
@@ -48,6 +51,9 @@ export interface PosSettings {
   can_switch: boolean
   business_date: string
   shift: Shift | null
+  // Phase 1 (additive): how this session was opened, and the company currency record.
+  session?: SessionSummary
+  company_currency?: { code: string; fraction_units?: number | null; symbol?: string | null; symbol_on_right?: number } | null
 }
 
 const CORE = 'custom_erp.api.pos_core.'
@@ -81,6 +87,19 @@ export const usePosStore = defineStore('pos', {
     roleLabel: (s) => s.settings?.role || '',
     // Anything that opens the Settings & reports screen: tables, menu, staff, reports or admin settings.
     canManage: (s) => ['tables', 'menu', 'reports', 'settings'].some((c) => s.settings?.caps.includes(c)),
+    sessionMode: (s) => s.settings?.session?.mode ?? null,
+    /** Everything lib/nav.ts needs to decide navigation and landing (hasRegister is added by the caller). */
+    navContext(): Omit<NavContext, 'hasRegister'> {
+      const st = this.settings
+      return {
+        level: st?.level ?? null,
+        mode: st?.session?.mode ?? null,
+        caps: st?.caps ?? [],
+        modes: st?.modes ?? (st?.pos_mode ? [st.pos_mode] : []),
+        shiftOpen: !!this.shift,
+        requireShift: !!st?.require_shift,
+      }
+    },
   },
   actions: {
     async load(posProfile?: string | null) {
@@ -88,6 +107,7 @@ export const usePosStore = defineStore('pos', {
       const s = await api.call<PosSettings>(CORE + 'get_pos_settings', this.profile ? { pos_profile: this.profile } : undefined)
       this.settings = s
       this.shift = s.shift
+      setCompanyCurrency(s.company_currency)
       this.loaded = true
     },
     reset() {

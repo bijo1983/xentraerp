@@ -1,41 +1,39 @@
 :root {
-  /* Light "modern indigo" theme — cool slate-tinted neutrals rather than
-     stark white, so cards/panels still read as distinct layers without
-     reaching back for a dark palette. */
-  --canvas: #f4f6fb;
-  --bg: #eef1f8;
-  --surface: #ffffff;
-  --surface-2: #f6f8fc;
-  --surface-3: #eaeef7;
-  --border: #dde3f0;
-  --border-soft: #e8ecf5;
-  --text: #161b2e;
-  --text-muted: #5b6480;
-  --text-faint: #8d96b0;
-  --accent: #4f46e5;
+  /* Legacy names used by the existing screens, now mapped onto the design tokens in
+     src/styles/tokens.css (Phase 1), so the F&B / retail workspaces pick up the
+     XentraERP palette and the dark POS theme without being redesigned. */
+  --canvas: var(--x-bg);
+  --bg: var(--x-bg-sunken);
+  --surface: var(--x-surface);
+  --surface-2: var(--x-surface-2);
+  --surface-3: var(--x-surface-3);
+  --border: var(--x-border);
+  --border-soft: var(--x-surface-3);
+  --text: var(--x-text);
+  --text-muted: var(--x-text-muted);
+  --text-faint: var(--x-text-faint);
+  --accent: var(--x-primary);
   /* Logo colours: fixed brand blue, deliberately not tied to the theme accent */
-  --brand-blue: #1776ff;
-  --brand-blue-deep: #0b4fc4;
-  --accent-soft: #eef0ff;
-  --accent-text: #4338ca;
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-  --success-text: #15803d;
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
-  --warning-text: #92400e;
-  --danger: #dc2626;
-  --danger-soft: #fee2e2;
-  --danger-text: #b91c1c;
+  --brand-blue: var(--x-brand-blue);
+  --brand-blue-deep: var(--x-brand-blue-deep);
+  --accent-soft: var(--x-primary-soft);
+  --accent-text: var(--x-primary-text);
+  --success: var(--x-success);
+  --success-soft: var(--x-success-soft);
+  --success-text: var(--x-success-text);
+  --warning: var(--x-warning);
+  --warning-soft: var(--x-warning-soft);
+  --warning-text: var(--x-warning-text);
+  --danger: var(--x-danger);
+  --danger-soft: var(--x-danger-soft);
+  --danger-text: var(--x-danger-text);
   --cat-beverages: #0891b2;
   --cat-bakery: #b45309;
   --cat-mains: #c2410c;
   --cat-desserts: #be185d;
   --cat-retail: #6d28d9;
   /* 3 occupancy concepts (available/reserved/occupied), each with a
-     soft-tint + text pair, referenced consistently at every call site
-     (floor-plan tiles, chairs, table cards, guest time badges) instead
-     of ad hoc one-off colors per call site. */
+     soft-tint + text pair, referenced consistently at every call site. */
   --status-available: #15a46e;
   --status-available-soft: #e2f8ee;
   --status-available-text: #0f7a52;
@@ -45,13 +43,21 @@
   --status-occupied: #f0653a;
   --status-occupied-soft: #feeadf;
   --status-occupied-text: #c2410c;
-  --radius-lg: 20px;
-  --radius-md: 14px;
-  --radius-sm: 10px;
-  --shadow-sm: 0 1px 2px rgba(31, 41, 68, 0.06);
-  --shadow-md: 0 8px 24px rgba(31, 41, 68, 0.08);
-  --shadow-lift: 0 20px 48px rgba(31, 41, 68, 0.14);
-  color-scheme: light;
+  --radius-lg: var(--x-radius-lg);
+  --radius-md: var(--x-radius-md);
+  --radius-sm: var(--x-radius-sm);
+  --shadow-sm: var(--x-shadow-sm);
+  --shadow-md: var(--x-shadow-md);
+  --shadow-lift: var(--x-shadow-lg);
+}
+
+:root[data-theme='dark'] {
+  --status-available-soft: #0f2e22;
+  --status-available-text: #6ee7b7;
+  --status-reserved-soft: #231a45;
+  --status-reserved-text: #c4b5fd;
+  --status-occupied-soft: #3a1d10;
+  --status-occupied-text: #fdba74;
 }
 
 * {
@@ -68,7 +74,7 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--text);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--x-font-sans);
   /* Clears the iOS notch/Dynamic Island and Android cutouts in the native
      app shell (index.html sets viewport-fit=cover for this) — a plain
      browser tab never reports a nonzero inset, so this is a no-op there. */
@@ -82,7 +88,7 @@ h1,
 h2,
 h3,
 .display {
-  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-family: var(--x-font-display);
   text-wrap: balance;
 }
 
@@ -94,7 +100,7 @@ h3,
   appearance: none;
   border: 0;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--x-font-sans);
   font-weight: 600;
   font-size: 14.5px;
   border-radius: var(--radius-sm);
@@ -189,7 +195,7 @@ h3,
 
 /* ---------------- Sign-in ---------------- */
 .signin {
-  min-height: 100vh;
+  min-height: calc(100dvh - var(--shell-h));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,13 +242,13 @@ h3,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--x-font-display);
   font-weight: 700;
   color: #fff;
   font-size: 16px;
 }
 .signin-mark .word {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--x-font-display);
   font-weight: 600;
   font-size: 17px;
   color: var(--text);
@@ -313,7 +319,7 @@ h3,
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--x-font-display);
   font-size: 17px;
   letter-spacing: 0.12em;
   text-align: center;
@@ -325,7 +331,7 @@ h3,
   color: var(--text-faint);
   letter-spacing: 0.06em;
   text-transform: none;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--x-font-sans);
   font-size: 14px;
 }
 .field:focus {
@@ -393,7 +399,7 @@ h3,
 
 /* ---------------- Register select ---------------- */
 .regselect {
-  min-height: 100vh;
+  min-height: calc(100dvh - var(--shell-h));
   padding: 44px 40px;
   background: var(--bg);
 }
@@ -419,7 +425,7 @@ h3,
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--x-font-display);
   font-weight: 700;
   font-size: 15px;
 }
@@ -490,7 +496,7 @@ h3,
 /* ---------------- Terminal ---------------- */
 .terminal {
   display: flex;
-  height: 100vh;
+  height: calc(100dvh - var(--shell-h));
   background: var(--bg);
 }
 .term-main {
@@ -511,7 +517,7 @@ h3,
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--x-font-display);
   font-weight: 600;
   color: var(--text);
   font-size: 14.5px;
@@ -681,7 +687,7 @@ h3,
   color: var(--cat, var(--accent-text));
 }
 .item-tile .nm {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--x-font-display);
   font-weight: 600;
   color: var(--text);
   font-size: 14px;
@@ -839,7 +845,7 @@ h3,
   border-top: 1px dashed var(--border);
 }
 .trow.grand .val {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--x-font-display);
 }
 .trow .val {
   font-variant-numeric: tabular-nums;
@@ -890,7 +896,7 @@ h3,
   cursor: not-allowed;
 }
 .charge-btn .r {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--x-font-display);
 }
 
 @media (max-width: 900px) {
@@ -907,7 +913,7 @@ h3,
      bottom, instead of buried below every item tile. */
   .terminal {
     flex-direction: column;
-    height: 100vh;
+    height: calc(100dvh - var(--shell-h));
   }
   .term-main {
     min-height: 0;
@@ -978,7 +984,7 @@ h3,
 .simple-table th, .simple-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border-soft); }
 .simple-table th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
 .simple-table td.num, .simple-table th.num { text-align: right; }
-.order-shell { display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
+.order-shell { display: grid; grid-template-columns: 1fr 380px; height: calc(100dvh - var(--shell-h)); }
 @media (max-width: 900px) {
   /* Same fix as .terminal above, and for the same reason: this is the
      "cart shows all the way down after the item list" screen the fix
@@ -987,7 +993,7 @@ h3,
   .order-shell {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
-    height: 100vh;
+    height: calc(100dvh - var(--shell-h));
   }
   .order-shell .term-main {
     min-height: 0;
@@ -1000,7 +1006,7 @@ h3,
 .sel-line input[type='number'] { width: 70px; }
 
 /* ---- floor plan, order type tiles, guests panel, notes (added) ---------- */
-.floor-shell { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+.floor-shell { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100dvh - var(--shell-h)); }
 @media (max-width: 960px) { .floor-shell { grid-template-columns: 1fr; } }
 .guests-panel { border-right: 1px solid var(--border-soft); padding: 16px; background: var(--surface); }
 .gtabs { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -1111,3 +1117,109 @@ button, .cat-chip, .item-tile, .stepper button, .menu-tile, .session-chip {
   .fld { min-height: 46px; font-size: 16px; } /* 16px stops iOS zooming into the field */
   .item-tile { min-height: 96px; }
 }
+
+/* =====================================================================================
+   Premium refresh (2026-10): one visual language for the screens still built on these
+   legacy classes (floor plan, kitchen, shift, settings, registers, dialogs). Same radii,
+   layered shadows, type and motion as the design tokens; no layout or behaviour changes.
+   ===================================================================================== */
+body { font-size: 15px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+h1, h2, h3, h4 { letter-spacing: -0.015em; word-spacing: 0.06em; }
+.sub2 { color: var(--x-text-muted); font-size: 13px; }
+
+.btn { border-radius: var(--x-radius-md); min-height: 44px; font-size: 14.5px; letter-spacing: -0.005em; transition: background var(--x-duration) var(--x-ease), box-shadow var(--x-duration), border-color var(--x-duration), transform 90ms var(--x-ease); }
+.btn-primary { background: var(--x-primary); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 16px -8px rgba(37, 99, 235, 0.7); }
+.btn-primary:hover { filter: none; background: var(--x-primary-hover); }
+.btn-ghost { background: var(--x-surface); border-color: var(--x-border); box-shadow: var(--x-shadow-xs); }
+.btn-ghost:hover { background: var(--x-surface-2); border-color: var(--x-border-strong); }
+.btn-danger { box-shadow: 0 6px 16px -8px rgba(239, 68, 68, 0.7); }
+.btn-icon { border-radius: var(--x-radius-md); }
+.mini { border-radius: 10px; }
+
+.error-box { border-radius: var(--x-radius-md); border-color: color-mix(in srgb, var(--x-danger) 35%, transparent); font-size: 13.5px; line-height: 1.45; }
+
+.fld { background: var(--x-surface); border-color: var(--x-border); border-radius: var(--x-radius-md); min-height: 44px; padding: 0 12px; box-shadow: var(--x-shadow-xs); transition: border-color var(--x-duration), box-shadow var(--x-duration); }
+.fld:hover { border-color: var(--x-border-strong); }
+.fld:focus { outline: 0; border-color: var(--x-primary); box-shadow: var(--x-focus-ring); }
+textarea.fld { padding: 10px 12px; }
+
+.modal-back { background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: var(--x-z-modal); animation: pos-fade 160ms var(--x-ease) both; }
+.modal { border-radius: var(--x-radius-xl); padding: 26px; box-shadow: var(--x-shadow-lg); border-color: var(--x-border); animation: pos-rise 220ms var(--x-ease) both; }
+.modal h3 { font-size: 20px; font-weight: 800; }
+@keyframes pos-fade { from { opacity: 0; } }
+@keyframes pos-rise { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+
+.page { padding: 28px clamp(16px, 3vw, 32px); }
+.page-head h2 { font-size: clamp(22px, 2.2vw, 28px); font-weight: 800; letter-spacing: -0.02em; }
+.card { border-color: var(--x-border); border-radius: var(--x-radius-lg); padding: 20px; box-shadow: var(--x-shadow-xs); }
+.card h4 { font-size: 12px; letter-spacing: 0.07em; color: var(--x-text-muted); }
+.seg { border-color: var(--x-border); background: var(--x-surface-3); padding: 3px; gap: 3px; border-radius: var(--x-radius-md); }
+.seg button { border-radius: 9px; padding: 8px 18px; font-weight: 600; }
+.seg button.on { background: var(--x-surface); color: var(--x-text); box-shadow: var(--x-shadow-sm); }
+.pill { font-weight: 600; padding: 3px 10px; }
+.stat { background: var(--x-surface); border: 1px solid var(--x-border); border-radius: var(--x-radius-lg); padding: 16px; box-shadow: var(--x-shadow-xs); }
+.stat .v { font-family: var(--x-font-display); font-size: 26px; letter-spacing: -0.02em; }
+.stat .l { font-size: 12.5px; font-weight: 600; }
+.simple-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--x-text-faint); padding: 10px 10px; }
+.simple-table td { padding: 12px 10px; border-color: var(--x-border); }
+.simple-table tbody tr { transition: background var(--x-duration); }
+.simple-table tbody tr:hover { background: var(--x-surface-2); }
+
+/* floor plan */
+.table-card { border-radius: var(--x-radius-lg); box-shadow: var(--x-shadow-xs); transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration); }
+.table-card:hover:not(.Disabled) { transform: translateY(-2px); box-shadow: var(--x-shadow-md); }
+.table-card .tn { font-family: var(--x-font-display); }
+.guests-panel { border-color: var(--x-border); }
+.gtab { border-radius: var(--x-radius-md); min-height: 44px; font-weight: 600; }
+.gcard { border-radius: var(--x-radius-lg); background: var(--x-surface); border-color: var(--x-border); box-shadow: var(--x-shadow-xs); transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration); }
+.gcard:hover { transform: translateY(-1px); box-shadow: var(--x-shadow-md); }
+.plan { border-radius: var(--x-radius-xl); border: 1px solid var(--x-border); box-shadow: var(--x-shadow-sm);
+  background-color: var(--x-surface); background-image: radial-gradient(var(--x-border) 1px, transparent 1px); background-size: 22px 22px; }
+.plan-item { transition: transform var(--x-duration) var(--x-ease); }
+.plan-item:hover:not(:disabled) { transform: translateY(-2px); }
+.plan-table { border-radius: 16px; box-shadow: var(--x-shadow-sm); }
+.plan-table .pn { font-family: var(--x-font-display); font-size: 14px; }
+.type-tile { border-radius: var(--x-radius-xl); background: var(--x-surface); box-shadow: var(--x-shadow-xs); transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration), border-color var(--x-duration), background var(--x-duration); }
+.type-tile:hover { transform: translateY(-2px); box-shadow: var(--x-shadow-md); }
+.type-tile .ic { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; }
+.type-tile .ic--dine { background: #fff7ed; color: #c2410c; }
+.type-tile .ic--ta { background: var(--x-primary-soft); color: var(--x-primary-text); }
+.gmeta span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* kitchen display */
+.kot { border-radius: var(--x-radius-lg); border-width: 1px; border-top-width: 5px; box-shadow: var(--x-shadow-sm); padding: 16px; animation: x-fade-up 260ms var(--x-ease) both; }
+.kot .kot-head { font-family: var(--x-font-display); font-size: 17px; }
+.kot li { padding: 6px 0; border-bottom: 1px dashed var(--x-border); font-size: 15px; }
+.kot li:last-child { border-bottom: 0; }
+.kot .kn { color: var(--x-warning-text); font-weight: 600; }
+
+/* registers */
+.reg-card { border-radius: var(--x-radius-lg); box-shadow: var(--x-shadow-xs); transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration), border-color var(--x-duration); }
+.reg-card:hover { transform: translateY(-2px); box-shadow: var(--x-shadow-md); }
+
+/* session sheet + confirmations */
+.menu-sheet { box-shadow: var(--x-shadow-lg); animation: pos-slide 240ms var(--x-ease) both; }
+@keyframes pos-slide { from { transform: translateX(24px); opacity: 0; } }
+[dir='rtl'] .menu-sheet { animation-name: pos-slide-rtl; }
+@keyframes pos-slide-rtl { from { transform: translateX(-24px); opacity: 0; } }
+.menu-tile { border-radius: var(--x-radius-lg); border-color: var(--x-border); transition: background var(--x-duration), border-color var(--x-duration), transform 90ms; }
+.menu-tile:hover { background: var(--x-surface-2); border-color: var(--x-border-strong); }
+.menu-tile.primary:hover { background: var(--x-primary-hover); }
+.sheet { border-radius: var(--x-radius-xl); box-shadow: var(--x-shadow-lg); animation: pos-rise 220ms var(--x-ease) both; }
+.sheet h3 { font-weight: 800; }
+.session-chip { box-shadow: var(--x-shadow-xs); }
+.avatar { background: var(--x-brand-gradient); color: #fff; }
+
+/* the old "cat-chip" / "item-tile" classes are still used by a few admin lists */
+.cat-chip { border-color: var(--x-border); min-height: 40px; box-shadow: var(--x-shadow-xs); }
+.cat-chip.active { background: var(--x-brand-navy); border-color: var(--x-brand-navy); color: #fff; }
+:root[data-theme='dark'] .cat-chip.active { background: var(--x-primary); border-color: var(--x-primary); }
+.item-tile { border-radius: var(--x-radius-lg); border-color: var(--x-border); box-shadow: var(--x-shadow-xs); transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration); }
+.item-tile:hover { transform: translateY(-2px); box-shadow: var(--x-shadow-md); background: var(--x-surface); }
+
+/* thin, quiet scrollbars on desktop */
+@media (pointer: fine) {
+  * { scrollbar-width: thin; scrollbar-color: var(--x-border-strong) transparent; }
+}
+
+[dir='rtl'] .flip-rtl { transform: scaleX(-1); }

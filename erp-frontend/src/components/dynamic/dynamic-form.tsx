@@ -1,12 +1,16 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
-import { cn } from '@/lib/utils';
+import { cn, STATUS_TONE } from '@/lib/utils';
 import { useTenantCode, withTenant } from '@/lib/tenant';
 import { DOCUMENT_MAPPERS } from '@/lib/document-mappers';
 import { stashMappedDoc } from '@/lib/mapped-doc';
+import { doctypeListRoute } from '@/lib/doctype-routes';
+import { linkFilters } from '@/lib/link-filters';
+import { errorText, readJson } from '@/lib/errors';
 import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,9 +21,9 @@ import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
 import { RecordSummary } from './record-summary';
 import { ItemPricePanel, useItemPrices } from './item-price-panel';
-import { PosAccessPanel } from './pos-access-panel';
+import { PosAccessDraftPanel, PosAccessPanel, applyPosAccessDraft } from './pos-access-panel';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { Printer, PanelRight, Plus, ChevronDown, Loader2 } from 'lucide-react';
+import { Printer, PanelRight, Plus, ChevronDown, Loader2, Copy, ChevronRight } from 'lucide-react';
 
 interface Props {
   doctype: string;
@@ -30,6 +34,8 @@ interface Props {
   onSaved?: (name: string) => void;
   onCancel?: () => void;
   onClose?: () => void;
+  /** Breadcrumb, title and status badge above the form (full-page forms). */
+  showHeader?: boolean;
 }
 
 interface Tab {
@@ -170,11 +176,67 @@ function consolidateTabs(rawTabs: Tab[]): Tab[] {
 // Delivery Note/Purchase Receipt.
 const PRICE_TAB_LABEL = /^(currency and price list|additional discount( and coupon code)?|totals)$/i;
 
-export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose }: Props) {
+// ── Server refresh ─────────────────────────────────────────────────
+//
+// Desk fills a form as you go (a customer's address and price list, an
+// item's rate, fetch_from values, totals) with per-doctype client scripts
+// this generic form can't run. Instead, after a change the whole unsaved
+// document goes to custom_erp.api.form.refresh_doc, which runs ERPNext's own
+// controller code on it and sends the filled-in copy back (nothing is
+// saved). Edits the user makes while a refresh is in flight are tracked as
+// paths ("customer", "items.2.qty") and win over the server's copy.
+
+export interface FieldChange {
+  fieldname: string;
+  /** Child table fieldname, for a line field. */
+  table?: string;
+  /** 0-based line index, for a line field. */
+  row?: number;
+}
+
+type Doc = Record<string, unknown>;
+type Rows = Record<string, unknown>[];
+
+function stripInternal(doc: Doc): Doc {
+  const out: Doc = {};
+  for (const [k, v] of Object.entries(doc)) {
+    if (k.startsWith('__') && k !== '__islocal') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function mergeServerDoc(server: Doc, current: Doc, dirty: Set<string>): Doc {
+  const next: Doc = { ...server };
+  // Keep identity fields the server copy may not echo back.
+  for (const k of ['name', 'doctype', 'docstatus']) if (current[k] !== undefined && next[k] === undefined) next[k] = current[k];
+  dirty.forEach((path) => {
+    const [field, idx, sub] = path.split('.');
+    if (idx === undefined) {
+      next[field] = current[field];
+      return;
+    }
+    const curRows = (current[field] as Rows) || [];
+    const srvRows = (next[field] as Rows) || [];
+    if (sub === undefined || curRows.length !== srvRows.length) {
+      next[field] = curRows;
+      return;
+    }
+    const i = Number(idx);
+    next[field] = srvRows.map((r, j) => (j === i ? { ...r, [sub]: curRows[i]?.[sub] } : r));
+  });
+  return next;
+}
+
+function changePath(c: FieldChange): string {
+  return c.table ? `${c.table}.${c.row ?? ''}.${c.fieldname}` : c.fieldname;
+}
+
+export default function DynamicForm({ doctype, name, initialDoc, initial, onSave, onSaved, onCancel, onClose, showHeader }: Props) {
   const router = useRouter();
   const tenantCode = useTenantCode();
   const { schema, loading, error } = useDocTypeSchema(doctype);
-  const [doc, setDoc] = useState<Record<string, unknown>>(initialDoc || initial || {});
+  const [doc, setDocState] = useState<Doc>(initialDoc || initial || {});
   const [docLoading, setDocLoading] = useState(!!name && !initialDoc && !initial);
   const [docError, setDocError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -190,6 +252,11 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  // "Not Saved" marker, like Desk: set by any user edit, cleared on load/save.
+  const [unsaved, setUnsaved] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Server defaults unavailable (older backend) — fall back to the local ones below.
+  const [serverDefaultsFailed, setServerDefaultsFailed] = useState(false);
 
   // Item only: standard selling / purchase price inputs, stored as Item Price
   // records (see lib/item-prices.ts). Keyed on the `name` prop — not on the
@@ -199,6 +266,77 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   const [createdName, setCreatedName] = useState<string | null>(null);
   const savedName = name || createdName || undefined;
   const itemPrices = useItemPrices(isItem, name, doc.stock_uom as string | undefined);
+
+  // ── Document state + server refresh queue ──
+  const docRef = useRef<Doc>(doc);
+  const setDoc = useCallback((update: Doc | ((prev: Doc) => Doc)) => {
+    setDocState((prev) => {
+      const next = typeof update === 'function' ? (update as (p: Doc) => Doc)(prev) : update;
+      docRef.current = next;
+      return next;
+    });
+  }, []);
+  const dirty = useRef<Set<string>>(new Set());
+  const queue = useRef<(FieldChange | null)[]>([]);
+  const busy = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const runQueue = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setRefreshing(true);
+    try {
+      while (queue.current.length) {
+        const change = queue.current.shift() ?? null;
+        const sent = docRef.current;
+        if (Number(sent.docstatus ?? 0) !== 0) {
+          queue.current = [];
+          break;
+        }
+        dirty.current = new Set();
+        try {
+          const res = (await frappe.call('custom_erp.api.form.refresh_doc', {
+            doc: JSON.stringify(stripInternal({ ...sent, doctype })),
+            changed: change?.fieldname,
+            table: change?.table,
+            row: change?.table && change.row !== undefined ? change.row + 1 : undefined,
+          })) as Doc;
+          const edits = dirty.current;
+          if (res && typeof res === 'object') setDoc((cur) => mergeServerDoc(res, cur, edits));
+        } catch {
+          // Best effort: the form still saves, and the server validates then.
+        }
+        // Let React commit the merged doc before the next queued change reads it.
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    } finally {
+      busy.current = false;
+      setRefreshing(false);
+    }
+  }, [doctype, setDoc]);
+
+  const requestRefresh = useCallback(
+    (change: FieldChange | null, delay = 250) => {
+      const key = change ? changePath(change) : '';
+      if (!queue.current.some((c) => (c ? changePath(c) : '') === key)) queue.current.push(change);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => runQueue(), delay);
+    },
+    [runQueue]
+  );
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+
+  const waitForRefresh = async () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+      if (queue.current.length) await runQueue();
+    }
+    while (busy.current) await new Promise((r) => setTimeout(r, 50));
+  };
 
   // Editing an existing document: the caller only passes doctype/name (no
   // initialDoc), so fetch the real saved record here — otherwise `doc`
@@ -214,13 +352,15 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       credentials: 'include',
       headers: { Accept: 'application/json' },
     })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.exception || data?.message || res.statusText);
-        if (!cancelled) setDoc((prev) => ({ ...prev, ...data.data }));
+      .then(readJson)
+      .then((data) => {
+        if (!cancelled) {
+          setDoc((prev) => ({ ...prev, ...(data.data as Doc) }));
+          setUnsaved(false);
+        }
       })
       .catch((e) => {
-        if (!cancelled) setDocError(String(e instanceof Error ? e.message : e));
+        if (!cancelled) setDocError(errorText(e, 'This record could not be loaded.'));
       })
       .finally(() => {
         if (!cancelled) setDocLoading(false);
@@ -228,7 +368,39 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     return () => {
       cancelled = true;
     };
-  }, [doctype, name, initialDoc, initial]);
+  }, [doctype, name, initialDoc, initial, setDoc]);
+
+  // New document: ERPNext's own defaults — user defaults (company, ...),
+  // Global Defaults, static defaults, and what the controller fills itself
+  // (currency, price list, exchange rate, posting date/time, naming series).
+  // Values the caller passed in (a list filter like ?purpose=...) win. A
+  // document mapped from another one (Sales Order -> Delivery Note, a
+  // duplicate, an amendment) already comes filled by the server, so it only
+  // gets a refresh.
+  const presetRef = useRef(initialDoc || initial);
+  useEffect(() => {
+    if (!schema || name) return;
+    const preset = presetRef.current;
+    if (preset?.doctype) {
+      requestRefresh(null, 0);
+      return;
+    }
+    let cancelled = false;
+    frappe
+      .call('custom_erp.api.form.get_new_doc', { doctype })
+      .then((base) => {
+        if (cancelled || !base || typeof base !== 'object') return;
+        const keep = new Set([...Object.keys(preset || {}), ...Array.from(dirty.current)]);
+        setDoc((prev) => mergeServerDoc({ ...prev, ...(base as Doc) }, prev, keep));
+        if (preset && Object.keys(preset).length) requestRefresh(null, 0);
+      })
+      .catch(() => {
+        if (!cancelled) setServerDefaultsFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [schema, name, doctype, setDoc, requestRefresh]);
 
   useEffect(() => {
     if (!schema) return;
@@ -260,20 +432,13 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       }
       return patched;
     });
-  }, [schema]);
+  }, [schema, setDoc]);
 
-  // Company/Currency/Price List defaults — deliberately separate from the
-  // meta-driven defaults effect above, because these aren't in the
-  // doctype's own `default` metadata at all; Frappe Desk fills them from
-  // Global Defaults / Selling & Buying Settings via client script, which
-  // this generic form doesn't run. Without this every new transaction
-  // opened with Company, Currency, Price List, and Exchange Rate all
-  // blank, forcing a manual pick on every single record even though the
-  // tenant only has one company/currency. Only touches fields that exist
-  // on this doctype and aren't already set, and never overrides a real
-  // multi-currency choice the user makes afterward.
+  // Fallback for a backend without custom_erp.api.form: Company/Currency/
+  // Price List from Global Defaults and Selling/Buying Settings, which Desk
+  // fills by client script and the doctype meta doesn't carry.
   useEffect(() => {
-    if (!schema || name) return;
+    if (!schema || name || !serverDefaultsFailed) return;
     const fieldnames = new Set(schema.fields.map((f) => f.fieldname));
     const relevant = ['company', 'currency', 'price_list_currency', 'selling_price_list', 'buying_price_list', 'conversion_rate', 'plc_conversion_rate'];
     if (!relevant.some((f) => fieldnames.has(f))) return;
@@ -284,17 +449,12 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
         const gd = await fetch('/api/resource/Global%20Defaults/Global%20Defaults', { credentials: 'include' }).then((r) => r.json());
         const company = gd?.data?.default_company;
         const currency = gd?.data?.default_currency;
-        const patch: Record<string, unknown> = {};
+        const patch: Doc = {};
         if (fieldnames.has('company') && company) patch.company = company;
         if (fieldnames.has('currency') && currency) patch.currency = currency;
         if (fieldnames.has('price_list_currency') && currency) patch.price_list_currency = currency;
-        // Single-currency tenants (the common case): price list / customer
-        // currency equals the company currency, so a 1:1 conversion rate is
-        // correct. A genuinely multi-currency transaction still needs the
-        // user (or ERPNext's own validation) to correct this.
         if (fieldnames.has('conversion_rate')) patch.conversion_rate = 1;
         if (fieldnames.has('plc_conversion_rate')) patch.plc_conversion_rate = 1;
-
         if (fieldnames.has('selling_price_list')) {
           const ss = await fetch('/api/resource/Selling%20Settings/Selling%20Settings', { credentials: 'include' }).then((r) => r.json());
           if (ss?.data?.selling_price_list) patch.selling_price_list = ss.data.selling_price_list;
@@ -303,7 +463,6 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           const bs = await fetch('/api/resource/Buying%20Settings/Buying%20Settings', { credentials: 'include' }).then((r) => r.json());
           if (bs?.data?.buying_price_list) patch.buying_price_list = bs.data.buying_price_list;
         }
-
         if (!cancelled && Object.keys(patch).length) {
           setDoc((prev) => {
             const next = { ...prev };
@@ -314,16 +473,19 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           });
         }
       } catch {
-        // Best-effort — leave the fields blank for the user to fill in
-        // manually, same as before this convenience existed.
+        // Best-effort — leave the fields blank for the user to fill in.
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [schema, name]);
+  }, [schema, name, serverDefaultsFailed, setDoc]);
 
-  const setField = (fieldname: string, value: unknown) => {
+  /** A user edit of a header field. `refresh` asks the server to fill in what depends on it. */
+  const setField = (fieldname: string, value: unknown, refresh = false, track = true) => {
+    // Table edits are tracked per line and field by onTableEdit instead.
+    if (track) dirty.current.add(fieldname);
+    setUnsaved(true);
     setDoc((prev) => {
       const updated = { ...prev, [fieldname]: value };
       if (schema) {
@@ -335,13 +497,23 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       }
       return updated;
     });
+    if (refresh) requestRefresh({ fieldname });
+  };
+
+  /** A user edit inside a child table (rows already updated through setField). */
+  const onTableEdit = (table: string, change: { row: number; fieldname: string; commit: boolean }) => {
+    dirty.current.add(change.row < 0 ? table : `${table}.${change.row}.${change.fieldname}`);
+    setUnsaved(true);
+    if (change.commit) requestRefresh(change.row < 0 ? { fieldname: table } : { fieldname: change.fieldname, table, row: change.row });
   };
 
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
     try {
-      const payload: Record<string, unknown> = { ...doc, doctype };
+      await waitForRefresh();
+      const payload: Doc = stripInternal({ ...docRef.current, doctype });
+      delete payload.__islocal;
       for (const key of Object.keys(payload)) {
         if (payload[key] === '__user') payload[key] = '';
       }
@@ -352,16 +524,25 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       const url = savedName
         ? `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(savedName)}`
         : `/api/resource/${encodeURIComponent(doctype)}`;
-      const res = await fetch(url, {
+      const data = await fetch(url, {
         method: savedName ? 'PUT' : 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.exception || data?.message || res.statusText);
-      const savedDoc = data.data as Record<string, unknown>;
+      }).then(readJson);
+      const savedDoc = data.data as Doc;
       if (!savedName) setCreatedName(savedDoc?.name as string);
+      setDoc((prev) => ({ ...prev, ...savedDoc }));
+      setUnsaved(false);
+      if (doctype === 'User' && !name) {
+        try {
+          await applyPosAccessDraft(savedDoc?.name as string);
+        } catch (posErr) {
+          // The user is created; only the POS profile step failed. Stay here (Save again retries it).
+          setSaveError(`The user was saved, but their POS role profile wasn't: ${posErr instanceof Error ? posErr.message : String(posErr)}`);
+          return;
+        }
+      }
       if (isItem) {
         try {
           await itemPrices.save(savedDoc?.name as string);
@@ -369,14 +550,14 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           // The Item itself is saved; only the price step failed. Stay on the
           // form (a retry updates this same record — see `savedName`) instead
           // of navigating away and losing the message.
-          setSaveError(`The item was saved, but its price wasn't: ${priceErr instanceof Error ? priceErr.message : String(priceErr)}`);
+          setSaveError(`The item was saved, but its price wasn't: ${errorText(priceErr)}`);
           return;
         }
       }
       onSave?.(savedDoc);
       onSaved?.(savedDoc?.name as string);
     } catch (e) {
-      setSaveError(String(e));
+      setSaveError(errorText(e, 'The record could not be saved.'));
     } finally {
       setSaving(false);
     }
@@ -390,22 +571,28 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   // Delivery Note, a Purchase Invoice, ...) could properly reference it.
   const runTransition = async (action: 'submit' | 'cancel') => {
     if (!name) return;
+    if (action === 'submit' && unsaved) {
+      setTransitionError('Save your changes before submitting.');
+      return;
+    }
+    if (!window.confirm(action === 'submit'
+      ? `Submit ${doctype} ${name}? A submitted document can no longer be edited, only cancelled.`
+      : `Cancel ${doctype} ${name}? This reverses its accounting and stock entries.`)) return;
     setTransitioning(action);
     setTransitionError(null);
     try {
-      const res = await fetch(`/api/method/xentraerp.client.${action}`, {
+      const data = await fetch(`/api/method/xentraerp.client.${action}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ doc: JSON.stringify({ ...doc, doctype, name }) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.exception || data?.message?.exception || data?.message || res.statusText);
-      const updated = data.message as Record<string, unknown>;
+        body: JSON.stringify({ doc: JSON.stringify({ ...stripInternal(docRef.current), doctype, name }) }),
+      }).then(readJson);
+      const updated = data.message as Doc;
       setDoc((prev) => ({ ...prev, ...updated }));
+      setUnsaved(false);
       onSave?.(updated);
     } catch (e) {
-      setTransitionError(String(e instanceof Error ? e.message : e));
+      setTransitionError(errorText(e, `The document could not be ${action === 'submit' ? 'submitted' : 'cancelled'}.`));
     } finally {
       setTransitioning(null);
     }
@@ -421,13 +608,13 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     setCreatingFrom(mapper.method);
     setCreateError(null);
     try {
-      let args: Record<string, unknown>;
+      let args: Doc;
       if (mapper.paramStyle === 'dt_dn') {
         args = { dt: doctype, dn: name };
       } else if (mapper.paramStyle === 'selected_items') {
         // No row-picker dialog here — send every line currently on the
         // document, matching "select all" in Frappe Desk's own picker.
-        const rows = (doc.items as Record<string, unknown>[] | undefined) || [];
+        const rows = (doc.items as Rows | undefined) || [];
         const items = rows.filter((r) => r.item_code).map((r) => ({ item_code: r.item_code }));
         if (!items.length) throw new Error('This document has no items to create a Purchase Order from.');
         args = { source_name: name, selected_items: JSON.stringify(items) };
@@ -435,21 +622,47 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
         args = { source_name: name };
       }
       const mapped = await frappe.call(mapper.method, args);
-      const key = stashMappedDoc(mapped as Record<string, unknown>);
+      const key = stashMappedDoc(mapped as Doc);
       router.push(withTenant(`/app/${encodeURIComponent(mapper.targetDoctype)}/new?from=${key}`, tenantCode));
     } catch (e) {
-      setCreateError(String(e instanceof Error ? e.message : e));
+      setCreateError(errorText(e));
     } finally {
       setCreatingFrom(null);
     }
   };
 
+  // Duplicate (any saved record) and Amend (a cancelled one): Desk's
+  // frappe.model.copy_doc — the same document without its identity and
+  // no_copy fields, opened as a new unsaved form.
+  const copyDocument = (amend: boolean) => {
+    if (!schema || !name) return;
+    const skip = new Set(['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'amended_from', 'idx', '_comments', '_assign', '_liked_by', '_user_tags', '_seen']);
+    schema.fields.forEach((f) => f.no_copy && skip.add(f.fieldname));
+    const copy: Doc = { doctype };
+    for (const [k, v] of Object.entries(doc)) {
+      if (skip.has(k) || k.startsWith('__')) continue;
+      copy[k] = Array.isArray(v)
+        ? (v as Rows).map((r) => {
+            const row = { ...r };
+            for (const k of ['name', 'parent', 'creation', 'modified', 'modified_by', 'owner', 'docstatus']) delete row[k];
+            return row;
+          })
+        : v;
+    }
+    if (amend) copy.amended_from = name;
+    const key = stashMappedDoc(copy);
+    router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new?from=${key}`, tenantCode));
+  };
+
   if (loading || docLoading) return <p className="text-muted-foreground p-4">Loading form…</p>;
   if (error) return <p className="text-destructive p-4">Error loading form: {error}</p>;
-  if (docError) return <p className="text-destructive p-4">Error loading document: {docError}</p>;
+  if (docError) return <p className="text-destructive p-4">{docError}</p>;
   if (!schema) return null;
 
   const docstatus = Number(doc.docstatus ?? 0);
+  // A submitted or cancelled document is read-only, except the fields the
+  // doctype marks "allow on submit" (Desk behaves the same).
+  const isLocked = (f: CompiledField) => !!f.read_only || (docstatus > 0 && !(docstatus === 1 && f.allow_on_submit));
   // On Item, the old "Standard Selling Rate" field (shown only while creating)
   // is replaced by the price panel, which also covers the purchase price.
   const tabs = buildTabs(isItem ? schema.fields.filter((f) => f.fieldname !== 'standard_rate') : schema.fields);
@@ -473,7 +686,31 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     )
   );
 
+  const title =
+    (schema.title_field && typeof doc[schema.title_field] === 'string' && (doc[schema.title_field] as string)) ||
+    (savedName as string) ||
+    `New ${doctype}`;
+  const status = statusOf(doc, schema.is_submittable, !savedName, unsaved);
+
   return (
+    <div className="space-y-4">
+    {showHeader && (
+      <div className="space-y-1">
+        <nav className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Link href={withTenant(doctypeListRoute(doctype), tenantCode)} className="hover:text-foreground hover:underline">
+            {doctype}
+          </Link>
+          <ChevronRight className="h-3 w-3" />
+          <span className="truncate">{savedName || 'New'}</span>
+        </nav>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-semibold">{title}</h1>
+          {status && <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', status.tone)}>{status.label}</span>}
+          {refreshing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Updating" />}
+          {savedName && title !== savedName && <span className="text-sm text-muted-foreground">{savedName}</span>}
+        </div>
+      </div>
+    )}
     <div className="flex items-start gap-4">
     <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-border/80 bg-card shadow-elevation-xs">
       <RecordSummary fields={schema.fields} doc={doc} />
@@ -485,11 +722,11 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       <div className="flex flex-wrap items-center gap-2 border-b bg-background px-5 py-3">
         {docstatus === 0 && (
           <Button onClick={handleSave} disabled={saving || !!transitioning}>
-            {saving ? 'Saving…' : name ? 'Update' : 'Save'}
+            {saving ? 'Saving…' : 'Save'}
           </Button>
         )}
         {schema.is_submittable && name && docstatus === 0 && (
-          <Button onClick={() => runTransition('submit')} disabled={saving || !!transitioning}>
+          <Button variant={unsaved ? 'outline' : 'default'} onClick={() => runTransition('submit')} disabled={saving || !!transitioning}>
             {transitioning === 'submit' ? 'Submitting…' : 'Submit'}
           </Button>
         )}
@@ -502,6 +739,9 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           >
             {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
           </Button>
+        )}
+        {schema.is_submittable && name && docstatus === 2 && (
+          <Button onClick={() => copyDocument(true)}>Amend</Button>
         )}
         {name && DOCUMENT_MAPPERS[doctype]?.length > 0 && (!schema.is_submittable || docstatus === 1) && (
           <DropdownMenu>
@@ -527,6 +767,12 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
             Print
           </Button>
         )}
+        {name && doctype !== 'User' && (
+          <Button variant="outline" className="gap-1.5" onClick={() => copyDocument(false)} title="Open a new copy of this record">
+            <Copy className="h-3.5 w-3.5" />
+            Duplicate
+          </Button>
+        )}
         {name && !drawerOpen && (
           <Button variant="outline" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
             <PanelRight className="h-3.5 w-3.5" />
@@ -543,21 +789,11 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       </div>
       {(saveError || transitionError || createError) && (
         <div className="space-y-2 border-b bg-background px-5 py-3">
-          {saveError && (
-            <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-              {saveError}
+          {[saveError, transitionError, createError].filter(Boolean).map((msg, i) => (
+            <p key={i} className="whitespace-pre-line text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
+              {msg}
             </p>
-          )}
-          {transitionError && (
-            <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-              {transitionError}
-            </p>
-          )}
-          {createError && (
-            <p className="text-sm text-destructive border border-destructive/30 rounded p-2 bg-destructive/10">
-              {createError}
-            </p>
-          )}
+          ))}
         </div>
       )}
 
@@ -592,6 +828,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       <div className="p-5 space-y-6">
         {isItem && activeTab === 0 && <ItemPricePanel state={itemPrices} />}
         {doctype === 'User' && name && activeTab === 0 && <PosAccessPanel user={name} />}
+        {doctype === 'User' && !name && activeTab === 0 && <PosAccessDraftPanel />}
         {tabs[activeTab]?.sections
           .filter((section) => evalDependsOn(section.depends_on, doc))
           .map((section, si) => {
@@ -616,7 +853,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
                           {f.label}
                           {isMandatory && <span className="text-destructive ml-1">*</span>}
                         </label>
-                        {renderField(f, doc, setField)}
+                        {renderField(f, doc, { setField, onTableEdit, locked: isLocked(f), docLocked: docstatus > 0, tenantCode })}
                         {f.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{f.description}</p>
                         )}
@@ -632,16 +869,58 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     </div>
     {name && drawerOpen && <RecordDrawer doctype={doctype} name={name} onClose={() => setDrawerOpen(false)} />}
     </div>
+    </div>
   );
 }
 
-function renderField(
-  f: CompiledField,
-  doc: Record<string, unknown>,
-  setField: (k: string, v: unknown) => void,
-) {
+// The badge next to the title: the document's own status when it has one,
+// else Draft / Submitted / Cancelled, and "Not Saved" while there are edits.
+function statusOf(doc: Doc, submittable: boolean, isNew: boolean, unsaved: boolean): { label: string; tone: string } | null {
+  if (isNew) return { label: 'Not Saved', tone: STATUS_TONE.warning };
+  if (unsaved) return { label: 'Not Saved', tone: STATUS_TONE.warning };
+  const docstatus = Number(doc.docstatus ?? 0);
+  const label = (typeof doc.status === 'string' && doc.status) || (submittable ? ['Draft', 'Submitted', 'Cancelled'][docstatus] : '');
+  if (!label) return null;
+  const tone = /cancel|overdue|lost|reject|expired|closed/i.test(label)
+    ? STATUS_TONE.danger
+    : /paid|completed|delivered|received|converted|ordered|billed|active|enabled|open/i.test(label) && !/unpaid|partly|not /i.test(label)
+      ? STATUS_TONE.success
+      : /draft/i.test(label)
+        ? STATUS_TONE.neutral
+        : /unpaid|partly|pending|to /i.test(label)
+          ? STATUS_TONE.warning
+          : STATUS_TONE.progress;
+  return { label, tone };
+}
+
+interface RenderCtx {
+  setField: (k: string, v: unknown, refresh?: boolean, track?: boolean) => void;
+  onTableEdit: (table: string, change: { row: number; fieldname: string; commit: boolean }) => void;
+  /** This field can't be edited (read-only field, or the document is submitted). */
+  locked: boolean;
+  /** The whole document is submitted/cancelled. */
+  docLocked: boolean;
+  tenantCode: string | null;
+}
+
+// Number inputs ask for a refresh when the user leaves the field with a
+// different value, not on every keystroke (a refresh mid-typing would
+// rewrite "1." to "1").
+function commitOnBlur(onCommit: () => void) {
+  return {
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
+      e.currentTarget.dataset.before = e.currentTarget.value;
+    },
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+      if (e.currentTarget.dataset.before !== e.currentTarget.value) onCommit();
+    },
+  };
+}
+
+function renderField(f: CompiledField, doc: Doc, ctx: RenderCtx) {
+  const { setField } = ctx;
   const value = doc[f.fieldname];
-  const readOnly = f.read_only;
+  const readOnly = ctx.locked;
 
   switch (f.component) {
     case 'readonly':
@@ -654,7 +933,7 @@ function renderField(
           checked={isTruthyDocValue(value)}
           disabled={readOnly}
           className="h-4 w-4"
-          onChange={(e) => setField(f.fieldname, e.target.checked ? 1 : 0)}
+          onChange={(e) => setField(f.fieldname, e.target.checked ? 1 : 0, true)}
         />
       );
 
@@ -662,10 +941,10 @@ function renderField(
       const opts = (f.options || '').split('\n').filter(Boolean);
       return (
         <select
-          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-70"
           value={String(value ?? '')}
           disabled={readOnly}
-          onChange={(e) => setField(f.fieldname, e.target.value)}
+          onChange={(e) => setField(f.fieldname, e.target.value, true)}
         >
           <option value="">— Select —</option>
           {opts.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -682,7 +961,8 @@ function renderField(
             target={linkTarget}
             value={(value as string) || ''}
             disabled={readOnly || !linkTarget}
-            onChange={(v) => setField(f.fieldname, v)}
+            onChange={(v) => setField(f.fieldname, v, true)}
+            tenantCode={ctx.tenantCode}
           />
         );
       }
@@ -691,7 +971,9 @@ function renderField(
           target={f.options || ''}
           value={(value as string) || ''}
           disabled={readOnly}
-          onChange={(v) => setField(f.fieldname, v)}
+          filters={linkFilters(f.options || '', doc)}
+          onChange={(v) => setField(f.fieldname, v, true)}
+          tenantCode={ctx.tenantCode}
         />
       );
     }
@@ -702,7 +984,7 @@ function renderField(
           type="date"
           disabled={readOnly}
           value={String(value ?? '')}
-          onChange={(e) => setField(f.fieldname, e.target.value)}
+          onChange={(e) => setField(f.fieldname, e.target.value, true)}
         />
       );
 
@@ -713,25 +995,30 @@ function renderField(
           type="datetime-local"
           disabled={readOnly}
           value={dtVal}
-          onChange={(e) => setField(f.fieldname, e.target.value.replace('T', ' ') + ':00')}
+          onChange={(e) => setField(f.fieldname, e.target.value ? e.target.value.replace('T', ' ') + ':00' : '', true)}
         />
       );
     }
 
     case 'number':
+      if (readOnly && isMoney(f)) {
+        return <Input value={formatNumber(value, f)} disabled className="text-right tabular-nums" />;
+      }
       return (
         <Input
           type="number"
           disabled={readOnly}
+          className="tabular-nums"
           value={String(value ?? '')}
           onChange={(e) => setField(f.fieldname, e.target.value)}
+          {...commitOnBlur(() => setField(f.fieldname, docNumber(doc, f.fieldname), true))}
         />
       );
 
     case 'textarea':
       return (
         <textarea
-          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring min-h-[80px] resize-y"
+          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring min-h-[80px] resize-y disabled:opacity-70"
           disabled={readOnly}
           value={String(value ?? '')}
           onChange={(e) => setField(f.fieldname, e.target.value)}
@@ -750,14 +1037,15 @@ function renderField(
 
     case 'table': {
       const childDoctype = f.options || '';
-      const rows = (value as Record<string, unknown>[]) || [];
+      const rows = (value as Rows) || [];
       return (
         <ChildTable
           childDoctype={childDoctype}
           rows={rows}
-          readOnly={readOnly}
+          readOnly={readOnly || ctx.docLocked}
           parentDoc={doc}
-          onChange={(updated) => setField(f.fieldname, updated)}
+          onChange={(updated) => setField(f.fieldname, updated.map((r, i) => ({ ...r, idx: i + 1 })), false, false)}
+          onEdit={(change) => ctx.onTableEdit(f.fieldname, change)}
         />
       );
     }
@@ -771,6 +1059,22 @@ function renderField(
         />
       );
   }
+}
+
+// The value already in state — commitOnBlur only needs to trigger the refresh.
+function docNumber(doc: Doc, fieldname: string): unknown {
+  return doc[fieldname];
+}
+
+function isMoney(f: CompiledField) {
+  return f.fieldtype === 'Currency' || f.fieldtype === 'Float' || f.fieldtype === 'Percent';
+}
+
+function formatNumber(v: unknown, f: CompiledField): string {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (v === undefined || v === null || v === '' || !Number.isFinite(n)) return '';
+  if (f.fieldtype === 'Percent') return `${n}%`;
+  return n.toLocaleString('en-US', { minimumFractionDigits: f.fieldtype === 'Currency' ? 2 : 0, maximumFractionDigits: 3 });
 }
 
 export { DynamicForm };

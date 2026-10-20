@@ -39,9 +39,21 @@ class XentraERPTenant(Document):
 		if not self.tenant_code:
 			self.tenant_code = generate_tenant_code(self.organization_name)
 
+		# The tenant's base currency is its country's currency (BHD for Bahrain, AED for the
+		# UAE, ...) unless the platform admin has set one; provisioning uses it for the Company.
+		if self.country and not self.base_currency:
+			from frappe.geo.country_info import get_country_info
+
+			self.base_currency = (get_country_info(self.country) or {}).get("currency") or None
+
 		if self.status == "Trial" and not self.trial_end_date:
 			self.trial_start_date = self.trial_start_date or today()
 			self.trial_end_date = add_months(self.trial_start_date, 1)
+
+		if not self.enabled_modules and self.plan and frappe.db.exists("XentraERP Plan", self.plan):
+			plan = frappe.get_doc("XentraERP Plan", self.plan)
+			self.enabled_modules = ",".join(m.module_code for m in plan.modules)
+			self.max_users = self.max_users or plan.max_users
 
 		if self.status == "Trial" and not self.enabled_modules:
 			self.enabled_modules = ",".join(ALL_MODULES)

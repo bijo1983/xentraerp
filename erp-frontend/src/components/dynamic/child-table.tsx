@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { linkFilters } from '@/lib/link-filters';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,13 @@ interface Props {
   // row itself (Frappe's own grid does the same: row context first, doc
   // context second).
   parentDoc?: Record<string, unknown>;
+  /**
+   * Called after every edit, so the form can track it and (when `commit`)
+   * ask the server to fill in what depends on it — an item's rate/UOM/
+   * warehouse, a line amount, the totals. `row` is the 0-based line, or -1
+   * when lines were added or removed.
+   */
+  onEdit?: (change: { row: number; fieldname: string; commit: boolean }) => void;
 }
 
 // Builds a doc-like object for depends_on evaluation: row fields take
@@ -60,9 +68,11 @@ function pickerContextFor(childDoctype: string): 'sales' | 'purchase' | undefine
   return undefined;
 }
 
-export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }: Props) {
+export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc, onEdit }: Props) {
   const { schema, loading } = useDocTypeSchema(childDoctype);
-  const [localRows, setLocalRows] = useState<Row[]>(rows.length ? rows : []);
+  // Controlled by the form: the server's refresh rewrites lines (rates,
+  // amounts, ...) and those must show here.
+  const localRows = rows;
   const [pickerRow, setPickerRow] = useState<number | null>(null);
   const [detailRow, setDetailRow] = useState<number | null>(null);
 
@@ -81,17 +91,27 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
 
   const hasItemCode = allFields.some((f) => f.fieldname === 'item_code');
 
-  const updateRow = (idx: number, fieldname: string, val: unknown) => {
+  const updateRow = (idx: number, fieldname: string, val: unknown, commit = false) => {
     const updated = localRows.map((r, i) => i === idx ? { ...r, [fieldname]: val } : r);
-    setLocalRows(updated);
     onChange(updated);
+    onEdit?.({ row: idx, fieldname, commit });
   };
 
-  const updateRowFields = (idx: number, patch: Record<string, unknown>) => {
+  const updateRowFields = (idx: number, patch: Record<string, unknown>, commitField?: string) => {
     const updated = localRows.map((r, i) => i === idx ? { ...r, ...patch } : r);
-    setLocalRows(updated);
     onChange(updated);
+    Object.keys(patch).forEach((k) => onEdit?.({ row: idx, fieldname: k, commit: k === commitField }));
   };
+
+  // Number cells refresh when the user leaves them with a new value, not per keystroke.
+  const commitOnBlur = (idx: number, fieldname: string) => ({
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
+      e.currentTarget.dataset.before = e.currentTarget.value;
+    },
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+      if (e.currentTarget.dataset.before !== e.currentTarget.value) onEdit?.({ row: idx, fieldname, commit: true });
+    },
+  });
 
   // Populates the sibling fields ERPNext transaction lines expect once an
   // item is picked. Deliberately simple — the Item master's own defaults
@@ -114,7 +134,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
     if (allFields.some((f) => f.fieldname === 'amount') && qty && rate) {
       patch.amount = qty * rate;
     }
-    updateRowFields(idx, patch);
+    updateRowFields(idx, patch, 'item_code');
   };
 
   // Which rate a picked item should bring onto the line: the item's price
@@ -145,6 +165,12 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
   };
 
   const onItemCodeChanged = async (idx: number, code: string) => {
+    // With a form that refreshes from the server, ERPNext prices the line
+    // (price list, pricing rules, UOM, warehouse, accounts) — no client-side guess.
+    if (onEdit) {
+      updateRow(idx, 'item_code', code, true);
+      return;
+    }
     updateRow(idx, 'item_code', code);
     if (!code) return;
     try {
@@ -185,15 +211,21 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
       if (!f.default) return;
       newRow[f.fieldname] = f.component === 'check' ? (f.default === '1' ? 1 : 0) : f.default;
     });
+    // Lines inherit the header's defaults the way Desk's grid does.
+    for (const f of ['warehouse', 'set_warehouse', 'delivery_date', 'schedule_date', 'cost_center', 'project']) {
+      if (!allFields.some((x) => x.fieldname === f) || newRow[f]) continue;
+      const fromParent = f === 'warehouse' ? parentDoc?.set_warehouse : parentDoc?.[f];
+      if (fromParent) newRow[f] = fromParent;
+    }
     const updated = [...localRows, newRow];
-    setLocalRows(updated);
     onChange(updated);
+    onEdit?.({ row: -1, fieldname: '__rows', commit: false });
   };
 
   const removeRow = (idx: number) => {
     const updated = localRows.filter((_, i) => i !== idx);
-    setLocalRows(updated);
     onChange(updated);
+    onEdit?.({ row: -1, fieldname: '__rows', commit: true });
   };
 
   const renderControl = (f: CompiledField, row: Row, rowIdx: number, compact: boolean) => {
@@ -203,31 +235,37 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
     if (!evalDependsOn(f.depends_on, rowEvalContext(row, parentDoc))) {
       return <span className="text-sm text-muted-foreground">—</span>;
     }
-    if (readOnly) return <span className="text-sm">{String(val ?? '')}</span>;
+    if (readOnly || f.read_only) {
+      const shown = f.component === 'number' && val !== undefined && val !== null && val !== '' && Number.isFinite(Number(val))
+        ? Number(val).toLocaleString('en-US', { maximumFractionDigits: 3, minimumFractionDigits: f.fieldtype === 'Currency' ? 2 : 0 })
+        : String(val ?? '');
+      return <span className={f.component === 'number' ? 'block text-right text-sm tabular-nums' : 'text-sm'}>{shown}</span>;
+    }
 
     switch (f.component) {
       case 'number':
         return (
           <Input
             type="number"
-            className={sizeCls}
+            className={`${sizeCls} text-right tabular-nums`}
             value={String(val ?? '')}
             onChange={(e) =>
               f.fieldname === 'qty' || f.fieldname === 'rate'
                 ? onQtyOrRateChanged(rowIdx, f.fieldname, e.target.value)
                 : updateRow(rowIdx, f.fieldname, e.target.value)
             }
+            {...commitOnBlur(rowIdx, f.fieldname)}
           />
         );
       case 'date':
         return (
           <Input type="date" className={sizeCls} value={String(val ?? '')}
-            onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value)} />
+            onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value, true)} />
         );
       case 'check':
         return (
           <input type="checkbox" checked={isTruthyDocValue(val)}
-            onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.checked ? 1 : 0)} />
+            onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.checked ? 1 : 0, true)} />
         );
       case 'link': {
         const linkTarget = f.fieldtype === 'Dynamic Link'
@@ -239,7 +277,8 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
             <LinkField
               target={linkTarget}
               value={String(val ?? '')}
-              onChange={(v) => (isItemCode ? onItemCodeChanged(rowIdx, v) : updateRow(rowIdx, f.fieldname, v))}
+              filters={linkFilters(linkTarget, { ...(parentDoc || {}), doctype: childDoctype })}
+              onChange={(v) => (isItemCode ? onItemCodeChanged(rowIdx, v) : updateRow(rowIdx, f.fieldname, v, true))}
               onOpenPicker={isItemCode ? () => setPickerRow(rowIdx) : undefined}
             />
             {isItemCode && row.item_name ? (
@@ -252,7 +291,7 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
         const opts = (f.options || '').split('\n').filter(Boolean);
         return (
           <select className={`w-full border rounded px-1 bg-background ${sizeCls}`}
-            value={String(val ?? '')} onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value)}>
+            value={String(val ?? '')} onChange={(e) => updateRow(rowIdx, f.fieldname, e.target.value, true)}>
             <option value="">—</option>
             {opts.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
@@ -328,7 +367,10 @@ export function ChildTable({ childDoctype, rows, readOnly, onChange, parentDoc }
           onOpenChange={(o) => !o && setPickerRow(null)}
           context={pickerContextFor(childDoctype)}
           onSelect={(item) => {
-            if (pickerRow !== null) applyItemPriced(pickerRow, item);
+            if (pickerRow !== null) {
+              if (onEdit) updateRowFields(pickerRow, { item_code: item.item_code, item_name: item.item_name }, 'item_code');
+              else applyItemPriced(pickerRow, item);
+            }
             setPickerRow(null);
           }}
         />

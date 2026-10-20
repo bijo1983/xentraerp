@@ -4,7 +4,21 @@ import { frappe } from '@/lib/frappe';
 // Frappe's REST API accepts filters either as a plain {field: value} dict
 // (implicit "=") or as a list of [field, operator, value] triples (for
 // "like", ">=", etc.) — support both shapes here.
-type FrappeFilters = Record<string, unknown> | Array<[string, string, unknown]>;
+/** Prefix bare sort fields with the doctype's table. A filter on a child-table field
+ * makes Frappe join that table, and an unqualified `modified desc` is then ambiguous
+ * (MySQL 1052 -> HTTP 417) — that broke every Connections link to a document whose
+ * back-reference lives on its rows (Purchase Invoice Item, Payment Entry Reference, ...). */
+export function qualifyOrderBy(doctype: string, orderBy: string): string {
+  return orderBy
+    .split(',')
+    .map((part) => {
+      const m = part.trim().match(/^([a-z_][a-z0-9_]*)(\s+(?:asc|desc))?$/i);
+      return m ? `\`tab${doctype}\`.${m[1]}${m[2] || ''}` : part.trim();
+    })
+    .join(', ');
+}
+
+type FrappeFilters = Record<string, unknown> | Array<[string, string, unknown] | [string, string, string, unknown]>;
 
 interface UseFrappeListOptions {
   doctype: string;
@@ -46,7 +60,7 @@ export function useFrappeList<T>({
       const params = {
         fields: fieldsKey,
         filters: filtersKey || undefined,
-        order_by: orderBy,
+        order_by: qualifyOrderBy(doctype, orderBy),
         limit_start: page * pageSize,
         limit_page_length: pageSize,
       };

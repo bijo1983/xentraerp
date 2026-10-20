@@ -3,13 +3,16 @@
 // it. Chair colour shows the table's state — Available (outline), Reserved (teal), On Dine
 // (orange, one filled chair per guest). Layout flows automatically by zone.
 import { computed } from 'vue'
+import { BellRing, Users } from 'lucide-vue-next'
 
 export interface PlanTable {
   name: string
   seats: number
   status: 'Available' | 'Occupied' | 'Reserved' | 'Disabled'
   guests: number
-  orders?: { part_paid?: boolean; merged?: boolean }[]
+  orders?: { part_paid?: boolean; merged?: boolean; bill_requested?: number }[]
+  // Phase 1: an order taker asked for the bill (the status itself stays Occupied).
+  bill_requested?: number
 }
 
 const props = defineProps<{ tables: PlanTable[]; selected?: string | null }>()
@@ -54,10 +57,15 @@ const drawn = computed(() => props.tables.map((t) => ({ t, ...layout(t) })))
         <span v-for="(c, i) in d.chairs" :key="i" class="chair" :class="[d.t.status, { filled: c.filled }]" :style="{ left: c.x + 'px', top: c.y + 'px', width: c.w + 'px', height: c.h + 'px' }" />
         <div class="plan-table" :class="d.t.status">
           <div class="pn">{{ d.t.name }}</div>
-          <div class="pg">👥 {{ d.t.status === 'Available' ? 0 : d.t.guests }}</div>
+          <div class="pg"><Users :size="12" style="vertical-align: -1px" /> {{ d.t.status === 'Available' ? 0 : d.t.guests }}</div>
         </div>
       </div>
       <div v-if="d.t.orders?.some((o) => o.part_paid)" class="pill warn" style="margin-top: 20px">part paid</div>
+      <div v-if="d.t.bill_requested" class="pill bill-req" style="margin-top: 6px"><BellRing :size="12" style="vertical-align: -2px" /> {{ $t('fnb.billRequested') }}</div>
     </button>
   </div>
 </template>
+
+<style scoped>
+.bill-req { background: var(--x-info-soft); color: var(--x-info-text); font-weight: 700; }
+</style>

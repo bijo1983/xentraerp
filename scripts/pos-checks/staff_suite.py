@@ -48,8 +48,9 @@ try:
     pos.set_pin_active(u, 1); check("…and back on", frappe.db.get_value("XentraERP POS PIN", u, "active") == 1)
     check("resetting a PIN keeps the person and changes the hash", (pos.set_pin(u, "246810"), frappe.db.get_value("XentraERP POS PIN", u, "pin_hash") == pos._hash_pin("246810"))[1])
     mgr = frappe.get_doc({"doctype":"User","email":"zz.mgr@example.com","first_name":"Mgr","send_welcome_email":0,"roles":[{"role":"System Manager"}]}).insert(ignore_permissions=True)
-    pos.set_pin("zz.mgr@example.com", "135790")
-    check("an administrator's PIN doesn't get downgraded to the cashier role set", "POS Cashier" not in [x.role for x in frappe.get_doc("User", "zz.mgr@example.com").roles])
+    # Phase 1: administrators never get a PIN (management login with an authenticator code instead).
+    check("set_pin refuses an administrator (Phase 1)", err(lambda: pos.set_pin("zz.mgr@example.com", "135790"), "administrators don't use a pin") and not frappe.db.exists("XentraERP POS PIN", "zz.mgr@example.com"))
+    check("…and the administrator keeps their roles untouched", "POS Cashier" not in [x.role for x in frappe.get_doc("User", "zz.mgr@example.com").roles])
 except Exception:
     F.append("UNEXPECTED"); traceback.print_exc()
 finally:

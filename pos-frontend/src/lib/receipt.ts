@@ -1,3 +1,5 @@
+import { formatMoney } from '@/lib/money'
+
 import { ReceiptBuilder } from './escpos'
 
 export interface ReceiptLine {
@@ -17,14 +19,14 @@ export interface ReceiptData {
   lines: ReceiptLine[]
   total: number
   paymentMethod: string
+  // Room for VAT (owner decision D6, Phase 2): taxable amount and one line per rate,
+  // printed between the items and the total when present.
+  taxes?: { label: string; amount: number }[]
 }
 
 function money(n: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n)
-  } catch {
-    return n.toFixed(2)
-  }
+  // Latin digits and the ISO code: ESC/POS printers print ASCII only.
+  return formatMoney(n, currency, { locale: 'en' })
 }
 
 // Builds the raw ESC/POS byte sequence for a Bluetooth thermal printer.
@@ -45,6 +47,7 @@ export function buildReceiptBytes(data: ReceiptData): Uint8Array {
     r.row('', money(line.amount, data.currency), WIDTH)
   }
   r.divider(WIDTH)
+  for (const tx of data.taxes || []) r.row(tx.label, money(tx.amount, data.currency), WIDTH)
   r.bold(true).row('TOTAL', money(data.total, data.currency), WIDTH).bold(false)
   r.row('Paid via', data.paymentMethod, WIDTH)
   r.feed(1)
@@ -96,15 +99,18 @@ export function printReceiptViaBrowser(data: ReceiptData) {
   <hr />
   ${rows}
   <hr />
+  ${(data.taxes || []).map((tx) => `<div class="line"><span>${escapeHtml(tx.label)}</span><span>${escapeHtml(money(tx.amount, data.currency))}</span></div>`).join('')}
   <div class="total"><span>TOTAL</span><span>${escapeHtml(money(data.total, data.currency))}</span></div>
   <div class="line"><span>Paid via</span><span>${escapeHtml(data.paymentMethod)}</span></div>
   <hr />
   <div class="center">${escapeHtml(data.invoiceName)}</div>
   <div class="center">Thank you!</div>
-  <script>window.onload = () => { window.print(); }</script>
 </body>
 </html>`)
   win.document.close()
+  // No inline <script> in the print window: it inherits the page's Content-Security-Policy.
+  win.focus()
+  window.setTimeout(() => win.print(), 250)
 }
 
 function escapeHtml(s: string): string {

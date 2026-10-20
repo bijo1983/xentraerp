@@ -38,7 +38,7 @@ export const REPORTS = catalog as ReportDef[];
 /** Sections in display order (each maps to a tenant module). */
 export const SECTIONS = [
   'Accounting', 'Selling', 'CRM', 'Buying', 'Stock', 'Point of Sale',
-  'Manufacturing', 'Projects', 'Assets', 'Quality', 'Support',
+  'Manufacturing', 'Projects', 'Assets', 'Quality', 'Support', 'Website',
 ] as const;
 
 export function findReport(slug: string): ReportDef | undefined {

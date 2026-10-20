@@ -62,7 +62,7 @@ def _open_orders() -> list:
 	return frappe.get_all(
 		"XentraERP POS Order",
 		filters={"status": ["in", ["Open", "Part Paid"]]},
-		fields=["name", "pos_table", "merged_tables", "guests", "total", "creation", "waiter", "bill_closed", "business_date", "status", "draft_invoice", "location", "order_type", "token", "guest_name"],
+		fields=["name", "pos_table", "merged_tables", "guests", "total", "creation", "waiter", "bill_closed", "business_date", "status", "draft_invoice", "location", "order_type", "token", "guest_name", "bill_requested"],
 		order_by="creation asc",
 		limit_page_length=0,
 	)
@@ -182,9 +182,12 @@ def list_tables(pos_profile: str | None = None):
 						"merged": o.pos_table != t.name,
 						"primary_table": o.pos_table,
 						"kots_pending": pending.get(o.name, 0),
+						"bill_requested": cint(o.bill_requested),
 					}
 					for o in here
 				],
+				# Phase 1: an order taker asked for the bill (status stays "Occupied").
+				"bill_requested": int(any(cint(o.bill_requested) for o in here)),
 				"guests": sum(cint(o.guests) for o in here) if here else (cint(held[t.name].party_size) if t.name in held else 0),
 				"total": sum(flt(o.total) for o in here),
 				"since": str(first.creation) if first else None,
@@ -271,6 +274,7 @@ def _order_payload(doc) -> dict:
 		"balance": flt(frappe.db.get_value("Sales Invoice", doc.draft_invoice, "outstanding_amount")) if doc.status == "Part Paid" and doc.draft_invoice else 0,
 		"business_date": str(doc.business_date) if doc.business_date else None,
 		"bill_closed": cint(doc.bill_closed),
+		"bill_requested": cint(doc.get("bill_requested")),
 		"items": [
 			{
 				"item_code": r.item_code,
@@ -406,7 +410,7 @@ def list_open_orders(pos_profile: str | None = None):
 	_require_fnb("view", pos_profile)
 	loc = core.location_of(pos_profile) if pos_profile else None
 	return [
-		{"name": o.name, "token": o.token, "guest_name": o.guest_name, "total": flt(o.total), "status": o.status, "guests": cint(o.guests), "bill_closed": cint(o.bill_closed)}
+		{"name": o.name, "token": o.token, "guest_name": o.guest_name, "total": flt(o.total), "status": o.status, "guests": cint(o.guests), "bill_closed": cint(o.bill_closed), "bill_requested": cint(o.bill_requested)}
 		for o in _open_orders()
 		if o.order_type == "Take Away" and (not loc or not o.location or o.location == loc.location_code)
 	]
@@ -572,6 +576,18 @@ def list_kots(statuses=None, pos_profile: str | None = None):
 		filters["location"] = loc.location_code
 	rows = frappe.get_all("XentraERP KOT", filters=filters, fields=["name"], order_by="creation asc", limit_page_length=200)
 	return [_kot_payload(frappe.get_doc("XentraERP KOT", r.name)) for r in rows]
+
+
+def _serve_order_kots(order: str):
+	"""Closing the bill finishes the order's tickets: every KOT still New, Preparing or
+	Ready is marked Served, so the kitchen board doesn't keep tickets for a table that has
+	settled up. Items added after a re-open go out on a new ticket as usual."""
+	for name in frappe.get_all(
+		"XentraERP KOT", filters={"pos_order": order, "status": ["in", ACTIVE_KOT]}, pluck="name"
+	):
+		kot = frappe.get_doc("XentraERP KOT", name)
+		kot.status = "Served"
+		kot.save(ignore_permissions=True)
 
 
 @frappe.whitelist()
@@ -828,6 +844,7 @@ def close_bill(order: str):
 	doc.bill_closed = 1
 	doc.bill_closed_at = now_datetime()
 	doc.save(ignore_permissions=True)
+	_serve_order_kots(doc.name)
 	frappe.db.commit()
 	return {"order": _order_payload(doc), "totals": totals}
 
@@ -846,6 +863,24 @@ def reopen_bill(order: str):
 		doc.invoice_doctype = None
 	doc.bill_closed = 0
 	doc.bill_closed_at = None
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return _order_payload(doc)
+
+
+@frappe.whitelist()
+def request_bill(order: str, cancel: int = 0):
+	"""Order taker: the table wants to pay. Flags the order (and so its table) as "bill
+	requested" for the cashier; taking payment stays a cashier action (cap `bill`).
+	`cancel=1` clears the flag."""
+	_require_fnb("order")
+	doc = _payable_order(order, for_update=True)
+	if cint(cancel):
+		doc.bill_requested, doc.bill_requested_at, doc.bill_requested_by = 0, None, None
+	else:
+		if not doc.items:
+			frappe.throw("The order has no items yet.")
+		doc.bill_requested, doc.bill_requested_at, doc.bill_requested_by = 1, now_datetime(), frappe.session.user
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return _order_payload(doc)
@@ -921,6 +956,7 @@ def bill_order(order: str, payment_method: str | None = None, payments=None, all
 		doc.save(ignore_permissions=True)
 	if doc.status == "Billed":
 		_complete_reservation(doc.name, "Completed")
+		_serve_order_kots(doc.name)  # billed without closing the check first
 	frappe.db.commit()
 	return {
 		**result,

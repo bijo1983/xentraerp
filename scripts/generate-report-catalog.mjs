@@ -20,7 +20,7 @@ const appsDir = process.argv[2] || '/home/frappe/innovegic-bench/apps';
 const outFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '../erp-frontend/src/lib/reports/catalog.json');
 
 // ERPNext module -> section on the Reports page. Modules not listed here
-// (Core, Desk, Website, Regional, Loan Management, ...) are not offered.
+// (Core, Desk, Loan Management, ...) are not offered.
 const SECTIONS = {
   Accounts: 'Accounting',
   Selling: 'Selling',
@@ -32,6 +32,8 @@ const SECTIONS = {
   Assets: 'Assets',
   'Quality Management': 'Quality',
   Support: 'Support',
+  Regional: 'Accounting', // country tax/VAT reports
+  Website: 'Website',
 };
 
 // Standard reports that don't apply to this deployment: country-specific
