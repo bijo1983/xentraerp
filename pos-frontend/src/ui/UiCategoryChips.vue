@@ -28,10 +28,11 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 </template>
 
 <style scoped>
-.x-chips { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 2px 2px 4px; scroll-snap-type: x proximity; }
-.x-chips::-webkit-scrollbar { display: none; }
+/* Categories wrap onto further rows so every one is visible at once (a hidden sideways
+   scroll left tills showing only the first few). Phones cap it at about three rows. */
+.x-chips { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px 2px 4px; }
 .x-chip {
-  flex: none; scroll-snap-align: start; min-height: 48px; padding: 0 16px 0 6px; border-radius: var(--x-radius-full);
+  flex: none; min-height: 48px; padding: 0 16px 0 6px; border-radius: var(--x-radius-full);
   border: 1px solid var(--x-border); background: var(--x-surface); color: var(--x-text); font: inherit; font-size: var(--x-text-sm);
   font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; box-shadow: var(--x-shadow-xs);
   transition: background var(--x-duration), border-color var(--x-duration), color var(--x-duration), transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration);
@@ -46,5 +47,8 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 .x-chip.on .x-chip__count { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .x-chip.on .x-chip__ic { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
 :root[data-theme='dark'] .x-chip.on { background: var(--x-primary); border-color: var(--x-primary); }
-@media (max-width: 767px) { .x-chip { min-height: 44px; } .x-chip__ic { width: 32px; height: 32px; } }
+@media (max-width: 767px) {
+  .x-chips { gap: 8px; max-height: 160px; overflow-y: auto; overscroll-behavior: contain; }
+  .x-chip { min-height: 44px; } .x-chip__ic { width: 32px; height: 32px; }
+}
 </style>
