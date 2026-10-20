@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Status = colour + icon + text (never colour alone).
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 
-const props = withDefaults(defineProps<{ tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'primary'; icon?: string | null; size?: 'sm' | 'md' }>(), {
+const props = withDefaults(defineProps<{ tone?: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'primary'; icon?: string | Component | null; size?: 'sm' | 'md' }>(), {
   tone: 'neutral',
   icon: null,
   size: 'md',
@@ -13,7 +13,8 @@ const glyph = computed(() => props.icon ?? DEFAULT_ICON[props.tone])
 
 <template>
   <span class="x-badge" :class="[`x-badge--${tone}`, `x-badge--${size}`]">
-    <span class="x-badge__icon" aria-hidden="true">{{ glyph }}</span>
+    <component :is="glyph" v-if="typeof glyph === 'object' || typeof glyph === 'function'" class="x-badge__svg" :size="13" :stroke-width="2.2" aria-hidden="true" />
+    <span v-else class="x-badge__icon" aria-hidden="true">{{ glyph }}</span>
     <slot />
   </span>
 </template>
@@ -23,6 +24,7 @@ const glyph = computed(() => props.icon ?? DEFAULT_ICON[props.tone])
 .x-badge--md { padding: 6px 10px; font-size: var(--x-text-xs); }
 .x-badge--sm { padding: 4px 8px; font-size: 11px; }
 .x-badge__icon { font-size: 9px; }
+.x-badge__svg { flex: none; }
 .x-badge--success { background: var(--x-success-soft); color: var(--x-success-text); }
 .x-badge--warning { background: var(--x-warning-soft); color: var(--x-warning-text); }
 .x-badge--danger { background: var(--x-danger-soft); color: var(--x-danger-text); }

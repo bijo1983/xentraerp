@@ -14,67 +14,75 @@
  *   phone  < 768px   ·  tablet 768–1279px  ·  counter terminal / desktop >= 1280px
  */
 :root {
-  /* brand */
-  --x-brand-blue: #1776ff; /* XentraERP electric blue (logo) */
-  --x-brand-blue-deep: #0b4fc4;
-  --x-brand-navy: #0b1b3a; /* deep navy */
-  --x-brand-slate: #0f172a; /* dark slate */
-  --x-brand-cyan: #06b6d4; /* controlled accent: highlights, focus glow, charts */
-  --x-brand-teal: #0d9488;
+  /* brand (premium palette, 2026-10 UI refresh) */
+  --x-brand-blue: #2563eb; /* brand */
+  --x-brand-blue-deep: #1d4ed8;
+  --x-brand-navy: #0f172a; /* primary ink */
+  --x-brand-slate: #0f172a;
+  --x-brand-cyan: #06b6d4;
+  --x-brand-teal: #14b8a6; /* secondary */
+  --x-brand-gradient: linear-gradient(135deg, #2563eb 0%, #4f46e5 55%, #14b8a6 130%);
 
   /* surfaces & text (light) */
-  --x-bg: #f7f8fb;
-  --x-bg-sunken: #eef1f6;
+  --x-bg: #f8fafc;
+  --x-bg-sunken: #f1f5f9;
   --x-surface: #ffffff;
   --x-surface-2: #f8fafc;
-  --x-surface-3: #eef2f7;
-  --x-border: #dde3ec;
-  --x-border-strong: #c5cedb;
-  --x-text: #0f1b33;
-  --x-text-muted: #51607a;
-  --x-text-faint: #8a96ab;
+  --x-surface-3: #f1f5f9;
+  --x-surface-glass: rgba(255, 255, 255, 0.78);
+  --x-border: #e2e8f0;
+  --x-border-strong: #cbd5e1;
+  --x-text: #0f172a;
+  --x-text-muted: #64748b;
+  --x-text-faint: #94a3b8;
   --x-text-on-primary: #ffffff;
 
   /* interactive */
-  --x-primary: var(--x-brand-blue);
-  --x-primary-hover: #0f66e6;
-  --x-primary-active: var(--x-brand-blue-deep);
-  --x-primary-soft: #e7f0ff;
-  --x-primary-text: #0b4fc4;
-  --x-accent: var(--x-brand-teal);
-  --x-accent-soft: #e0f7f5;
-  --x-focus-ring: 0 0 0 3px rgba(23, 118, 255, 0.35);
+  --x-primary: #2563eb;
+  --x-primary-hover: #1d4ed8;
+  --x-primary-active: #1e40af;
+  --x-primary-soft: #eff6ff;
+  --x-primary-text: #1d4ed8;
+  --x-accent: #14b8a6;
+  --x-accent-soft: #f0fdfa;
+  --x-accent-text: #0f766e;
+  --x-focus-ring: 0 0 0 4px rgba(37, 99, 235, 0.18);
 
   /* status */
-  --x-success: #059669;
-  --x-success-soft: #e3f8ee;
+  --x-success: #10b981;
+  --x-success-soft: #ecfdf5;
   --x-success-text: #047857;
-  --x-warning: #d97706;
-  --x-warning-soft: #fdf3dc;
-  --x-warning-text: #92400e;
-  --x-danger: #dc2626;
-  --x-danger-soft: #fde8e8;
+  --x-warning: #f59e0b;
+  --x-warning-soft: #fffbeb;
+  --x-warning-text: #b45309;
+  --x-danger: #ef4444;
+  --x-danger-soft: #fef2f2;
   --x-danger-text: #b91c1c;
   --x-info: var(--x-brand-cyan);
-  --x-info-soft: #e0f6fb;
+  --x-info-soft: #ecfeff;
   --x-info-text: #0e7490;
 
-  /* typography */
+  /* typography — app scale (dense POS screens) and marketing scale (landing) */
   --x-font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans Arabic', 'Tahoma', sans-serif;
   --x-font-display: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', var(--x-font-sans);
-  --x-text-xs: 12px;
-  --x-text-sm: 13.5px;
-  --x-text-md: 15px;
+  --x-text-xs: 12.5px;
+  --x-text-sm: 14px;
+  --x-text-md: 15.5px;
   --x-text-lg: 18px;
   --x-text-xl: 22px;
-  --x-text-2xl: 28px;
-  --x-text-3xl: clamp(28px, 3.2vw, 44px);
+  --x-text-2xl: 26px;
+  --x-text-3xl: clamp(30px, 3.4vw, 44px);
+  --x-text-hero: clamp(40px, 5.4vw, 70px);
+  --x-text-section: clamp(32px, 3.6vw, 46px);
+  --x-text-card: clamp(21px, 1.9vw, 26px);
+  --x-text-body: clamp(16px, 1.2vw, 18px);
   --x-weight-regular: 400;
   --x-weight-medium: 500;
   --x-weight-semibold: 600;
   --x-weight-bold: 700;
-  --x-leading-tight: 1.2;
-  --x-leading: 1.5;
+  --x-leading-tight: 1.1;
+  --x-leading: 1.55;
+  --x-tracking-tight: -0.025em;
 
   /* spacing (4px grid) */
   --x-space-1: 4px;
@@ -87,18 +95,22 @@
   --x-space-10: 40px;
   --x-space-12: 48px;
   --x-space-16: 64px;
+  --x-space-24: 96px;
 
-  /* radius */
-  --x-radius-sm: 8px;
+  /* radius — one scale everywhere: controls 12, cards 16, panels 20, sheets 28 */
+  --x-radius-sm: 10px;
   --x-radius-md: 12px;
   --x-radius-lg: 16px;
-  --x-radius-xl: 24px;
+  --x-radius-xl: 20px;
+  --x-radius-2xl: 28px;
   --x-radius-full: 999px;
 
-  /* depth */
-  --x-shadow-sm: 0 1px 2px rgba(15, 27, 51, 0.06);
-  --x-shadow-md: 0 6px 20px rgba(15, 27, 51, 0.08);
-  --x-shadow-lg: 0 18px 48px rgba(15, 27, 51, 0.16);
+  /* depth — layered, low-opacity "quartz" shadows */
+  --x-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --x-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --x-shadow-md: 0 2px 4px -2px rgba(15, 23, 42, 0.05), 0 10px 24px -6px rgba(15, 23, 42, 0.1);
+  --x-shadow-lg: 0 8px 16px -8px rgba(15, 23, 42, 0.08), 0 28px 56px -16px rgba(15, 23, 42, 0.22);
+  --x-shadow-brand: 0 10px 24px -8px rgba(37, 99, 235, 0.55);
 
   /* touch */
   --x-touch: 44px; /* minimum target */
@@ -106,7 +118,9 @@
 
   /* motion (disabled under prefers-reduced-motion) */
   --x-ease: cubic-bezier(0.2, 0, 0, 1);
+  --x-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --x-duration: 160ms;
+  --x-duration-slow: 320ms;
 
   /* layering */
   --x-z-base: 0;
@@ -124,23 +138,25 @@
 }
 
 :root[data-theme='dark'] {
-  --x-bg: #0b1220;
-  --x-bg-sunken: #070d18;
-  --x-surface: #111a2b;
-  --x-surface-2: #152036;
-  --x-surface-3: #1b2842;
-  --x-border: #24324d;
-  --x-border-strong: #33456a;
-  --x-text: #e7ecf5;
-  --x-text-muted: #a3b0c7;
-  --x-text-faint: #6f7d97;
-  --x-primary: #3b8bff;
-  --x-primary-hover: #5a9dff;
-  --x-primary-active: #1776ff;
-  --x-primary-soft: #14284d;
-  --x-primary-text: #8dbbff;
+  --x-bg: #0b1120;
+  --x-bg-sunken: #060b16;
+  --x-surface: #111827;
+  --x-surface-2: #151e30;
+  --x-surface-3: #1e293b;
+  --x-surface-glass: rgba(17, 24, 39, 0.78);
+  --x-border: #1f2a3d;
+  --x-border-strong: #334155;
+  --x-text: #f1f5f9;
+  --x-text-muted: #94a3b8;
+  --x-text-faint: #64748b;
+  --x-primary: #3b82f6;
+  --x-primary-hover: #60a5fa;
+  --x-primary-active: #2563eb;
+  --x-primary-soft: #172554;
+  --x-primary-text: #93c5fd;
   --x-accent: #2dd4bf;
-  --x-accent-soft: #10302e;
+  --x-accent-soft: #0f2e2b;
+  --x-accent-text: #5eead4;
   --x-success: #34d399;
   --x-success-soft: #0e2e24;
   --x-success-text: #6ee7b7;
@@ -152,9 +168,10 @@
   --x-danger-text: #fca5a5;
   --x-info-soft: #0b2a33;
   --x-info-text: #67e8f9;
+  --x-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
   --x-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --x-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
-  --x-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
+  --x-shadow-md: 0 10px 24px -6px rgba(0, 0, 0, 0.5);
+  --x-shadow-lg: 0 28px 56px -16px rgba(0, 0, 0, 0.65);
   color-scheme: dark;
 }
 
@@ -193,3 +210,45 @@
 .x-tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Shared micro-interactions (all subtle; off under prefers-reduced-motion). */
+@keyframes x-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes x-pop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes x-bump { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes x-draw { from { stroke-dashoffset: 48; } to { stroke-dashoffset: 0; } }
+@keyframes x-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+.x-enter { animation: x-fade-up var(--x-duration-slow) var(--x-ease) both; }
+
+/* Route change: a short fade so screens don't snap. */
+.x-page-enter-active { transition: opacity 180ms var(--x-ease), transform 180ms var(--x-ease); }
+.x-page-enter-from { opacity: 0; transform: translateY(4px); }
+
+/* Illustration tints for items without a photo (lib/itemArt.ts). */
+.x-art { display: grid; place-items: center; background: var(--art-bg); color: var(--art-fg); }
+.x-art--amber { --art-bg: linear-gradient(145deg, #fef3c7, #fde68a); --art-fg: #b45309; }
+.x-art--rose { --art-bg: linear-gradient(145deg, #ffe4e6, #fecdd3); --art-fg: #be123c; }
+.x-art--emerald { --art-bg: linear-gradient(145deg, #d1fae5, #a7f3d0); --art-fg: #047857; }
+.x-art--sky { --art-bg: linear-gradient(145deg, #e0f2fe, #bae6fd); --art-fg: #0369a1; }
+.x-art--violet { --art-bg: linear-gradient(145deg, #ede9fe, #ddd6fe); --art-fg: #6d28d9; }
+.x-art--orange { --art-bg: linear-gradient(145deg, #ffedd5, #fed7aa); --art-fg: #c2410c; }
+.x-art--teal { --art-bg: linear-gradient(145deg, #ccfbf1, #99f6e4); --art-fg: #0f766e; }
+.x-art--slate { --art-bg: linear-gradient(145deg, #f1f5f9, #e2e8f0); --art-fg: #334155; }
+.x-art--blue { --art-bg: linear-gradient(145deg, #dbeafe, #bfdbfe); --art-fg: #1d4ed8; }
+.x-art--lime { --art-bg: linear-gradient(145deg, #ecfccb, #d9f99d); --art-fg: #4d7c0f; }
+:root[data-theme='dark'] .x-art { --art-bg: linear-gradient(145deg, #1e293b, #172033); }
+:root[data-theme='dark'] .x-art::after { opacity: 0.08; }
+:root[data-theme='dark'] .x-art--amber { --art-fg: #fcd34d; }
+:root[data-theme='dark'] .x-art--rose { --art-fg: #fda4af; }
+:root[data-theme='dark'] .x-art--emerald { --art-fg: #6ee7b7; }
+:root[data-theme='dark'] .x-art--sky { --art-fg: #7dd3fc; }
+:root[data-theme='dark'] .x-art--violet { --art-fg: #c4b5fd; }
+:root[data-theme='dark'] .x-art--orange { --art-fg: #fdba74; }
+:root[data-theme='dark'] .x-art--teal { --art-fg: #5eead4; }
+:root[data-theme='dark'] .x-art--slate { --art-fg: #cbd5e1; }
+:root[data-theme='dark'] .x-art--blue { --art-fg: #93c5fd; }
+:root[data-theme='dark'] .x-art--lime { --art-fg: #bef264; }
+
+/* Arabic: never track letters (it breaks the joined script) and give headings room for
+   the taller glyphs. */
+[dir='rtl'] :is(h1, h2, h3, h4, h5, b, strong, .x-tabular) { letter-spacing: 0 !important; word-spacing: normal !important; }
+[dir='rtl'] :is(h1, h2) { line-height: 1.3 !important; }

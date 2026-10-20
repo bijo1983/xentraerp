@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
 // Big tappable radio list (base of BranchSelector / RegisterSelector).
-export interface Choice { value: string; label: string; hint?: string; icon?: string; disabled?: boolean }
+export interface Choice { value: string; label: string; hint?: string; icon?: string | Component; disabled?: boolean }
 defineProps<{ modelValue: string | null; options: Choice[]; label: string }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 </script>
@@ -18,7 +19,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
       :disabled="o.disabled"
       @click="emit('update:modelValue', o.value)"
     >
-      <span class="x-choice__icon" aria-hidden="true">{{ o.icon || '▤' }}</span>
+      <span class="x-choice__icon" aria-hidden="true"><component :is="o.icon" v-if="o.icon && typeof o.icon !== 'string'" :size="20" /><template v-else>{{ o.icon || '▤' }}</template></span>
       <span class="x-choice__text"><b>{{ o.label }}</b><small v-if="o.hint">{{ o.hint }}</small></span>
       <span class="x-choice__check" aria-hidden="true">{{ o.value === modelValue ? '✓' : '' }}</span>
     </button>

@@ -9,6 +9,7 @@ import { api, errorMessage, ApiError } from '@/lib/api'
 import { usePosStore } from '@/stores/pos'
 import { landingRoute } from '@/lib/nav'
 import { t } from '@/lib/i18n'
+import { Receipt } from 'lucide-vue-next'
 import { UiBranchSelector, UiEmptyState, UiErrorState, UiRegisterSelector, UiSkeleton } from '@/ui'
 
 const router = useRouter()
@@ -65,7 +66,7 @@ async function select(name: string) {
 
     <UiSkeleton v-if="loading" :lines="3" height="72px" />
     <UiErrorState v-else-if="failure" :message="failure.message" :reference="failure.ref" retry @retry="load" />
-    <UiEmptyState v-else-if="profiles.length === 0" :title="t('registers.noneTitle')" :message="t('registers.noneMessage')" icon="🧾" />
+    <UiEmptyState v-else-if="profiles.length === 0" :title="t('registers.noneTitle')" :message="t('registers.noneMessage')" :icon="Receipt" />
     <template v-else>
       <UiBranchSelector v-if="needBranch && !branch" v-model="branch" :branches="branches" />
       <template v-else>

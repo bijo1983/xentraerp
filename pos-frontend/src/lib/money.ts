@@ -56,6 +56,16 @@ export interface MoneyOptions {
   locale?: string
 }
 
+const ARABIC_SCRIPT = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/
+
+/** The symbol to show in this locale. ERPNext stores some symbols in Arabic script (BHD "د.ب",
+ *  SAR, AED, KWD ...): those appear only when the screen is in Arabic; otherwise the ISO code. */
+function symbolFor(meta: CurrencyMeta, loc: string): string {
+  const sym = meta.symbol || meta.code
+  if (ARABIC_SCRIPT.test(sym) && !loc.toLowerCase().startsWith('ar')) return meta.code
+  return sym
+}
+
 export function formatMoney(amount: number | string | null | undefined, code: string, opts: MoneyOptions = {}): string {
   const n = Number(amount ?? 0)
   const value = Number.isFinite(n) ? n : 0
@@ -72,8 +82,10 @@ export function formatMoney(amount: number | string | null | undefined, code: st
   }
   const num = new Intl.NumberFormat(loc, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value)
   if (!showSymbol) return num
-  const sym = meta.symbol || meta.code
-  return meta.symbolOnRight ? `${num} ${sym}` : `${sym} ${num}`
+  const sym = symbolFor(meta, loc)
+  // Our fallback to the ISO code always goes in front (BHD 1.500), whatever ERPNext's side setting.
+  const right = meta.symbolOnRight && sym !== meta.code
+  return right ? `${num} ${sym}` : `${sym} ${num}`
 }
 
 // ------------------------------------------------------------ company currency
