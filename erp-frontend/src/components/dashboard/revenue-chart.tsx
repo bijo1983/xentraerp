@@ -46,7 +46,12 @@ export function RevenueChart({ data }: RevenueChartProps) {
         <CardTitle className="text-base">Revenue Trend</CardTitle>
       </CardHeader>
       <CardContent>
-        <Chart options={options} series={series} type="area" height={300} />
+        {/* ApexCharts draws an empty series as NaN widths/translates (console errors, blank chart). */}
+        {data.length ? (
+          <Chart options={options} series={series} type="area" height={300} />
+        ) : (
+          <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">No submitted sales orders in the last 30 days.</p>
+        )}
       </CardContent>
     </Card>
   );

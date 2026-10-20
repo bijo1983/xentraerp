@@ -571,6 +571,25 @@ error logs) will show it happening.
   the Letter Head create/update/default flow as `admin@jjc.com`. **The
   designer UI itself has not been exercised in a browser** (none on this box).
   Old `lib/print-template.ts` (fixed field-picker) was removed.
+- **Fixed 2026-10-20 — Cancel on submitted documents always failed (HTTP 500).** `DynamicForm.runTransition` posted
+  `{doc: <json>}` to `xentraerp.client.cancel` for both submit and cancel, but `frappe.client.cancel(doctype, name)`
+  takes no `doc` — every cancel of every doctype died with `TypeError: cancel() missing 2 required positional
+  arguments: 'doctype' and 'name'` (found in `sites/197349.xentraerp.local/error-snapshots/`, which is where v14's
+  "New Exception collected with id ..." lines in `logs/frappe.log` point; the `Error Log` doctype doesn't have them).
+  The 417 on `POST /api/resource/Sales Order` in the same browser console was an earlier, unrelated failed first save.
+  Now cancel sends `{doctype, name}`. It also follows Desk's "Cancel All": `get_submitted_linked_docs` first, and if
+  submitted dependants exist (e.g. a Sales Invoice against the Sales Order) the confirm lists them and
+  `cancel_all_linked_docs` cancels them before the document; Desk's per-doctype `ignore_doctypes_on_cancel_all`
+  (form-script only, not in the REST meta) is copied into `CANCEL_ALL_IGNORED` in `lib/document-mappers.ts`. A server
+  refusal (`LinkExistsError: Cannot delete or cancel because ... is linked with ...`) shows as that sentence.
+  **Amend** (cancelled docs, any submittable doctype) now shows only with the `amend` right
+  (`client.has_permission`) and when not yet amended (`client.is_document_amended`; otherwise "Amended as X" link);
+  the copy keeps no_copy fields like Desk's `from_amend` but drops status/workflow_state, sets `amended_from` and goes
+  through the `lib/mapped-doc.ts` hand-off — the server names it `<original>-1` on save. Verified in a rolled-back
+  console as `admin@jjc.com`: old payload → the TypeError; new cancel → docstatus 2; cancel-all on SAL-ORD-2026-00002
+  (linked ACC-SINV-2026-00001) works; amended copy of SAL-ORD-2026-00003 inserts as `SAL-ORD-2026-00003-1`. Not
+  exercised in a browser. Dashboard charts: ApexCharts throws `width "NaN"`/`translate(NaN, 0)` on an empty series
+  (no submitted Sales Orders in the last 30 days); revenue/order-status charts now show an empty state instead.
 
 ## POS app (deployed 2026-09-21) — Retail + F&B
 

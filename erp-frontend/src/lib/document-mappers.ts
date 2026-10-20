@@ -72,3 +72,21 @@ export const DOCUMENT_MAPPERS: Record<string, DocumentMapper[]> = {
     { label: 'Debit Note (Return)', targetDoctype: 'Purchase Invoice', method: 'xentraerp.erp.accounts.doctype.purchase_invoice.purchase_invoice.make_debit_note' },
   ],
 };
+
+// Linked documents Desk leaves alone when "Cancel All" cancels a document's
+// submitted dependants first: each ERPNext form script sets
+// `frm.ignore_doctypes_on_cancel_all`, which (like the mappers above) never
+// reaches the REST API, so it is copied here from this bench's ERPNext source
+// (sales_order.js, sales_invoice.js, purchase_invoice.js, journal_entry.js,
+// payment_entry.js, pos_invoice.js, pos_closing_entry.js). These are links
+// ERPNext undoes on its own during the cancel (a payment is unlinked, not
+// cancelled), so cancelling them as well would lose data the user meant to keep.
+export const CANCEL_ALL_IGNORED: Record<string, string[]> = {
+  'Sales Order': ['Purchase Order'],
+  'Sales Invoice': ['POS Invoice', 'Timesheet', 'POS Invoice Merge Log', 'POS Closing Entry', 'Journal Entry', 'Payment Entry'],
+  'Purchase Invoice': ['Journal Entry', 'Payment Entry', 'Purchase Invoice'],
+  'Journal Entry': ['Sales Invoice', 'Purchase Invoice', 'Journal Entry'],
+  'Payment Entry': ['Sales Invoice', 'Purchase Invoice'],
+  'POS Invoice': ['POS Invoice Merge Log', 'POS Closing Entry'],
+  'POS Closing Entry': ['POS Invoice Merge Log'],
+};

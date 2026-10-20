@@ -24,7 +24,12 @@ export function OrderStatusChart({ data }: OrderStatusChartProps) {
         <CardTitle className="text-base">Order Status</CardTitle>
       </CardHeader>
       <CardContent>
-        <Chart options={options} series={data.map((d) => d.count)} type="donut" height={300} />
+        {/* An empty (or all-zero) donut is drawn with NaN sizes by ApexCharts. */}
+        {data.some((d) => d.count > 0) ? (
+          <Chart options={options} series={data.map((d) => d.count)} type="donut" height={300} />
+        ) : (
+          <p className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">No submitted sales orders in the last 30 days.</p>
+        )}
       </CardContent>
     </Card>
   );

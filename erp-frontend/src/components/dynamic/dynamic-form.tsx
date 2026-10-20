@@ -6,7 +6,7 @@ import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { CompiledField, evalDependsOn, isTruthyDocValue } from '@/lib/meta-compiler';
 import { cn, STATUS_TONE } from '@/lib/utils';
 import { useTenantCode, withTenant } from '@/lib/tenant';
-import { DOCUMENT_MAPPERS } from '@/lib/document-mappers';
+import { CANCEL_ALL_IGNORED, DOCUMENT_MAPPERS } from '@/lib/document-mappers';
 import { stashMappedDoc } from '@/lib/mapped-doc';
 import { doctypeListRoute } from '@/lib/doctype-routes';
 import { linkFilters } from '@/lib/link-filters';
@@ -370,6 +370,33 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
     };
   }, [doctype, name, initialDoc, initial, setDoc]);
 
+  // Amend, like Desk: offered on a cancelled document when the user has the
+  // `amend` right on it and it hasn't been amended already (the server
+  // refuses a second amendment; Desk checks is_document_amended first too).
+  // If the checks themselves fail, the button stays — saving still enforces it.
+  const cancelledName = name && Number(doc.docstatus ?? 0) === 2 ? name : null;
+  const [amendState, setAmendState] = useState<{ allowed: boolean; amendedAs: string | null } | null>(null);
+  useEffect(() => {
+    setAmendState(null);
+    if (!cancelledName) return;
+    let cancelled = false;
+    Promise.all([
+      frappe
+        .call('xentraerp.client.has_permission', { doctype, docname: cancelledName, perm_type: 'amend' })
+        .then((r) => (r as { has_permission?: boolean })?.has_permission !== false)
+        .catch(() => true),
+      frappe
+        .call('xentraerp.client.is_document_amended', { doctype, docname: cancelledName })
+        .then((r) => (typeof r === 'string' && r ? r : null))
+        .catch(() => null),
+    ]).then(([allowed, amendedAs]) => {
+      if (!cancelled) setAmendState({ allowed, amendedAs });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [doctype, cancelledName]);
+
   // New document: ERPNext's own defaults — user defaults (company, ...),
   // Global Defaults, static defaults, and what the controller fills itself
   // (currency, price list, exchange rate, posting date/time, naming series).
@@ -575,17 +602,47 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       setTransitionError('Save your changes before submitting.');
       return;
     }
+    // Cancel, like Desk: submitted documents that depend on this one (a Sales
+    // Invoice against this Sales Order, ...) block it. List them and offer to
+    // cancel them first; declining leaves everything as it is.
+    let linked: { doctype: string; name: string }[] = [];
+    if (action === 'cancel') {
+      try {
+        const res = (await frappe.call('xentraerp.desk.form.linked_with.get_submitted_linked_docs', { doctype, name })) as {
+          docs?: { doctype: string; name: string }[];
+        };
+        const ignored = CANCEL_ALL_IGNORED[doctype] || [];
+        linked = (res?.docs || []).filter((d) => !ignored.includes(d.doctype));
+      } catch {
+        // Lookup unavailable — the cancel below still refuses with the server's own reason.
+      }
+    }
     if (!window.confirm(action === 'submit'
       ? `Submit ${doctype} ${name}? A submitted document can no longer be edited, only cancelled.`
-      : `Cancel ${doctype} ${name}? This reverses its accounting and stock entries.`)) return;
+      : linked.length
+        ? `${doctype} ${name} has submitted documents linked to it, which must be cancelled first:\n\n${linked
+            .map((d) => `${d.doctype} ${d.name}`)
+            .join('\n')}\n\nCancel all of them and ${name}? This reverses their accounting and stock entries.`
+        : `Cancel ${doctype} ${name}? This reverses its accounting and stock entries.`)) return;
     setTransitioning(action);
     setTransitionError(null);
     try {
+      if (linked.length) {
+        await frappe.call('xentraerp.desk.form.linked_with.cancel_all_linked_docs', {
+          docs: JSON.stringify(linked.map((d) => ({ ...d, docstatus: 1 }))),
+          ignore_doctypes_on_cancel_all: JSON.stringify(CANCEL_ALL_IGNORED[doctype] || []),
+        });
+      }
+      // submit takes the whole document; cancel takes only doctype + name
+      // (frappe.client.cancel(doctype, name) — sending `doc` there was a 500,
+      // "cancel() missing 2 required positional arguments").
       const data = await fetch(`/api/method/xentraerp.client.${action}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ doc: JSON.stringify({ ...stripInternal(docRef.current), doctype, name }) }),
+        body: JSON.stringify(action === 'submit'
+          ? { doc: JSON.stringify({ ...stripInternal(docRef.current), doctype, name }) }
+          : { doctype, name }),
       }).then(readJson);
       const updated = data.message as Doc;
       setDoc((prev) => ({ ...prev, ...updated }));
@@ -632,12 +689,16 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
   };
 
   // Duplicate (any saved record) and Amend (a cancelled one): Desk's
-  // frappe.model.copy_doc — the same document without its identity and
-  // no_copy fields, opened as a new unsaved form.
+  // frappe.model.copy_doc — the same document without its identity fields,
+  // opened as a new unsaved form. A duplicate also drops the no_copy fields;
+  // an amendment keeps them (Desk's `from_amend`) but not its status or
+  // workflow state. Saving it with `amended_from` set is what makes the
+  // server name it `<original>-1`.
   const copyDocument = (amend: boolean) => {
     if (!schema || !name) return;
     const skip = new Set(['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'amended_from', 'idx', '_comments', '_assign', '_liked_by', '_user_tags', '_seen']);
-    schema.fields.forEach((f) => f.no_copy && skip.add(f.fieldname));
+    if (amend) ['status', 'workflow_state', 'amendment_date', 'cancel_reason'].forEach((k) => skip.add(k));
+    else schema.fields.forEach((f) => f.no_copy && skip.add(f.fieldname));
     const copy: Doc = { doctype };
     for (const [k, v] of Object.entries(doc)) {
       if (skip.has(k) || k.startsWith('__')) continue;
@@ -649,7 +710,10 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
           })
         : v;
     }
-    if (amend) copy.amended_from = name;
+    if (amend) {
+      copy.amended_from = name;
+      if (schema.fields.some((f) => f.fieldname === 'amendment_date')) copy.amendment_date = new Date().toISOString().slice(0, 10);
+    }
     const key = stashMappedDoc(copy);
     router.push(withTenant(`/app/${encodeURIComponent(doctype)}/new?from=${key}`, tenantCode));
   };
@@ -740,8 +804,19 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
             {transitioning === 'cancel' ? 'Cancelling…' : 'Cancel Document'}
           </Button>
         )}
-        {schema.is_submittable && name && docstatus === 2 && (
-          <Button onClick={() => copyDocument(true)}>Amend</Button>
+        {schema.is_submittable && name && docstatus === 2 && amendState?.amendedAs && (
+          <Link
+            href={withTenant(`/app/${encodeURIComponent(doctype)}/${encodeURIComponent(amendState.amendedAs)}`, tenantCode)}
+            className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+          >
+            Amended as {amendState.amendedAs}
+          </Link>
+        )}
+        {schema.is_submittable && name && docstatus === 2 && amendState?.allowed && !amendState.amendedAs &&
+          schema.fields.some((f) => f.fieldname === 'amended_from') && (
+          <Button onClick={() => copyDocument(true)} title="Open a new draft copy of this cancelled document">
+            Amend
+          </Button>
         )}
         {name && DOCUMENT_MAPPERS[doctype]?.length > 0 && (!schema.is_submittable || docstatus === 1) && (
           <DropdownMenu>
