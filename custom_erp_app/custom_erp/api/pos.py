@@ -387,6 +387,7 @@ def _give_pos_role(user: str, role: str):
 	if role in [r.role for r in doc.roles] and len(keep) == len(doc.roles) - 1:
 		return
 	doc.set("roles", [{"role": r.role} for r in keep] + [{"role": role}])
+	doc.flags.pos_role = role  # pos_roles.keep_pos_role re-applies it after a Role Profile
 	doc.save(ignore_permissions=True)
 
 

@@ -680,6 +680,14 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
   `seed_pos_role_profiles` (also links existing plain-role staff to the equal standard profile) and lazily on first use;
   seeding never overwrites a tenant's edits. Managed in the ERP at Settings → POS role profiles. `set_pin` with no role
   still defaults to Cashier (API contract); the User form and `reset_pin` default to Waiter.
+  **Fixed 2026-10-20 — staff signed in as Waiter despite a Supervisor/Cashier profile.** POS roles are non-desk, so
+  the ERP user form (`users.save_user`) rebuilt the roles table without them, and a Frappe Role Profile on the user
+  (tenant 197349 has an empty one named "POS Profile" on pos1/waiter1) replaces every role on each save. With no POS
+  role, `pos_level` falls back to waiter and the profile is ignored (level mismatch). Now a User `validate` hook
+  (`pos_roles.keep_pos_role`) restores the profile's role; `_give_pos_role` passes the intended role in
+  `doc.flags.pos_role` so a change still wins over a Role Profile. Patch `restore_pos_roles_from_profiles` repairs
+  existing users. **Testing gotcha**: `frappe.get_roles` is cached in Redis, which a DB rollback does not undo — after a
+  rolled-back test that touches roles, run `frappe.clear_cache(user=...)` or live sessions see the test's roles.
 - **Order flow**: every order starts Dine In (table) or Take Away (no table, token `001…` per business day/location,
   optional name/phone). **Saving the order files the KOT automatically** (`auto_kot`, default on; `set_order_items`
   returns `kot`); the order screen is a local cart with an explicit Save. The KOT shows on the kitchen board at once; a
