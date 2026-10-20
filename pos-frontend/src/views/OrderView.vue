@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/lib/i18n'
+import { formatMoney } from '@/lib/money'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -18,7 +20,7 @@ interface Draft extends Line { saved_qty: number }
 interface Order {
   name: string; table: string | null; order_type: 'Dine In' | 'Take Away'; token: string | null; guest_name: string | null
   merged_tables: string[]; pos_profile: string; status: string; guests: number; total: number; invoice: string | null
-  draft_invoice?: string | null; balance?: number; bill_closed: number; items: Line[]
+  draft_invoice?: string | null; balance?: number; bill_closed: number; bill_requested?: number; items: Line[]
 }
 interface KotOut { kot: string; table: string | null; order_type: 'Dine In' | 'Take Away'; token: string | null; items: { item_name: string; qty: number; note: string }[]; created: string }
 interface MenuItem { item_code: string; item_name: string; item_group: string; rate: number }
@@ -56,7 +58,7 @@ const mergeBillTarget = ref('')
 const mergeTableTarget = ref('')
 const transferTarget = ref('')
 
-const money = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: profile.value.currency }).format(n)
+const money = (n: number) => formatMoney(n, profile.value.currency)
 const orderId = computed(() => String(route.params.id))
 const partPaid = computed(() => order.value?.status === 'Part Paid')
 const takeAway = computed(() => order.value?.order_type === 'Take Away')
@@ -214,6 +216,14 @@ const closeBill = () =>
     syncFromOrder()
     totals.value = r.totals
     notice.value = `Bill closed — ${money(r.totals.due)} due (tax ${money(r.totals.tax)})`
+  })
+
+// Order takers (no `bill` cap) ask the cashier for the bill; the table shows "bill requested".
+const requestBill = (cancel = false) =>
+  run(async () => {
+    order.value = await api.call<Order>(FNB + 'request_bill', { order: orderId.value, cancel: cancel ? 1 : 0 })
+    syncFromOrder()
+    notice.value = cancel ? null : t('fnb.billRequested')
   })
 
 const reopenBill = () =>
@@ -441,7 +451,13 @@ const closeOrder = () => {
       <p v-if="dirty && canBill" class="sub2" style="margin: 0 20px 8px">Save the order first, then close the bill or take payment.</p>
 
       <button v-if="canBill" class="charge-btn" :disabled="busy || dirty || !order?.items.length" @click="startPay"><span>{{ partPaid ? 'Collect balance' : 'Pay' }}</span><span class="r tabular">{{ money(partPaid ? order?.balance || 0 : order?.total || 0) }}</span></button>
-      <p v-else class="sub2" style="margin: 0 20px 14px">Ask a cashier to close the bill and take payment.</p>
+      <template v-else>
+        <div class="row" style="padding: 0 14px 8px">
+          <button v-if="!order?.bill_requested" class="btn btn-primary" style="flex: 1" :disabled="busy || dirty || !order?.items.length" @click="requestBill(false)">{{ $t('fnb.requestBill') }}</button>
+          <button v-else class="btn btn-ghost" style="flex: 1" :disabled="busy" @click="requestBill(true)">✓ {{ $t('fnb.billRequested') }} · {{ $t('fnb.cancelBillRequest') }}</button>
+        </div>
+        <p class="sub2" style="margin: 0 20px 14px">Ask a cashier to close the bill and take payment.</p>
+      </template>
 
       <div v-if="!partPaid" class="close-order-wrap">
         <button v-if="canClose" class="btn close-order" :disabled="busy" @click="closing = true">

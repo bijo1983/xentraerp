@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMoney } from '@/lib/money'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -51,7 +52,7 @@ async function refresh() {
 }
 
 function money(n: number, currency: string) {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n)
+  return formatMoney(n, currency)
 }
 
 function addCurrency() {

@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 interface PosAccess {
   user: string;
   has_pin: boolean;
+  // Phase 1: what the person types (or picks) before their PIN at the till.
+  staff_code?: string | null;
   active: boolean;
   pos_profile: string | null;
   location: string | null;
@@ -161,13 +163,14 @@ export function PosAccessPanel({ user }: { user: string }) {
         <ShieldCheck className="h-4 w-4 text-primary" />
         <h3 className="text-sm font-semibold">POS access</h3>
         {data.is_admin ? (
-          <Badge>Administrator — full POS access</Badge>
+          <Badge>Administrator — POS management sign-in (no PIN)</Badge>
         ) : data.has_pin ? (
           <Badge variant={data.active ? 'success' : 'default'}>{data.active ? 'PIN active' : 'PIN switched off'}</Badge>
         ) : (
           <Badge>No PIN yet</Badge>
         )}
         {data.level && !data.is_admin && <Badge>{data.role_label}</Badge>}
+        {data.has_pin && data.staff_code && !data.is_admin && <Badge>Staff no. {data.staff_code}</Badge>}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -238,6 +241,11 @@ export function PosAccessPanel({ user }: { user: string }) {
         </div>
       </div>
 
+      {data.is_admin ? (
+        <p className="mt-4 border-t pt-4 text-xs text-muted-foreground">
+          Administrators don&apos;t use a PIN at the till: they use the POS Management sign-in (email, password and an authenticator code).
+        </p>
+      ) : (
       <div className="mt-4 border-t pt-4">
         <div className="mb-2 flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-muted-foreground" />
@@ -285,6 +293,7 @@ export function PosAccessPanel({ user }: { user: string }) {
           </div>
         )}
       </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button size="sm" disabled={busy || !changed || (!data.has_pin && role === (data.pos_role || ''))} onClick={save}>

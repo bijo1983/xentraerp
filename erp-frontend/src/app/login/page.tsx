@@ -66,22 +66,16 @@ function LoginForm() {
     setTenantLoading(true);
     setTenantCookie(null); // tenant_lookup itself runs against the control-plane site
     try {
-      // A site that hasn't been hit recently can return an incomplete
-      // response on its very first request after being woken up (seen as
-      // a blank admin_email that then breaks login with "Incomplete login
-      // details") — retry once silently rather than surfacing that.
-      let res: { organization_name: string; admin_email: string } | undefined;
-      for (let attempt = 0; ; attempt++) {
-        res = await frappe.call('custom_erp.api.signup.tenant_lookup', { tenant_code: tenantCode }) as {
-          organization_name: string;
-          admin_email: string;
-        };
-        if (res.admin_email || attempt >= 1) break;
-        await new Promise((r) => setTimeout(r, 400));
-      }
-      if (!res.admin_email) throw new Error('Could not find that tenant code');
+      // tenant_lookup no longer returns the tenant admin's email (it was readable by
+      // anyone with a tenant code); the person types their own email below. If the
+      // control plane still sends admin_email (legacy transition flag), prefill it.
+      const res = await frappe.call('custom_erp.api.signup.tenant_lookup', { tenant_code: tenantCode }) as {
+        organization_name: string;
+        admin_email?: string;
+      };
+      if (!res?.organization_name) throw new Error('Could not find that tenant code');
       setOrgName(res.organization_name);
-      setAdminEmail(res.admin_email);
+      setAdminEmail(res.admin_email || '');
       setTenantStep('login');
     } catch (err: unknown) {
       setTenantError(err instanceof Error ? err.message : 'Could not find that tenant code');
@@ -208,8 +202,20 @@ function LoginForm() {
             {tenantStep === 'login' && (
               <form onSubmit={tenantLogin} className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Signing in to <strong>{orgName}</strong> as <strong>{adminEmail}</strong>
+                  Signing in to <strong>{orgName}</strong>
                 </p>
+                <div className="space-y-2">
+                  <label htmlFor="tenant-email" className="text-sm font-medium">Email</label>
+                  <Input
+                    id="tenant-email"
+                    type="email"
+                    autoComplete="username"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value.trim())}
+                    placeholder="you@company.com"
+                    required
+                  />
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Password</label>
                   <Input

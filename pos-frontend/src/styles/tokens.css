@@ -1,0 +1,195 @@
+/*
+ * XentraERP POS design tokens (Phase 1 design system).
+ *
+ * Every colour, size and depth used by src/ui/* comes from here. Two themes:
+ *  - light (default): off-white canvas, deep navy text, XentraERP electric blue;
+ *  - dark "POS" theme: dark slate surfaces for dim bars/kitchens, same brand blue.
+ * The theme is chosen per device (stores/ui.ts) and applied as <html data-theme="…">.
+ *
+ * Status colours are never the only signal: StatusBadge always pairs them with an icon
+ * and text. Layout uses logical properties (margin-inline-start, inset-inline-end…) so
+ * Arabic (dir="rtl") mirrors without per-component overrides.
+ *
+ * Breakpoints (used in @media queries; CSS variables can't be used there):
+ *   phone  < 768px   ·  tablet 768–1279px  ·  counter terminal / desktop >= 1280px
+ */
+:root {
+  /* brand */
+  --x-brand-blue: #1776ff; /* XentraERP electric blue (logo) */
+  --x-brand-blue-deep: #0b4fc4;
+  --x-brand-navy: #0b1b3a; /* deep navy */
+  --x-brand-slate: #0f172a; /* dark slate */
+  --x-brand-cyan: #06b6d4; /* controlled accent: highlights, focus glow, charts */
+  --x-brand-teal: #0d9488;
+
+  /* surfaces & text (light) */
+  --x-bg: #f7f8fb;
+  --x-bg-sunken: #eef1f6;
+  --x-surface: #ffffff;
+  --x-surface-2: #f8fafc;
+  --x-surface-3: #eef2f7;
+  --x-border: #dde3ec;
+  --x-border-strong: #c5cedb;
+  --x-text: #0f1b33;
+  --x-text-muted: #51607a;
+  --x-text-faint: #8a96ab;
+  --x-text-on-primary: #ffffff;
+
+  /* interactive */
+  --x-primary: var(--x-brand-blue);
+  --x-primary-hover: #0f66e6;
+  --x-primary-active: var(--x-brand-blue-deep);
+  --x-primary-soft: #e7f0ff;
+  --x-primary-text: #0b4fc4;
+  --x-accent: var(--x-brand-teal);
+  --x-accent-soft: #e0f7f5;
+  --x-focus-ring: 0 0 0 3px rgba(23, 118, 255, 0.35);
+
+  /* status */
+  --x-success: #059669;
+  --x-success-soft: #e3f8ee;
+  --x-success-text: #047857;
+  --x-warning: #d97706;
+  --x-warning-soft: #fdf3dc;
+  --x-warning-text: #92400e;
+  --x-danger: #dc2626;
+  --x-danger-soft: #fde8e8;
+  --x-danger-text: #b91c1c;
+  --x-info: var(--x-brand-cyan);
+  --x-info-soft: #e0f6fb;
+  --x-info-text: #0e7490;
+
+  /* typography */
+  --x-font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans Arabic', 'Tahoma', sans-serif;
+  --x-font-display: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', var(--x-font-sans);
+  --x-text-xs: 12px;
+  --x-text-sm: 13.5px;
+  --x-text-md: 15px;
+  --x-text-lg: 18px;
+  --x-text-xl: 22px;
+  --x-text-2xl: 28px;
+  --x-text-3xl: clamp(28px, 3.2vw, 44px);
+  --x-weight-regular: 400;
+  --x-weight-medium: 500;
+  --x-weight-semibold: 600;
+  --x-weight-bold: 700;
+  --x-leading-tight: 1.2;
+  --x-leading: 1.5;
+
+  /* spacing (4px grid) */
+  --x-space-1: 4px;
+  --x-space-2: 8px;
+  --x-space-3: 12px;
+  --x-space-4: 16px;
+  --x-space-5: 20px;
+  --x-space-6: 24px;
+  --x-space-8: 32px;
+  --x-space-10: 40px;
+  --x-space-12: 48px;
+  --x-space-16: 64px;
+
+  /* radius */
+  --x-radius-sm: 8px;
+  --x-radius-md: 12px;
+  --x-radius-lg: 16px;
+  --x-radius-xl: 24px;
+  --x-radius-full: 999px;
+
+  /* depth */
+  --x-shadow-sm: 0 1px 2px rgba(15, 27, 51, 0.06);
+  --x-shadow-md: 0 6px 20px rgba(15, 27, 51, 0.08);
+  --x-shadow-lg: 0 18px 48px rgba(15, 27, 51, 0.16);
+
+  /* touch */
+  --x-touch: 44px; /* minimum target */
+  --x-touch-lg: 56px; /* keypad keys, primary till actions */
+
+  /* motion (disabled under prefers-reduced-motion) */
+  --x-ease: cubic-bezier(0.2, 0, 0, 1);
+  --x-duration: 160ms;
+
+  /* layering */
+  --x-z-base: 0;
+  --x-z-sticky: 100;
+  --x-z-shell: 200;
+  --x-z-drawer: 900;
+  --x-z-modal: 1000;
+  --x-z-toast: 1100;
+  --x-z-lock: 1200;
+
+  /* app shell height (views subtract it from 100dvh) */
+  --shell-h: 0px;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --x-bg: #0b1220;
+  --x-bg-sunken: #070d18;
+  --x-surface: #111a2b;
+  --x-surface-2: #152036;
+  --x-surface-3: #1b2842;
+  --x-border: #24324d;
+  --x-border-strong: #33456a;
+  --x-text: #e7ecf5;
+  --x-text-muted: #a3b0c7;
+  --x-text-faint: #6f7d97;
+  --x-primary: #3b8bff;
+  --x-primary-hover: #5a9dff;
+  --x-primary-active: #1776ff;
+  --x-primary-soft: #14284d;
+  --x-primary-text: #8dbbff;
+  --x-accent: #2dd4bf;
+  --x-accent-soft: #10302e;
+  --x-success: #34d399;
+  --x-success-soft: #0e2e24;
+  --x-success-text: #6ee7b7;
+  --x-warning: #fbbf24;
+  --x-warning-soft: #33270b;
+  --x-warning-text: #fcd34d;
+  --x-danger: #f87171;
+  --x-danger-soft: #3a1414;
+  --x-danger-text: #fca5a5;
+  --x-info-soft: #0b2a33;
+  --x-info-text: #67e8f9;
+  --x-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --x-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --x-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --x-duration: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible keyboard focus everywhere (mouse/touch focus stays quiet). */
+:focus-visible {
+  outline: 2px solid var(--x-primary);
+  outline-offset: 2px;
+}
+
+.x-sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.x-tabular {
+  font-variant-numeric: tabular-nums;
+}

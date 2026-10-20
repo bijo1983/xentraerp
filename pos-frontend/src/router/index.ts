@@ -1,11 +1,25 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePosStore } from '@/stores/pos'
+import { ApiError } from '@/lib/api'
+import { effectiveMode, guardRoute, landingRoute } from '@/lib/nav'
+import { currentNavContext, ensureImplicitRegister } from '@/composables/useSessionBoot'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    public?: boolean
+    state?: 'unavailable' | 'permission' | 'notfound'
+    bare?: boolean
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue') },
+    // Public landing page with the sign-in panel on the right (Phase 1).
+    { path: '/', name: 'landing', component: () => import('@/views/LandingView.vue'), meta: { public: true, bare: true } },
+    // Old links / bookmarks.
+    { path: '/login', redirect: '/' },
     { path: '/registers', name: 'registers', component: () => import('@/views/RegisterSelectView.vue') },
     { path: '/shift', name: 'shift', component: () => import('@/views/ShiftView.vue') },
     // Retail counter sale (also available in F&B mode for quick sales).
@@ -15,14 +29,14 @@ const router = createRouter({
     { path: '/order/:id', name: 'order', component: () => import('@/views/OrderView.vue') },
     { path: '/kitchen', name: 'kitchen', component: () => import('@/views/KitchenView.vue') },
     { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
-    { path: '/', redirect: '/registers' },
+    { path: '/unavailable', name: 'unavailable', component: () => import('@/views/SystemStateView.vue'), meta: { state: 'unavailable' } },
+    { path: '/denied', name: 'denied', component: () => import('@/views/SystemStateView.vue'), meta: { state: 'permission' } },
+    ...(import.meta.env.DEV ? [{ path: '/ui-kit', name: 'ui-kit', component: () => import('@/views/UiKitView.vue'), meta: { public: true, bare: true } }] : []),
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/SystemStateView.vue'), meta: { state: 'notfound', public: true } },
   ],
 })
 
 let sessionChecked = false
-// Screens that ring up sales — they need a register and (if the organization
-// requires it) an open shift.
-const SELLING = new Set(['terminal', 'floor', 'order'])
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
@@ -33,41 +47,33 @@ router.beforeEach(async (to) => {
     sessionChecked = true
   }
 
-  if (to.name !== 'login' && !auth.user) {
-    return { name: 'login' }
+  if (!auth.user) {
+    if (to.meta.public) return true
+    return { name: 'landing', query: to.fullPath && to.fullPath !== '/' ? { next: to.fullPath } : {} }
   }
-  if (auth.user && !pos.loaded) {
+
+  if (!pos.loaded) {
     try {
-      await pos.load()
-    } catch {
-      // A user without POS access (no PIN, not an admin) lands back on login.
+      await pos.load(auth.posProfile?.name ?? null)
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'POS_NOT_ENTITLED') return to.name === 'unavailable' ? true : { name: 'unavailable', query: { reason: 'plan' } }
+      // A user without POS access (no PIN, not an administrator) lands back on the sign-in.
       auth.user = null
-      return { name: 'login' }
+      return to.meta.public ? true : { name: 'landing' }
     }
   }
-  if (to.name === 'login' && auth.user) {
-    return { name: 'registers' }
+
+  // Order takers and kitchen screens never pick a register: it is chosen for them.
+  const mode = effectiveMode({ level: pos.settings?.level ?? null, mode: pos.settings?.session?.mode ?? null })
+  if ((mode === 'order' || mode === 'kitchen') && !auth.posProfile) {
+    await ensureImplicitRegister().catch(() => false)
   }
-  // Kitchen staff only ever see the kitchen board.
-  if (pos.settings?.level === 'kitchen' && !['kitchen', 'registers', 'login'].includes(String(to.name))) {
-    return auth.posProfile ? { name: 'kitchen' } : { name: 'registers' }
-  }
-  // Counter sales and the shift drawer are for people who bill; waiters take orders on the floor.
-  if (to.name === 'terminal' && (!pos.can('bill') || !pos.hasRetail)) return { name: pos.isFnb ? 'floor' : 'registers' }
-  if (to.name === 'shift' && !pos.can('shift')) return { name: pos.isFnb ? 'floor' : 'registers' }
-  if (SELLING.has(String(to.name)) || to.name === 'shift') {
-    if (!auth.posProfile) return { name: 'registers' }
-  }
-  if (SELLING.has(String(to.name)) && pos.needsShift) {
-    return { name: 'shift' }
-  }
-  if ((to.name === 'floor' || to.name === 'order' || to.name === 'kitchen') && !pos.isFnb) {
-    return { name: 'terminal' }
-  }
-  if (to.name === 'admin' && !pos.canManage) {
-    return { name: 'registers' }
-  }
-  return true
+
+  const ctx = currentNavContext()
+  if (to.name === 'landing') return landingRoute(ctx)
+  if (to.name === 'not-found' || to.name === 'unavailable' || to.name === 'denied' || to.name === 'ui-kit') return true
+  const decision = guardRoute(String(to.name), ctx)
+  return decision === true ? true : decision
 })
 
 export default router

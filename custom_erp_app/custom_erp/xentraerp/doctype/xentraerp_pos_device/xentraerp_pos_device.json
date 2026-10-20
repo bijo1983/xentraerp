@@ -1,0 +1,175 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-19 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "device_label",
+  "device_type",
+  "status",
+  "location",
+  "pos_profile",
+  "column_break_1",
+  "approved_by",
+  "registered_at",
+  "registered_ip",
+  "last_seen",
+  "last_user",
+  "last_ip",
+  "revoked_at",
+  "revoked_by",
+  "secrets_section",
+  "token_hash",
+  "approval_code_hash",
+  "code_expires"
+ ],
+ "fields": [
+  {
+   "fieldname": "device_label",
+   "fieldtype": "Data",
+   "label": "Device name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "device_type",
+   "fieldtype": "Select",
+   "label": "Device type",
+   "options": "Till\nOrder Taking\nKitchen Display",
+   "default": "Till",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Till = cashier terminal (register, shift, payments). Order Taking = handheld/tablet for waiters (floor, orders, KOT, request bill). Kitchen Display = kitchen board only."
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nActive\nRevoked",
+   "default": "Pending",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Location",
+   "options": "XentraERP POS Location"
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "Register",
+   "options": "POS Profile",
+   "description": "Optional. A till with a register skips the register picker; an order-taking device files orders under it."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "registered_at",
+   "fieldtype": "Datetime",
+   "label": "Registered at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "registered_ip",
+   "fieldtype": "Data",
+   "label": "Registered from IP",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_seen",
+   "fieldtype": "Datetime",
+   "label": "Last sign-in",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_user",
+   "fieldtype": "Link",
+   "label": "Last user",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_ip",
+   "fieldtype": "Data",
+   "label": "Last IP",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revoked_at",
+   "fieldtype": "Datetime",
+   "label": "Revoked at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revoked_by",
+   "fieldtype": "Link",
+   "label": "Revoked by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "secrets_section",
+   "fieldtype": "Section Break",
+   "label": "Secrets (hashes only)",
+   "collapsible": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "token_hash",
+   "fieldtype": "Data",
+   "label": "Device token hash",
+   "read_only": 1,
+   "hidden": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "approval_code_hash",
+   "fieldtype": "Data",
+   "label": "Approval code hash",
+   "read_only": 1,
+   "hidden": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "code_expires",
+   "fieldtype": "Datetime",
+   "label": "Approval code expires",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Device",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "DEV-.#####",
+ "naming_rule": "Expression (old style)",
+ "title_field": "device_label",
+ "in_create": 1
+}
