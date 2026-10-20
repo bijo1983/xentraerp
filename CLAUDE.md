@@ -652,6 +652,15 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
   shifts, tables, menu, reports, staff for waiter/cashier/kitchen) · Kitchen (kot only) · Administrator (System Manager:
   everything incl. mode, settings, locations, currencies). One POS role per person (`set_pos_role`); a PIN with no POS role
   is a Waiter. Refusals say "<Role> accounts can't do this — it needs …" (HTTP 403).
+- **POS role profiles** (`custom_erp/api/pos_roles.py`, DocType `XentraERP POS Role Profile`, added 2026-10-20): preconfigured
+  jobs — Waiter, Host, Cashier, Kitchen, Shift Supervisor, Floor Manager, Branch Manager, Auditor — each an *access level*
+  (one of the four POS roles, which keeps device rules working) plus *rights* (a subset of that level's `CAPS`). Mapped to
+  staff on the User record (hidden custom field `User.pos_role_profile`, set from the ERP User form's POS Access panel,
+  also on the New User form); `pos_core.session_caps` uses the profile's rights. No profile = the level's full rights
+  (staff from before profiles). Seeded on every tenant by `provisioning.run_default_setup`, the patch
+  `seed_pos_role_profiles` (also links existing plain-role staff to the equal standard profile) and lazily on first use;
+  seeding never overwrites a tenant's edits. Managed in the ERP at Settings → POS role profiles. `set_pin` with no role
+  still defaults to Cashier (API contract); the User form and `reset_pin` default to Waiter.
 - **Order flow**: every order starts Dine In (table) or Take Away (no table, token `001…` per business day/location,
   optional name/phone). **Saving the order files the KOT automatically** (`auto_kot`, default on; `set_order_items`
   returns `kot`); the order screen is a local cart with an explicit Save. The KOT shows on the kitchen board at once; a

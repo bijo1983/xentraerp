@@ -21,7 +21,7 @@ import { PrintPanel } from './print-panel';
 import { RecordDrawer } from './record-drawer';
 import { RecordSummary } from './record-summary';
 import { ItemPricePanel, useItemPrices } from './item-price-panel';
-import { PosAccessPanel } from './pos-access-panel';
+import { PosAccessDraftPanel, PosAccessPanel, applyPosAccessDraft } from './pos-access-panel';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Printer, PanelRight, Plus, ChevronDown, Loader2, Copy, ChevronRight } from 'lucide-react';
 
@@ -534,6 +534,15 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       if (!savedName) setCreatedName(savedDoc?.name as string);
       setDoc((prev) => ({ ...prev, ...savedDoc }));
       setUnsaved(false);
+      if (doctype === 'User' && !name) {
+        try {
+          await applyPosAccessDraft(savedDoc?.name as string);
+        } catch (posErr) {
+          // The user is created; only the POS profile step failed. Stay here (Save again retries it).
+          setSaveError(`The user was saved, but their POS role profile wasn't: ${posErr instanceof Error ? posErr.message : String(posErr)}`);
+          return;
+        }
+      }
       if (isItem) {
         try {
           await itemPrices.save(savedDoc?.name as string);
@@ -819,6 +828,7 @@ export default function DynamicForm({ doctype, name, initialDoc, initial, onSave
       <div className="p-5 space-y-6">
         {isItem && activeTab === 0 && <ItemPricePanel state={itemPrices} />}
         {doctype === 'User' && name && activeTab === 0 && <PosAccessPanel user={name} />}
+        {doctype === 'User' && !name && activeTab === 0 && <PosAccessDraftPanel />}
         {tabs[activeTab]?.sections
           .filter((section) => evalDependsOn(section.depends_on, doc))
           .map((section, si) => {

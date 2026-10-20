@@ -82,8 +82,12 @@ def session_caps() -> set:
 	"""The signed-in person's capabilities: their role's CAPS, narrowed by the device type
 	of their POS session (Phase 1: an Order Taking device never bills or runs a shift, a
 	Kitchen Display only shows the kitchen board; supervisors are never narrowed). A
-	session without a POS Session record (ERP login, legacy) is not narrowed."""
-	caps = set(CAPS.get(pos_level() or "", set()))
+	session without a POS Session record (ERP login, legacy) is not narrowed. Someone who
+	holds a POS role profile gets that profile's rights instead of their level's full set
+	(see pos_roles)."""
+	from custom_erp.api import pos_roles
+
+	caps = pos_roles.rights_for(frappe.session.user, pos_level())
 	try:
 		from custom_erp.api import pos_auth
 
@@ -101,8 +105,22 @@ def require_cap(cap: str):
 	"""Refuse unless the signed-in POS user's role grants `cap`."""
 	require_pos_user()
 	if not has_cap(cap):
-		level = LEVEL_LABEL.get(pos_level() or "", "your role")
-		frappe.throw(f"{level} accounts can't do this — it needs {_CAP_NEEDS.get(cap, 'a higher role')}.", frappe.PermissionError)
+		from custom_erp.api import pos_roles
+
+		lvl = pos_level()
+		label = pos_roles.label_for(frappe.session.user, lvl) or "your role"
+		if lvl and cap in CAPS.get(lvl, set()) and cap not in pos_roles.rights_for(frappe.session.user, lvl):
+			# Their level allows it, but their role profile leaves it out.
+			right = next((r[1] for r in pos_roles.RIGHTS if r[0] == cap), cap)
+			frappe.throw(f"The {label} profile doesn't include “{right}”. Ask your administrator to change your POS role profile.", frappe.PermissionError)
+		frappe.throw(f"{label} accounts can't do this — it needs {_CAP_NEEDS.get(cap, 'a higher role')}.", frappe.PermissionError)
+
+
+def _role_label() -> str:
+	"""What the POS shows as the person's role: their profile's name, else their level."""
+	from custom_erp.api import pos_roles
+
+	return pos_roles.label_for(frappe.session.user, pos_level())
 
 
 def require_pos_user():
@@ -178,7 +196,7 @@ def get_pos_settings(pos_profile: str | None = None):
 		"global_mode": s["pos_mode"],
 		"pos_mode": "F&B" if "F&B" in modes else "Retail",
 		"can_switch": is_manager(),
-		"role": LEVEL_LABEL.get(pos_level() or "", ""),
+		"role": _role_label(),
 		"level": pos_level(),
 		"location": user_location(),
 		"caps": sorted(session_caps()),

@@ -9,7 +9,7 @@ import { useTenantCode, withTenant } from '@/lib/tenant';
 import { cn, STATUS_TONE } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PosAccessPanel } from '@/components/dynamic/pos-access-panel';
+import { PosAccessDraftPanel, PosAccessPanel, applyPosAccessDraft } from '@/components/dynamic/pos-access-panel';
 
 const API = 'custom_erp.api.users.';
 
@@ -141,6 +141,12 @@ export function TenantUserForm({ name, onClose }: { name?: string; onClose: () =
       }
       const res = (await frappe.call(API + 'save_user', { data: JSON.stringify(payload) })) as { name: string };
       if (!name) {
+        try {
+          await applyPosAccessDraft(res.name);
+        } catch (posErr) {
+          // The user exists, so we still move to their record page, where the POS panel lets you retry.
+          window.alert(`The user was saved, but their POS role profile wasn't: ${errorText(posErr, 'unknown error')}`);
+        }
         router.push(withTenant(`/app/User/${encodeURIComponent(res.name)}`, tenantCode));
         return;
       }
@@ -324,6 +330,7 @@ export function TenantUserForm({ name, onClose }: { name?: string; onClose: () =
           </Section>
 
           {name && <PosAccessPanel user={name} />}
+          {!name && <PosAccessDraftPanel />}
         </div>
       </div>
     </div>

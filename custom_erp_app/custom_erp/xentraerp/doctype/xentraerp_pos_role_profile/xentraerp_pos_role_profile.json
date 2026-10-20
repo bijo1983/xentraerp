@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:profile_name",
+ "creation": "2026-10-20 00:00:00.000000",
+ "description": "A preconfigured set of POS rights (a job at the till) that is mapped to staff on their User record.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_name",
+  "access_level",
+  "rights",
+  "description",
+  "disabled",
+  "is_standard",
+  "standard_key",
+  "sort_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "label": "Profile",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "access_level",
+   "fieldtype": "Select",
+   "label": "Access level",
+   "options": "Kitchen\nWaiter\nCashier\nSupervisor",
+   "default": "Waiter",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Decides which devices the person can sign in on and the most this profile can be given."
+  },
+  {
+   "fieldname": "rights",
+   "fieldtype": "Small Text",
+   "label": "Rights",
+   "description": "Comma-separated POS rights, e.g. view, kot, order. Manage them from the POS role profiles screen."
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "is_standard",
+   "fieldtype": "Check",
+   "label": "Standard profile",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "standard_key",
+   "fieldtype": "Data",
+   "label": "Standard key",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort order",
+   "default": "100",
+   "hidden": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "XentraERP POS Role Profile",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "naming_rule": "By fieldname"
+}

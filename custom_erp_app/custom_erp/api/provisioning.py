@@ -279,6 +279,13 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 	if not frappe.db.get_single_value("Buying Settings", "buying_price_list"):
 		frappe.db.set_single_value("Buying Settings", "buying_price_list", "Standard Buying")
 
+	# POS role profiles (Waiter, Host, Cashier, Kitchen, Shift Supervisor, Floor Manager,
+	# Branch Manager, Auditor) are ready on every tenant, so the moment POS is part of the
+	# subscription the administrator can map them to staff. Only adds what is missing.
+	from custom_erp.api import pos_roles
+
+	pos_roles.ensure_defaults(force=True)
+
 	frappe.db.commit()
 
 
@@ -341,6 +348,8 @@ def get_default_setup_status():
 		and bool(frappe.db.get_single_value("Buying Settings", "buying_price_list")),
 		"letter_head": bool(frappe.db.get_value("Letter Head", {"is_default": 1})),
 		"fiscal_year": bool(frappe.db.get_single_value("Global Defaults", "current_fiscal_year")),
+		"pos_role_profiles": bool(frappe.db.table_exists("XentraERP POS Role Profile"))
+		and frappe.db.count("XentraERP POS Role Profile", {"is_standard": 1}) > 0,
 	}
 
 
