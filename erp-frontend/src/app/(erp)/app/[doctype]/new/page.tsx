@@ -4,6 +4,7 @@ import { useState } from 'react';
 import DynamicForm from '@/components/dynamic/dynamic-form';
 import { useTenantCode, withTenant } from '@/lib/tenant';
 import { popMappedDoc } from '@/lib/mapped-doc';
+import { TenantUserForm } from '@/components/users/tenant-user-form';
 
 export default function NewDocPage() {
   const { doctype } = useParams<{ doctype: string }>();
@@ -23,10 +24,14 @@ export default function NewDocPage() {
     return Object.keys(preset).length ? preset : undefined;
   });
 
+  if (decodeURIComponent(doctype) === 'User') {
+    return <TenantUserForm onClose={() => router.back()} />;
+  }
+
   return (
     <div className="w-full">
-      <h1 className="text-2xl font-semibold mb-6">New {decodeURIComponent(doctype)}</h1>
       <DynamicForm
+        showHeader
         doctype={decodeURIComponent(doctype)}
         initialDoc={initialDoc}
         onSave={(savedDoc) => {

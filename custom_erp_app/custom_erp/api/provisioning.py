@@ -200,10 +200,15 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 		company.insert(ignore_permissions=True)
 		frappe.db.set_default("company", company.name)
 		frappe.db.set_single_value("Global Defaults", "default_company", company.name)
+		# set_single_value skips Global Defaults' on_update, which is what normally
+		# writes the session defaults new documents take their currency from — set
+		# those too, or every new transaction opens in the site's install currency.
 		if currency:
 			frappe.db.set_single_value("Global Defaults", "default_currency", currency)
+			frappe.db.set_default("currency", currency)
 		if country:
 			frappe.db.set_single_value("Global Defaults", "country", country)
+			frappe.db.set_default("country", country)
 		# New tenants bill exact amounts. ERPNext's default (rounding on) rounds to a whole
 		# unit for currencies with no smallest fraction set — BHD 2.500 was billed 2.000.
 		# Only on first setup: a tenant's own choice (Settings → Bill rounding) survives re-runs.
