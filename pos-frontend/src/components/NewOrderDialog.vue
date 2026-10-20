@@ -3,6 +3,7 @@
 //   Dine in   -> pick a table (already chosen if you tapped one) and the number of guests.
 //   Take away -> no table; the order gets a token number. Name and phone are optional.
 import { ref, computed } from 'vue'
+import { ShoppingBag, UtensilsCrossed } from 'lucide-vue-next'
 
 interface TableChoice { name: string; seats: number; status: string; zone: string }
 const props = defineProps<{ tables: TableChoice[]; presetTable?: string | null; busy?: boolean; error?: string | null }>()
@@ -32,8 +33,8 @@ function chooseDine() {
       <template v-if="step === 'type'">
         <h3 style="margin: 0 0 14px">New order</h3>
         <div class="type-tiles">
-          <button class="type-tile" @click="chooseDine"><span class="ic">🍽️</span><b>Dine in</b><span class="sub2">{{ presetTable ? `Table ${presetTable}` : 'Pick a table' }}</span></button>
-          <button class="type-tile" @click="step = 'take'"><span class="ic">🥡</span><b>Take away</b><span class="sub2">No table · gets a token</span></button>
+          <button class="type-tile" @click="chooseDine"><span class="ic ic--dine"><UtensilsCrossed :size="30" /></span><b>Dine in</b><span class="sub2">{{ presetTable ? `Table ${presetTable}` : 'Pick a table' }}</span></button>
+          <button class="type-tile" @click="step = 'take'"><span class="ic ic--ta"><ShoppingBag :size="30" /></span><b>Take away</b><span class="sub2">No table · gets a token</span></button>
         </div>
       </template>
 

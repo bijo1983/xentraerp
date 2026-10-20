@@ -7,7 +7,6 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { usePosStore } from '@/stores/pos'
 import { usePrinterStore } from '@/stores/printer'
-import SessionMenu from '@/components/SessionMenu.vue'
 
 interface Kot {
   name: string
@@ -90,7 +89,6 @@ function age(k: Kot) {
       <span class="pill">{{ kots.length }} open</span>
       <label class="pill" style="cursor: pointer"><input type="checkbox" :checked="printer.autoKotKitchen" @change="printer.setAutoKot('kitchen', ($event.target as HTMLInputElement).checked)" /> Auto-print new tickets here</label>
       <button v-if="pos.can('order') || pos.can('bill')" class="btn btn-ghost mini" @click="router.push('/floor')">← Tables</button>
-      <SessionMenu style="margin-left: auto" />
     </div>
     <p v-if="error" class="error-box">{{ error }}</p>
     <p v-if="printMsg" class="error-box">{{ printMsg }}</p>
