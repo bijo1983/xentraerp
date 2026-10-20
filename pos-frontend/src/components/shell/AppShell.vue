@@ -16,13 +16,13 @@ import { UiBanner, UiStatusBadge, UiUserMenu } from '@/ui'
 import type { UserMenuItem } from '@/ui/UiUserMenu.vue'
 import LocaleSwitch from './LocaleSwitch.vue'
 import {
-  ArrowLeftRight, Bell, ChefHat, CircleStop, Clock, LayoutGrid, Lock, LogOut, MapPin, MonitorSmartphone, Play, Printer, Receipt,
+  ArrowLeftRight, Bell, ChefHat, CircleStop, Clock, LayoutDashboard, LayoutGrid, Lock, LogOut, MapPin, MonitorSmartphone, Play, Printer, Receipt,
   ScanBarcode, Settings, Wifi, WifiOff,
 } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 // lib/nav.ts keeps plain-text glyphs (tested); the shell shows proper icons for them.
-const NAV_ICONS: Record<string, Component> = { floor: LayoutGrid, terminal: ScanBarcode, kitchen: ChefHat, shift: Clock, admin: Settings }
+const NAV_ICONS: Record<string, Component> = { dashboard: LayoutDashboard, floor: LayoutGrid, terminal: ScanBarcode, kitchen: ChefHat, shift: Clock, admin: Settings }
 import MySessionsDrawer from './MySessionsDrawer.vue'
 
 const auth = useAuthStore()
@@ -80,10 +80,10 @@ async function onMenu(key: string) {
     router.push('/registers')
   } else if (key === 'switch') {
     await auth.switchUser()
-    router.push('/')
+    router.push('/signin')
   } else if (key === 'signout') {
     await auth.logout()
-    router.push('/')
+    router.push('/signin')
   }
 }
 

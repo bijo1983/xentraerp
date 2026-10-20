@@ -34,7 +34,7 @@ async function unlock() {
 }
 async function switchUser() {
   await auth.switchUser()
-  router.push('/')
+  router.push('/signin')
 }
 </script>
 

@@ -16,10 +16,13 @@ declare module 'vue-router' {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    // Public landing page with the sign-in panel on the right (Phase 1).
+    // Public marketing page; its "Sign in" buttons lead to the separate sign-in page.
     { path: '/', name: 'landing', component: () => import('@/views/LandingView.vue'), meta: { public: true, bare: true } },
+    { path: '/signin', name: 'signin', component: () => import('@/views/SignInView.vue'), meta: { public: true, bare: true } },
     // Old links / bookmarks.
-    { path: '/login', redirect: '/' },
+    { path: '/login', redirect: '/signin' },
+    // Management overview (administrators land here after the management sign-in).
+    { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
     { path: '/registers', name: 'registers', component: () => import('@/views/RegisterSelectView.vue') },
     { path: '/shift', name: 'shift', component: () => import('@/views/ShiftView.vue') },
     // Retail counter sale (also available in F&B mode for quick sales).
@@ -49,7 +52,7 @@ router.beforeEach(async (to) => {
 
   if (!auth.user) {
     if (to.meta.public) return true
-    return { name: 'landing', query: to.fullPath && to.fullPath !== '/' ? { next: to.fullPath } : {} }
+    return { name: 'signin', query: to.fullPath && to.fullPath !== '/' ? { next: to.fullPath } : {} }
   }
 
   if (!pos.loaded) {
@@ -59,7 +62,7 @@ router.beforeEach(async (to) => {
       if (e instanceof ApiError && e.code === 'POS_NOT_ENTITLED') return to.name === 'unavailable' ? true : { name: 'unavailable', query: { reason: 'plan' } }
       // A user without POS access (no PIN, not an administrator) lands back on the sign-in.
       auth.user = null
-      return to.meta.public ? true : { name: 'landing' }
+      return to.meta.public ? true : { name: 'signin' }
     }
   }
 
@@ -70,7 +73,7 @@ router.beforeEach(async (to) => {
   }
 
   const ctx = currentNavContext()
-  if (to.name === 'landing') return landingRoute(ctx)
+  if (to.name === 'landing' || to.name === 'signin') return landingRoute(ctx)
   if (to.name === 'not-found' || to.name === 'unavailable' || to.name === 'denied' || to.name === 'ui-kit') return true
   const decision = guardRoute(String(to.name), ctx)
   return decision === true ? true : decision

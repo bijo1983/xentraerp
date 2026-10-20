@@ -41,7 +41,7 @@ async function onError(err: ApiError) {
       const who = err.code === 'PERMISSION_DENIED' ? await api.getLoggedUser().catch(() => 'Guest') : 'Guest'
       if (who === 'Guest') {
         auth.sessionEnded()
-        router.push('/')
+        router.push('/signin')
       }
     } finally {
       checking = false

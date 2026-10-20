@@ -79,6 +79,23 @@ describe('routing by role and device type', () => {
     expect(guardRoute('admin', a)).toBe(true)
   })
 
+  it('management sign-in lands on the dashboard, with or without a register', () => {
+    const a = ctx({ level: 'admin', mode: 'manager', caps: ADMIN })
+    expect(landingRoute(a)).toBe('/dashboard')
+    expect(landingRoute({ ...a, hasRegister: false })).toBe('/dashboard')
+    expect(names(a)[0]).toBe('dashboard')
+    expect(guardRoute('dashboard', { ...a, hasRegister: false })).toBe(true)
+    // selling still needs a register
+    expect(guardRoute('floor', { ...a, hasRegister: false })).toBe('/registers')
+  })
+
+  it('only people with the reports right see the dashboard', () => {
+    expect(names(ctx({}))).not.toContain('dashboard')
+    expect(guardRoute('dashboard', ctx({}))).toBe('/floor')
+    expect(names(ctx({ level: 'supervisor', caps: SUPERVISOR }))).toContain('dashboard')
+    expect(landingRoute(ctx({ level: 'supervisor', caps: SUPERVISOR }))).toBe('/floor')
+  })
+
   it('navigation is filtered by permission', () => {
     expect(names(ctx({ level: 'supervisor', caps: SUPERVISOR }))).toContain('admin')
     expect(names(ctx({}))).not.toContain('admin')

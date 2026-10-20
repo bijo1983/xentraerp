@@ -51,6 +51,7 @@ export function visibleNav(ctx: NavContext): NavItem[] {
     if (fnb(ctx) && has(ctx, 'kot')) items.push({ name: 'kitchen', path: '/kitchen', labelKey: 'nav.kitchen', icon: '🍳' })
     return items
   }
+  if (mode !== 'order' && has(ctx, 'reports')) items.push({ name: 'dashboard', path: '/dashboard', labelKey: 'nav.dashboard', icon: '▤' })
   if (fnb(ctx) && has(ctx, 'view')) items.push({ name: 'floor', path: '/floor', labelKey: 'nav.floor', icon: '▦' })
   if (mode !== 'order' && retail(ctx) && has(ctx, 'bill')) items.push({ name: 'terminal', path: '/terminal', labelKey: 'nav.terminal', icon: '🧾' })
   if (mode !== 'order' && fnb(ctx) && has(ctx, 'kot')) items.push({ name: 'kitchen', path: '/kitchen', labelKey: 'nav.kitchen', icon: '🍳' })
@@ -76,6 +77,8 @@ export function landingRoute(ctx: NavContext): string {
   const mode = effectiveMode(ctx)
   if (mode === 'kitchen') return fnb(ctx) ? '/kitchen' : '/unavailable'
   if (mode === 'order') return fnb(ctx) ? '/floor' : '/unavailable'
+  // Management sign-in opens on the dashboard; selling still asks for a register first.
+  if (mode === 'manager' && has(ctx, 'reports')) return '/dashboard'
   if (!ctx.hasRegister) return '/registers'
   if (needsShift(ctx)) return '/shift'
   if (fnb(ctx)) return '/floor'
@@ -101,6 +104,7 @@ export function guardRoute(name: string, ctx: NavContext): true | string {
     return landingRoute(ctx)
   }
   if (name === 'registers') return true
+  if (name === 'dashboard') return has(ctx, 'reports') ? true : landingRoute(ctx)
   if (name === 'terminal' && (!has(ctx, 'bill') || !retail(ctx))) return fnb(ctx) ? '/floor' : '/registers'
   if (name === 'shift' && !has(ctx, 'shift')) return fnb(ctx) ? '/floor' : '/registers'
   if ((SELLING.has(name) || name === 'shift') && !ctx.hasRegister) return '/registers'

@@ -1,53 +1,34 @@
 <script setup lang="ts">
-// Public landing page at "/". The hero holds only the headline, value proposition, calls to action
-// and the real sign-in card (right side, on a plain surface — never over photography). Product
-// capabilities follow as alternating screenshot/text sections using real XentraERP POS screens
-// captured with sample data (public/img/product), then sample KPIs, the businesses it is made for
-// (the only photography, self-hosted from Unsplash — see public/img/stock/CREDITS.md), features,
-// security and a closing call to action. Spacing follows one scale: 24px between components,
+// Public landing page at "/". Marketing only: every "Sign in" leads to the separate sign-in page
+// (/signin, SignInView). The hero pairs the headline and calls to action with a photograph;
+// capabilities follow as alternating photo/text sections, then sample KPIs, the businesses it is
+// made for, features, security and a closing call to action. All photography is self-hosted from
+// Unsplash (see public/img/stock/CREDITS.md). Spacing follows one scale: 24px between components,
 // 48px inside sections, 96px between major sections.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowRight, Banknote, Boxes, Building2, ChartColumn, CircleCheck, Fingerprint, Globe, KeyRound, Layers, MonitorSmartphone,
-  Printer, Receipt, ShieldCheck, ShoppingBag, Sparkles, Timer, Users, UtensilsCrossed, Wallet,
+  Printer, Receipt, ShieldCheck, ShoppingBag, Sparkles, Timer, TrendingUp, Users, UtensilsCrossed, Wallet,
 } from 'lucide-vue-next'
 import brandMark from '@/assets/brand-mark.png'
-import SignInPanel from '@/components/auth/SignInPanel.vue'
 import LocaleSwitch from '@/components/shell/LocaleSwitch.vue'
 import CountUp from '@/components/landing/CountUp.vue'
-import ProductShot from '@/components/landing/ProductShot.vue'
-import { routeAfterSignIn } from '@/composables/useSessionBoot'
 import { useReveal } from '@/composables/useReveal'
 import { t } from '@/lib/i18n'
 
-const router = useRouter()
-const route = useRoute()
 const year = new Date().getFullYear()
 const root = ref<HTMLElement | null>(null)
 useReveal(root)
 
 const scrolled = ref(false)
-const onScroll = () => (scrolled.value = window.scrollY > 8)
-// The floating "Sign in" button (tablets and phones) hides while the sign-in card itself is on screen.
-const panel = ref<HTMLElement | null>(null)
-const panelVisible = ref(true)
-let panelIo: IntersectionObserver | undefined
-onMounted(() => {
-  window.addEventListener('scroll', onScroll, { passive: true })
-  if (panel.value && typeof IntersectionObserver !== 'undefined') {
-    panelIo = new IntersectionObserver(([e]) => (panelVisible.value = e.isIntersecting), { threshold: 0.15 })
-    panelIo.observe(panel.value)
-  }
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('scroll', onScroll)
-  panelIo?.disconnect()
-})
-
-async function signedIn() {
-  await routeAfterSignIn(router, typeof route.query.next === 'string' ? route.query.next : null)
+// The floating "Sign in" button (tablets and phones) appears once the hero's own buttons are scrolled past.
+const pastHero = ref(false)
+const onScroll = () => {
+  scrolled.value = window.scrollY > 8
+  pastHero.value = window.scrollY > 480
 }
+onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
+onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 
 const sections = computed(() => [
   { id: 'restaurant', label: t('landing.nav.fnb') },
@@ -62,21 +43,13 @@ const trust = computed(() => [
   { icon: KeyRound, text: t('landing.trust.mfa') },
 ])
 
-// Restaurant section: three real screens behind tabs.
-const fnbTabs = computed(() => [
-  { id: 'restaurant-order', label: t('landing.fnb.tab.order'), alt: t('landing.shot.order') },
-  { id: 'restaurant-floor', label: t('landing.fnb.tab.floor'), alt: t('landing.shot.floor') },
-  { id: 'kitchen', label: t('landing.fnb.tab.kitchen'), alt: t('landing.shot.kitchen') },
-])
-const fnbTab = ref('restaurant-order')
-const fnbShot = computed(() => fnbTabs.value.find((x) => x.id === fnbTab.value) || fnbTabs.value[0])
-
-// The remaining capability sections alternate screenshot left / right.
+// Capability sections alternate photo right / left.
 const capabilities = computed(() => [
-  { id: 'retail', icon: ShoppingBag, tone: 'sky', shot: 'retail-checkout', alt: t('landing.shot.retail'), key: 'retail' },
-  { id: 'analytics', icon: ChartColumn, tone: 'emerald', shot: 'analytics-eod', alt: t('landing.shot.eod'), key: 'analytics' },
-  { id: 'inventory', icon: Boxes, tone: 'rose', shot: 'inventory-menu', alt: t('landing.shot.menu'), key: 'inventory' },
-  { id: 'branches', icon: Building2, tone: 'violet', shot: 'branches-locations', alt: t('landing.shot.locations'), key: 'branches' },
+  { id: 'restaurant', icon: UtensilsCrossed, tone: 'amber', photo: 'hero-restaurant', alt: t('landing.photo.restaurant'), key: 'fnb' },
+  { id: 'retail', icon: ShoppingBag, tone: 'sky', photo: 'retail-payment', alt: t('landing.photo.retail'), key: 'retail' },
+  { id: 'analytics', icon: ChartColumn, tone: 'emerald', photo: 'analytics-laptop', alt: t('landing.photo.analytics'), key: 'analytics' },
+  { id: 'inventory', icon: Boxes, tone: 'rose', photo: 'warehouse', alt: t('landing.photo.inventory'), key: 'inventory' },
+  { id: 'branches', icon: Building2, tone: 'violet', photo: 'mall', alt: t('landing.photo.branches'), key: 'branches' },
 ])
 
 const kpis = computed(() => [
@@ -110,7 +83,7 @@ const security = computed(() => [
 
 <template>
   <div ref="root" class="lp">
-    <a class="lp-skip" href="#signin">{{ t('landing.skipToSignIn') }}</a>
+    <a class="lp-skip" href="#top">{{ t('landing.skipToContent') }}</a>
 
     <!-- top navigation -->
     <header class="lp-nav" :class="{ 'is-scrolled': scrolled }">
@@ -125,12 +98,12 @@ const security = computed(() => [
         </nav>
         <div class="lp-nav__end">
           <LocaleSwitch />
-          <a class="lp-btn lp-btn--dark lp-btn--sm" href="#signin">{{ t('auth.signIn') }}</a>
+          <RouterLink class="lp-btn lp-btn--dark lp-btn--sm" to="/signin">{{ t('auth.signIn') }}</RouterLink>
         </div>
       </div>
     </header>
 
-    <!-- hero: headline, value proposition, calls to action and sign-in only -->
+    <!-- hero: headline, value proposition and calls to action beside a photograph -->
     <main id="top" class="lp-hero">
       <div class="lp-hero__bg" aria-hidden="true" />
       <div class="lp-hero__in lp-wrap">
@@ -139,7 +112,7 @@ const security = computed(() => [
           <h1 class="lp-hero__title x-enter">{{ t('landing.headline') }}</h1>
           <p class="lp-hero__lead x-enter">{{ t('landing.lead') }}</p>
           <div class="lp-ctas x-enter">
-            <a class="lp-btn lp-btn--primary" href="#signin">{{ t('landing.cta.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></a>
+            <RouterLink class="lp-btn lp-btn--primary" to="/signin">{{ t('landing.cta.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></RouterLink>
             <a class="lp-btn lp-btn--ghost" href="#restaurant">{{ t('landing.cta.secondary') }}</a>
           </div>
           <ul class="lp-trust x-enter" :aria-label="t('landing.trust.label')">
@@ -147,53 +120,35 @@ const security = computed(() => [
           </ul>
         </div>
 
-        <aside id="signin" ref="panel" class="lp-hero__panel" :aria-label="t('auth.signIn')">
-          <div class="lp-panel">
-            <SignInPanel @signed-in="signedIn" />
+        <figure class="lp-hero__media x-enter">
+          <img
+            src="/img/stock/cafe-counter.webp"
+            srcset="/img/stock/cafe-counter-sm.webp 560w, /img/stock/cafe-counter.webp 1600w"
+            sizes="(max-width: 1023px) 92vw, 560px"
+            :alt="t('landing.photo.hero')"
+            width="1600"
+            height="1200"
+            fetchpriority="high"
+          />
+          <div class="lp-chip lp-chip--sales" aria-hidden="true">
+            <span class="x-art x-art--emerald"><TrendingUp :size="18" /></span>
+            <span><small>{{ t('landing.kpis.sales') }}</small><b class="x-tabular">BHD 2,846.750</b></span>
           </div>
-        </aside>
+          <div class="lp-chip lp-chip--kot" aria-hidden="true">
+            <span class="x-art x-art--amber"><UtensilsCrossed :size="18" /></span>
+            <span><small>{{ t('landing.hero.chipKot') }}</small><b>{{ t('landing.hero.chipKotValue') }}</b></span>
+          </div>
+        </figure>
       </div>
     </main>
 
-    <!-- restaurant POS: tabs over three real screens -->
-    <section id="restaurant" class="lp-cap lp-cap--first" aria-labelledby="restaurant-title">
-      <div class="lp-cap__in lp-wrap">
-        <div class="lp-cap__copy" data-reveal>
-          <p class="lp-eyebrow"><span class="x-art x-art--amber" aria-hidden="true"><UtensilsCrossed :size="18" :stroke-width="1.8" /></span>{{ t('landing.fnb.eyebrow') }}</p>
-          <h2 id="restaurant-title" class="lp-h2">{{ t('landing.fnb.title') }}</h2>
-          <p class="lp-sub">{{ t('landing.fnb.body') }}</p>
-          <ul class="lp-checks">
-            <li v-for="b in ['b1', 'b2', 'b3']" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.fnb.${b}`) }}</li>
-          </ul>
-          <div class="lp-tabs" role="tablist" :aria-label="t('landing.fnb.eyebrow')">
-            <button
-              v-for="tab in fnbTabs"
-              :key="tab.id"
-              type="button"
-              role="tab"
-              :aria-selected="fnbTab === tab.id"
-              :class="{ on: fnbTab === tab.id }"
-              @click="fnbTab = tab.id"
-            >
-              {{ tab.label }}
-            </button>
-          </div>
-        </div>
-        <div class="lp-stage lp-stage--amber" data-reveal role="tabpanel">
-          <Transition name="lp-fade" mode="out-in">
-            <ProductShot :key="fnbShot.id" :name="fnbShot.id" :alt="fnbShot.alt" />
-          </Transition>
-        </div>
-      </div>
-    </section>
-
-    <!-- other capabilities, alternating screenshot left / right -->
+    <!-- capabilities, alternating photo right / left -->
     <section
       v-for="(c, i) in capabilities"
       :id="c.id"
       :key="c.id"
       class="lp-cap"
-      :class="{ 'lp-cap--flip': i % 2 === 0, 'lp-cap--tint': i % 2 === 0 }"
+      :class="{ 'lp-cap--flip': i % 2 === 1, 'lp-cap--tint': i % 2 === 1, 'lp-cap--first': i === 0 }"
       :aria-labelledby="`${c.id}-title`"
     >
       <div class="lp-cap__in lp-wrap">
@@ -204,14 +159,20 @@ const security = computed(() => [
           <ul class="lp-checks">
             <li v-for="b in ['b1', 'b2', 'b3']" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.${c.key}.${b}`) }}</li>
           </ul>
-          <a class="lp-link" href="#signin">{{ t(`landing.${c.key}.cta`) }} <ArrowRight class="lp-arrow" :size="17" aria-hidden="true" /></a>
+          <RouterLink class="lp-link" to="/signin">{{ t(`landing.${c.key}.cta`) }} <ArrowRight class="lp-arrow" :size="17" aria-hidden="true" /></RouterLink>
         </div>
-        <div class="lp-stage" :class="`lp-stage--${c.tone}`" data-reveal>
-          <ProductShot :name="c.shot" :alt="c.alt" />
+        <div class="lp-photo" :class="`lp-photo--${c.tone}`" data-reveal>
+          <img
+            :src="`/img/stock/${c.photo}.webp`"
+            :srcset="`/img/stock/${c.photo}-sm.webp 560w, /img/stock/${c.photo}.webp 1200w`"
+            sizes="(max-width: 1023px) 92vw, 680px"
+            :alt="c.alt"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       </div>
     </section>
-    <p class="lp-shots-note">{{ t('landing.shot.sample') }}</p>
 
     <!-- KPIs -->
     <section id="kpis" class="lp-kpis" aria-labelledby="kpis-title">
@@ -288,7 +249,7 @@ const security = computed(() => [
           <p class="lp-eyebrow lp-eyebrow--dark"><span aria-hidden="true"><ShieldCheck :size="18" /></span>{{ t('landing.security.eyebrow') }}</p>
           <h2 id="security-title" class="lp-h2">{{ t('landing.security.title') }}</h2>
           <p class="lp-sub">{{ t('landing.security.body') }}</p>
-          <a class="lp-btn lp-btn--primary" href="#signin">{{ t('landing.security.cta') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></a>
+          <RouterLink class="lp-btn lp-btn--primary" to="/signin">{{ t('landing.security.cta') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></RouterLink>
         </div>
         <ul class="lp-sec__grid">
           <li v-for="s in security" :key="s.title" data-reveal>
@@ -307,7 +268,7 @@ const security = computed(() => [
           <h2 id="final-title" class="lp-h2">{{ t('landing.final.title') }}</h2>
           <p class="lp-sub">{{ t('landing.final.body') }}</p>
           <div class="lp-ctas">
-            <a class="lp-btn lp-btn--light" href="#signin">{{ t('landing.final.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></a>
+            <RouterLink class="lp-btn lp-btn--light" to="/signin">{{ t('landing.final.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></RouterLink>
             <a class="lp-btn lp-btn--glass" href="https://xentraerp.net">{{ t('landing.final.secondary') }}</a>
           </div>
           <p class="lp-final__contact">{{ t('landing.contact.body') }} <a href="https://xentraerp.net">xentraerp.net</a></p>
@@ -322,7 +283,7 @@ const security = computed(() => [
       </div>
     </footer>
 
-    <a class="lp-sticky" :class="{ 'is-hidden': panelVisible }" href="#signin" :tabindex="panelVisible ? -1 : undefined" :aria-hidden="panelVisible || undefined">{{ t('auth.signIn') }}</a>
+    <RouterLink class="lp-sticky" :class="{ 'is-hidden': !pastHero }" to="/signin" :tabindex="pastHero ? undefined : -1" :aria-hidden="pastHero ? undefined : true">{{ t('auth.signIn') }}</RouterLink>
   </div>
 </template>
 
@@ -391,7 +352,7 @@ const security = computed(() => [
 .lp-hero__bg::before { content: ''; position: absolute; inset: 0; opacity: 0.22;
   background-image: linear-gradient(var(--x-border) 1px, transparent 1px), linear-gradient(90deg, var(--x-border) 1px, transparent 1px);
   background-size: 64px 64px; mask-image: radial-gradient(70% 60% at 40% 0%, #000 20%, transparent 70%); -webkit-mask-image: radial-gradient(70% 60% at 40% 0%, #000 20%, transparent 70%); }
-.lp-hero__in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 440px); gap: clamp(40px, 6vw, 96px); align-items: center; padding-block: clamp(48px, 7vw, 96px) var(--s3); }
+.lp-hero__in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(40px, 6vw, 96px); align-items: center; padding-block: clamp(48px, 7vw, 96px) var(--s3); }
 .lp-hero__story { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .lp-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--x-surface); border: 1px solid var(--x-border); box-shadow: var(--x-shadow-xs); font-size: var(--small); font-weight: 600; }
 .lp-badge span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--x-brand-gradient); color: #fff; }
@@ -400,8 +361,14 @@ const security = computed(() => [
 .lp-trust { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px 24px; }
 .lp-trust li { display: inline-flex; align-items: center; gap: 8px; font-size: var(--small); font-weight: 500; color: var(--x-text-muted); white-space: nowrap; }
 .lp-trust li svg { color: var(--x-success); }
-.lp-hero__panel { min-width: 0; }
-.lp-panel { padding: 32px; border-radius: var(--r); background: var(--x-surface); border: 1px solid var(--x-border); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 32px 64px -24px rgba(15, 23, 42, 0.22); }
+.lp-hero__media { position: relative; margin: 0; min-width: 0; }
+.lp-hero__media > img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 40px 80px -32px rgba(15, 23, 42, 0.45); }
+.lp-chip { position: absolute; display: flex; align-items: center; gap: 12px; padding: 12px 16px 12px 12px; border-radius: 16px; background: var(--x-surface-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--x-border); box-shadow: 0 16px 32px -16px rgba(15, 23, 42, 0.35); }
+.lp-chip > .x-art { width: 40px; height: 40px; border-radius: 12px; flex: none; }
+.lp-chip small { display: block; font-size: 12px; font-weight: 600; color: var(--x-text-muted); }
+.lp-chip b { font-family: var(--x-font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.lp-chip--sales { inset-inline-start: -24px; inset-block-end: 32px; }
+.lp-chip--kot { inset-inline-end: -16px; inset-block-start: 28px; }
 
 /* section headings */
 .lp-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; max-width: 760px; margin-inline: auto; }
@@ -414,7 +381,7 @@ const security = computed(() => [
 [data-reveal] { opacity: 0; transform: translateY(16px); transition: opacity 600ms var(--x-ease), transform 600ms var(--x-ease); }
 [data-reveal].is-in { opacity: 1; transform: none; }
 
-/* capability sections: copy beside a framed screenshot, alternating sides */
+/* capability sections: copy beside a photograph, alternating sides */
 .lp-cap { padding-block: var(--s3); }
 .lp-cap--first { border-block-start: 1px solid var(--x-border); background: var(--x-surface); }
 .lp-cap--tint { background: var(--x-bg); }
@@ -427,20 +394,15 @@ const security = computed(() => [
 .lp-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .lp-checks li { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; font-weight: 500; line-height: 1.5; }
 .lp-checks svg { color: var(--x-success); flex: none; margin-top: 2px; }
-.lp-stage { position: relative; padding: clamp(12px, 1.8vw, 24px); border-radius: var(--r); min-width: 0;
-  background: linear-gradient(150deg, var(--stage-a), var(--stage-b)); border: 1px solid color-mix(in srgb, var(--stage-b) 60%, var(--x-border)); }
-.lp-stage--amber { --stage-a: #fffbeb; --stage-b: #fde9c4; }
-.lp-stage--sky { --stage-a: #f0f9ff; --stage-b: #d6ecfb; }
-.lp-stage--emerald { --stage-a: #ecfdf5; --stage-b: #cdf3e2; }
-.lp-stage--rose { --stage-a: #fff1f2; --stage-b: #fbd9de; }
-.lp-stage--violet { --stage-a: #f5f3ff; --stage-b: #e2dcfd; }
-:root[data-theme='dark'] .lp-stage { --stage-a: #111a2e; --stage-b: #17233d; }
-.lp-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: var(--r-sm); background: var(--x-surface-3); }
-.lp-tabs button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 9px; background: transparent; font: inherit; font-size: var(--small); font-weight: 600; color: var(--x-text-muted); cursor: pointer; white-space: nowrap; }
-.lp-tabs button.on { background: var(--x-surface); color: var(--x-text); box-shadow: var(--x-shadow-sm); }
-.lp-fade-enter-active, .lp-fade-leave-active { transition: opacity 220ms var(--x-ease); }
-.lp-fade-enter-from, .lp-fade-leave-to { opacity: 0; }
-.lp-shots-note { margin: 0; padding: 0 16px var(--s2); margin-top: calc(-1 * var(--s2)); text-align: center; font-size: 13px; color: var(--x-text-faint); background: var(--x-surface); }
+.lp-photo { position: relative; min-width: 0; padding: clamp(10px, 1.4vw, 16px); border-radius: calc(var(--r) + 8px);
+  background: linear-gradient(150deg, var(--stage-a), var(--stage-b)); }
+.lp-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); box-shadow: 0 24px 48px -28px rgba(15, 23, 42, 0.5); }
+.lp-photo--amber { --stage-a: #fffbeb; --stage-b: #fde9c4; }
+.lp-photo--sky { --stage-a: #f0f9ff; --stage-b: #d6ecfb; }
+.lp-photo--emerald { --stage-a: #ecfdf5; --stage-b: #cdf3e2; }
+.lp-photo--rose { --stage-a: #fff1f2; --stage-b: #fbd9de; }
+.lp-photo--violet { --stage-a: #f5f3ff; --stage-b: #e2dcfd; }
+:root[data-theme='dark'] .lp-photo { --stage-a: #111a2e; --stage-b: #17233d; }
 
 /* cards: one treatment for KPI and feature cards */
 .lp-card { border-radius: var(--r); background: var(--x-surface); border: 1px solid color-mix(in srgb, var(--x-border) 70%, transparent);
@@ -519,7 +481,9 @@ const security = computed(() => [
 @media (max-width: 1023px) {
   .lp { --s3: 72px; }
   .lp-hero__in { grid-template-columns: 1fr; min-height: 0; max-height: none; padding-block: var(--s1) var(--s2); }
-  .lp-hero__panel { max-width: 520px; width: 100%; margin-inline: auto; }
+  .lp-hero__media { max-width: 640px; width: 100%; margin-inline: auto; }
+  .lp-chip--sales { inset-inline-start: 12px; }
+  .lp-chip--kot { inset-inline-end: 12px; }
   .lp-cap__in, .lp-sec__in { grid-template-columns: 1fr; }
   .lp-cap--flip .lp-cap__in { grid-template-columns: 1fr; }
   .lp-cap--flip .lp-cap__copy { order: 0; }
@@ -531,10 +495,8 @@ const security = computed(() => [
   .lp-nav__in { gap: 12px; min-height: 64px; }
   .lp-nav__end .lp-btn { display: none; }
   .lp-brand__word { font-size: 18px; }
-  .lp-panel { padding: 20px; }
+  .lp-chip--kot { display: none; }
   .lp-kpi-grid, .lp-fgrid, .lp-sec__grid, .lp-for__grid { grid-template-columns: 1fr; }
-  .lp-tabs { display: flex; width: 100%; overflow-x: auto; }
-  .lp-tabs button { flex: 1; padding: 0 10px; }
   .lp-ctas .lp-btn { flex: 1 1 100%; }
   .lp-foot__in { justify-content: center; text-align: center; padding-bottom: 96px; }
 }

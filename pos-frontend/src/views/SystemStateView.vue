@@ -15,16 +15,16 @@ const reason = computed(() => (typeof route.query.reason === 'string' ? route.qu
 const message = computed(() => (reason.value ? t(`state.reason.${reason.value}`) : undefined))
 async function signOut() {
   await auth.logout()
-  router.push('/')
+  router.push('/signin')
 }
 </script>
 
 <template>
   <main class="state-page">
     <UiErrorState :kind="kind" :message="message">
-      <UiButton v-if="auth.user" variant="secondary" @click="router.push('/')">{{ t('state.home') }}</UiButton>
+      <UiButton v-if="auth.user" variant="secondary" @click="router.push('/signin')">{{ t('state.home') }}</UiButton>
       <UiButton v-if="auth.user" variant="ghost" @click="signOut">{{ t('menu.signOut') }}</UiButton>
-      <UiButton v-else @click="router.push('/')">{{ t('auth.signIn') }}</UiButton>
+      <UiButton v-else @click="router.push('/signin')">{{ t('auth.signIn') }}</UiButton>
     </UiErrorState>
   </main>
 </template>

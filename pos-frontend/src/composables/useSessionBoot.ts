@@ -36,5 +36,5 @@ export async function routeAfterSignIn(router: Router, next?: string | null) {
     await router.push(next)
     return
   }
-  await router.push(mode === 'till' || mode === 'manager' ? (ctx.hasRegister ? landingRoute(ctx) : '/registers') : landingRoute(ctx))
+  await router.push(mode === 'till' && !ctx.hasRegister ? '/registers' : landingRoute(ctx))
 }
