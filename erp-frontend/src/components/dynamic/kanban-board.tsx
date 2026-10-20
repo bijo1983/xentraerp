@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { frappe } from '@/lib/frappe';
+import { qualifyOrderBy } from '@/hooks/use-frappe-list';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useTenantCode, withTenant } from '@/lib/tenant';
@@ -14,7 +15,7 @@ interface Props {
   kanbanField: string;
   columns: Array<{ value: string; label: string }>;
   /** Extra Frappe filter triples already active in the parent (search, other dropdown filters) — applied on top of the per-column grouping. */
-  baseFilters?: Array<[string, string, unknown]>;
+  baseFilters?: Array<[string, string, unknown] | [string, string, string, unknown]>;
   titleField: string;
   subtitleField?: string;
   amountField?: string;
@@ -45,7 +46,7 @@ export function KanbanBoard({ doctype, fields, kanbanField, columns, baseFilters
       const data = await frappe.getList(doctype, {
         fields: JSON.stringify(Array.from(new Set([...fields, kanbanField]))),
         filters: baseFilters ? JSON.stringify(baseFilters) : undefined,
-        order_by: 'modified desc',
+        order_by: qualifyOrderBy(doctype, 'modified desc'),
         limit_page_length: MAX_CARDS,
       });
       setRows(Array.isArray(data) ? data : []);

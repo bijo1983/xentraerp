@@ -45,6 +45,9 @@ interface LinkDef {
    * back-reference with no single reliable count (see loadLinks below) —
    * always shown as clickable instead of gated on a count. */
   unknownCount?: boolean;
+  /** `internal_links` entry: where on THIS document the linked names live — a
+   * parent field, or [child table field, field on its rows]. */
+  internal?: unknown;
 }
 
 function parseVersionSummary(raw: string): string[] {
@@ -145,12 +148,17 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
       // `internal_links` (e.g. Sales Order -> Quotation via each line's own
       // `prevdoc_docname`) has no single reliable count per Frappe's own
       // get_open_count below — always keep these clickable instead.
-      const internalLinks = new Set(Object.keys(dash?.internal_links || {}));
+      const internalMap = (dash?.internal_links || {}) as Record<string, unknown>;
+      const internalLinks = new Set(Object.keys(internalMap));
       const defs: LinkDef[] = [];
       for (const group of dash?.transactions || []) {
         for (const item of group.items) {
           const fieldname = overrides[item] || defaultField;
-          if (fieldname) defs.push({ link_doctype: item, link_fieldname: fieldname, group: group.label, unknownCount: internalLinks.has(item) });
+          if (internalLinks.has(item)) {
+            defs.push({ link_doctype: item, link_fieldname: fieldname || '', group: group.label, unknownCount: true, internal: internalMap[item] });
+          } else if (fieldname) {
+            defs.push({ link_doctype: item, link_fieldname: fieldname, group: group.label });
+          }
         }
       }
       setLinks(defs);
@@ -206,9 +214,25 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
     }
   };
 
-  const goToConnection = (linkDoctype: string, linkFieldname: string) => {
-    const qs = new URLSearchParams({ [linkFieldname]: name }).toString();
-    router.push(withTenant(`${doctypeListRoute(linkDoctype)}?${qs}`, tenantCode));
+  const goToConnection = async (l: LinkDef) => {
+    let params: Record<string, string> = { [l.link_fieldname]: name };
+    if (l.internal) {
+      // The link is stored on this document (e.g. a Purchase Order's rows name the Material
+      // Request they came from), so list exactly those names.
+      const doc = (await frappe.getDoc(doctype, name)) as Record<string, unknown>;
+      const values = new Set<string>();
+      if (Array.isArray(l.internal)) {
+        const [table, field] = l.internal as [string, string];
+        for (const row of (doc[table] as Array<Record<string, unknown>>) || []) {
+          if (row?.[field]) values.add(String(row[field]));
+        }
+      } else if (typeof l.internal === 'string' && doc[l.internal]) {
+        values.add(String(doc[l.internal]));
+      }
+      params = { filters: JSON.stringify([['name', 'in', values.size ? Array.from(values) : ['']]]) };
+    }
+    const qs = new URLSearchParams(params).toString();
+    router.push(withTenant(`${doctypeListRoute(l.link_doctype)}?${qs}`, tenantCode));
   };
 
   return (
@@ -333,7 +357,7 @@ export function RecordDrawer({ doctype, name, onClose }: Props) {
                       </p>
                     )}
                     <button
-                      onClick={() => goToConnection(l.link_doctype, l.link_fieldname)}
+                      onClick={() => goToConnection(l)}
                       disabled={!clickable}
                       title={clickable ? `View ${l.link_doctype} linked to this document` : undefined}
                       className={cn(

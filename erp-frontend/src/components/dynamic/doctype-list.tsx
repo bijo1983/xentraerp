@@ -6,7 +6,7 @@ import {
   Search, X, Inbox, ChevronRight, ChevronLeft, ChevronsUpDown, ChevronUp, ChevronDown,
   Trash2, Download, Upload, LayoutGrid, List as ListIcon, Rows3, Loader2, Columns3,
 } from 'lucide-react';
-import { useFrappeList } from '@/hooks/use-frappe-list';
+import { qualifyOrderBy, useFrappeList } from '@/hooks/use-frappe-list';
 import { useDocTypeSchema } from '@/hooks/use-doctype-schema';
 import { CompiledMeta } from '@/lib/meta-compiler';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
@@ -100,6 +100,56 @@ function deriveAutoCols(schema: CompiledMeta | null): ColDef[] {
   ];
 }
 
+type UrlFilter = [string, string, unknown];
+type FrappeFilter = [string, string, unknown] | [string, string, string, unknown];
+
+const childFieldCache: Record<string, Record<string, string>> = {};
+
+/** fieldname -> child doctype, for fields that only exist on `doctype`'s child tables. */
+async function loadChildFields(doctype: string): Promise<Record<string, string>> {
+  if (childFieldCache[doctype]) return childFieldCache[doctype];
+  const data = await fetch(`/api/method/xentraerp.desk.form.load.getdoctype?doctype=${encodeURIComponent(doctype)}`, {
+    credentials: 'include',
+  }).then((r) => r.json());
+  type RawMeta = { name?: string; istable?: number; fields?: Array<{ fieldname: string }> };
+  const docs: RawMeta[] = data?.docs || data?.message?.docs || [];
+  const parent = docs.find((d) => d.name === doctype);
+  const own = new Set((parent?.fields || []).map((f) => f.fieldname));
+  const map: Record<string, string> = {};
+  for (const d of docs) {
+    if (!d.istable || !d.name) continue;
+    for (const f of d.fields || []) {
+      if (!own.has(f.fieldname) && !map[f.fieldname]) map[f.fieldname] = d.name;
+    }
+  }
+  childFieldCache[doctype] = map;
+  return map;
+}
+
+const STANDARD_FIELDS = new Set(['name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx']);
+
+function useResolvedUrlFilters(doctype: string, urlFilters: UrlFilter[]): { filters: FrappeFilter[] | null } {
+  const needsLookup = urlFilters.some(([k]) => !STANDARD_FIELDS.has(k));
+  const [state, setState] = useState<{ key: string; filters: FrappeFilter[] } | null>(null);
+  const key = doctype + JSON.stringify(urlFilters);
+  useEffect(() => {
+    if (!needsLookup) return;
+    let cancelled = false;
+    loadChildFields(doctype)
+      .then(
+        (childOf) => urlFilters.map(([k, op, v]): FrappeFilter => (childOf[k] ? [childOf[k], k, op, v] : [k, op, v])),
+        () => urlFilters as FrappeFilter[]
+      )
+      .then((filters) => !cancelled && setState({ key, filters }));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, needsLookup]);
+  if (!needsLookup) return { filters: urlFilters };
+  return { filters: state?.key === key ? state.filters : null };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const col = createColumnHelper<any>();
 const REPORT_GROUP_CAP = 1000;
@@ -130,10 +180,30 @@ export function DoctypeList({
   // one. Any query param is treated as an exact-match filter on that
   // fieldname — generic on purpose, so this works for every doctype this
   // component is used for without per-page wiring.
-  const urlFilters = useMemo<[string, string, string][]>(
-    () => Array.from(searchParams.entries()).map(([key, value]) => [key, '=', value]),
-    [searchParams]
-  );
+  // `?filters=<json>` carries a ready-made Frappe filter list (Connections uses it for
+  // "documents this one was made from", a `name in [...]` filter).
+  const urlFilters = useMemo<UrlFilter[]>(() => {
+    const out: UrlFilter[] = [];
+    for (const [key, value] of Array.from(searchParams.entries())) {
+      if (key === 'filters') {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) out.push(...(parsed as [string, string, unknown][]));
+        } catch {
+          /* malformed link — ignore it rather than break the list */
+        }
+      } else {
+        out.push([key, '=', value]);
+      }
+    }
+    return out;
+  }, [searchParams]);
+  // Most connections point at a field on the target's CHILD table, not the document
+  // itself — Purchase Invoice -> Purchase Order is `Purchase Invoice Item.purchase_order`,
+  // Payment Entry -> invoice is `Payment Entry Reference.reference_name`. Filtering the
+  // parent on that field is a 417 (unknown column), so such filters are rewritten to
+  // Frappe's child-table form [child doctype, field, op, value] before the list loads.
+  const urlFilterState = useResolvedUrlFilters(doctype, urlFilters);
 
   const [view, setView] = useState<ViewMode>('list');
   const [searchInput, setSearchInput] = useState('');
@@ -218,7 +288,7 @@ export function DoctypeList({
   };
 
   const activeFrappeFilters = useMemo(() => {
-    const f: [string, string, unknown][] = [...urlFilters];
+    const f: FrappeFilter[] = [...(urlFilterState.filters || [])];
     if (search) f.push([effectiveSearchField, 'like', `%${search}%`]);
     for (const [key, value] of Object.entries(filterValues)) {
       if (value) f.push([key, '=', value]);
@@ -231,13 +301,13 @@ export function DoctypeList({
     }
     return f.length ? f : undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlFilters, search, filterValues, columnFilters, allCols, effectiveSearchField]);
+  }, [urlFilterState, search, filterValues, columnFilters, allCols, effectiveSearchField]);
 
   // A human-readable strip for the deep-link filter(s) so it's obvious why
   // the list looks narrower than expected when arriving from a Connections
   // link, with a one-click way back to the unfiltered list.
   const urlFilterSummary = urlFilters.length
-    ? urlFilters.map(([k, , v]) => `${humanizeFieldname(k)}: ${v}`).join(', ')
+    ? urlFilters.map(([k, , v]) => `${humanizeFieldname(k)}: ${Array.isArray(v) ? v.join(', ') : v}`).join(', ')
     : null;
 
   const orderBy = sortField && sortDir ? `${sortField} ${sortDir}` : undefined;
@@ -247,6 +317,7 @@ export function DoctypeList({
     fields: effectiveFields,
     filters: activeFrappeFilters,
     orderBy,
+    enabled: !!urlFilterState.filters,
   });
 
   // A new filter can make the current page land past the end of the
@@ -273,7 +344,7 @@ export function DoctypeList({
         fields: JSON.stringify(effectiveFields),
         filters: activeFrappeFilters ? JSON.stringify(activeFrappeFilters) : undefined,
         limit_page_length: REPORT_GROUP_CAP,
-        order_by: orderBy || 'modified desc',
+        order_by: qualifyOrderBy(doctype, orderBy || 'modified desc'),
       })
       .then((rows) => {
         if (cancelled) return;
@@ -405,7 +476,7 @@ export function DoctypeList({
         fields: JSON.stringify(effectiveFields),
         filters: activeFrappeFilters ? JSON.stringify(activeFrappeFilters) : undefined,
         limit_page_length: 0,
-        order_by: orderBy || 'modified desc',
+        order_by: qualifyOrderBy(doctype, orderBy || 'modified desc'),
       });
       const arr = (Array.isArray(rows) ? rows : []) as Record<string, unknown>[];
       const headers = allCols.map((c) => c.header);
