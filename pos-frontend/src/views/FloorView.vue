@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { Armchair, ChefHat, ChevronLeft, ChevronRight, Phone, ScanBarcode, Users } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, NO_PROFILE } from '@/stores/auth'
 import { usePosStore } from '@/stores/pos'
 import { api } from '@/lib/api'
 import FloorPlan, { type PlanTable } from '@/components/FloorPlan.vue'
@@ -25,7 +25,7 @@ const FNB = 'custom_erp.api.pos_fnb.'
 const router = useRouter()
 const auth = useAuthStore()
 const pos = usePosStore()
-const profile = computed(() => auth.posProfile!)
+const profile = computed(() => auth.posProfile ?? NO_PROFILE)
 
 const tables = ref<FloorTable[]>([])
 const bookings = ref<Booking[]>([])
@@ -47,6 +47,7 @@ const bookingOpen = ref(false)
 const editing = ref<Booking | null>(null)
 
 async function load() {
+  if (!auth.posProfile) return // leaving: the register was just cleared
   try {
     const [t, b, ta] = await Promise.all([
       api.call<FloorTable[]>(FNB + 'list_tables', { pos_profile: profile.value.name }),

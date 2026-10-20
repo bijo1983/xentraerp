@@ -24,6 +24,13 @@ export interface POSProfileSummary {
   location_name?: string | null
 }
 
+/** Stand-in while a screen is leaving after the register was cleared (sign-out, switch
+ * user, session ended): the store drops `posProfile` before the route changes, and a
+ * screen that still renders for that moment must not crash on `null`. */
+export const NO_PROFILE: POSProfileSummary = {
+  name: '', company: '', currency: '', customer: null, payment_methods: [], selling_price_list: null,
+}
+
 export interface DeviceInfo {
   registered: boolean
   id?: string

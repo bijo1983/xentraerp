@@ -2,14 +2,14 @@
 import { formatMoney } from '@/lib/money'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, NO_PROFILE } from '@/stores/auth'
 import { usePosStore, type Shift, type CashRow } from '@/stores/pos'
 import { api } from '@/lib/api'
 
 const router = useRouter()
 const auth = useAuthStore()
 const pos = usePosStore()
-const profile = computed(() => auth.posProfile!)
+const profile = computed(() => auth.posProfile ?? NO_PROFILE)
 
 interface Report extends Shift {
   cash: (CashRow & { cash_in: number })[]

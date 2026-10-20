@@ -3,7 +3,7 @@ import { t } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, NO_PROFILE } from '@/stores/auth'
 import { usePrinterStore } from '@/stores/printer'
 import { usePosStore } from '@/stores/pos'
 import { api } from '@/lib/api'
@@ -37,7 +37,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const printer = usePrinterStore()
 const pos = usePosStore()
-const profile = computed(() => auth.posProfile!)
+const profile = computed(() => auth.posProfile ?? NO_PROFILE)
 
 const order = ref<Order | null>(null)
 const draft = ref<Draft[]>([])

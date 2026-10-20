@@ -10,7 +10,7 @@ import {
   Check, ChevronUp, CircleCheck, Flame, Minus, Plus, Printer, ReceiptText, RotateCcw, ScanBarcode, Search, ShoppingBasket,
   Trash2, UserRound, UtensilsCrossed, Wallet, X,
 } from 'lucide-vue-next'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, NO_PROFILE } from '@/stores/auth'
 import { usePrinterStore } from '@/stores/printer'
 import { api } from '@/lib/api'
 import { t } from '@/lib/i18n'
@@ -40,7 +40,7 @@ interface CartLine {
 const router = useRouter()
 const auth = useAuthStore()
 const pos = usePosStore()
-const profile = computed(() => auth.posProfile!)
+const profile = computed(() => auth.posProfile ?? NO_PROFILE)
 
 const items = ref<Item[]>([])
 // item_code -> rate from the POS Profile's actual configured selling price
