@@ -1,18 +1,21 @@
 <script setup lang="ts">
 // Public landing page at "/". Marketing only: every "Sign in" leads to the separate sign-in page
-// (/signin, SignInView). The hero pairs the headline and calls to action with a photograph;
-// capabilities follow as alternating photo/text sections, then sample KPIs, the businesses it is
-// made for, features, security and a closing call to action. All photography is self-hosted from
-// Unsplash (see public/img/stock/CREDITS.md). Spacing follows one scale: 24px between components,
+// (/signin, SignInView). No lifestyle or stock photography: the hero pairs the headline with
+// the product family drawn as floating panels (HeroProduct); capabilities alternate copy with
+// real XentraERP POS screens (public/img/product, sample data) or drawn product panels
+// (ProductPanel); then sample KPIs, the businesses it is made for, features, security and a
+// closing call to action. Spacing follows one scale: 24px between components,
 // 48px inside sections, 96px between major sections.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   ArrowRight, Banknote, Boxes, Building2, ChartColumn, CircleCheck, Fingerprint, Globe, KeyRound, Layers, MonitorSmartphone,
-  Printer, Receipt, ShieldCheck, ShoppingBag, Sparkles, Timer, TrendingUp, Users, UtensilsCrossed, Wallet,
+  Coffee, Printer, Receipt, ShieldCheck, ShoppingBag, Sparkles, Store, Timer, Users, UtensilsCrossed, Wallet,
 } from 'lucide-vue-next'
 import brandMark from '@/assets/brand-mark.png'
 import LocaleSwitch from '@/components/shell/LocaleSwitch.vue'
 import CountUp from '@/components/landing/CountUp.vue'
+import HeroProduct from '@/components/landing/HeroProduct.vue'
+import ProductPanel from '@/components/landing/ProductPanel.vue'
 import { useReveal } from '@/composables/useReveal'
 import { t } from '@/lib/i18n'
 
@@ -43,13 +46,14 @@ const trust = computed(() => [
   { icon: KeyRound, text: t('landing.trust.mfa') },
 ])
 
-// Capability sections alternate photo right / left.
-const capabilities = computed(() => [
-  { id: 'restaurant', icon: UtensilsCrossed, tone: 'amber', photo: 'hero-restaurant', alt: t('landing.photo.restaurant'), key: 'fnb' },
-  { id: 'retail', icon: ShoppingBag, tone: 'sky', photo: 'retail-payment', alt: t('landing.photo.retail'), key: 'retail' },
-  { id: 'analytics', icon: ChartColumn, tone: 'emerald', photo: 'analytics-laptop', alt: t('landing.photo.analytics'), key: 'analytics' },
-  { id: 'inventory', icon: Boxes, tone: 'rose', photo: 'warehouse', alt: t('landing.photo.inventory'), key: 'inventory' },
-  { id: 'branches', icon: Building2, tone: 'violet', photo: 'mall', alt: t('landing.photo.branches'), key: 'branches' },
+// Capability sections alternate visual right / left: a real screen (shot) or a drawn panel.
+type Capability = { id: string; icon: typeof UtensilsCrossed; tone: string; key: string; alt: string; shot?: string; panel?: 'inventory' | 'branches' }
+const capabilities = computed<Capability[]>(() => [
+  { id: 'restaurant', icon: UtensilsCrossed, tone: 'amber', shot: 'restaurant-order', alt: t('landing.shot.order'), key: 'fnb' },
+  { id: 'retail', icon: ShoppingBag, tone: 'sky', shot: 'retail-checkout', alt: t('landing.shot.retail'), key: 'retail' },
+  { id: 'analytics', icon: ChartColumn, tone: 'emerald', shot: 'management-dashboard', alt: t('landing.shot.dashboard'), key: 'analytics' },
+  { id: 'inventory', icon: Boxes, tone: 'rose', panel: 'inventory', alt: t('landing.shot.inventory'), key: 'inventory' },
+  { id: 'branches', icon: Building2, tone: 'violet', panel: 'branches', alt: t('landing.shot.branches'), key: 'branches' },
 ])
 
 const kpis = computed(() => [
@@ -61,9 +65,9 @@ const kpis = computed(() => [
 const sparkPath = (pts: number[]) => pts.map((v, i) => `${i ? 'L' : 'M'}${(i / (pts.length - 1)) * 100},${40 - v * 0.8}`).join(' ')
 
 const madeFor = computed(() => [
-  { photo: 'dining', label: t('landing.for.restaurants'), alt: t('landing.photo.dining') },
-  { photo: 'coffee', label: t('landing.for.cafes'), alt: t('landing.photo.coffee') },
-  { photo: 'store', label: t('landing.for.retail'), alt: t('landing.photo.store') },
+  { id: 'restaurants', icon: UtensilsCrossed, tone: 'amber', label: t('landing.for.restaurants'), body: t('landing.for.restaurantsBody') },
+  { id: 'cafes', icon: Coffee, tone: 'rose', label: t('landing.for.cafes'), body: t('landing.for.cafesBody') },
+  { id: 'retail', icon: Store, tone: 'sky', label: t('landing.for.retail'), body: t('landing.for.retailBody') },
 ])
 const features = computed(() => [
   { icon: Users, tone: 'sky', title: t('landing.f1.title'), body: t('landing.f1.body') },
@@ -103,7 +107,7 @@ const security = computed(() => [
       </div>
     </header>
 
-    <!-- hero: headline, value proposition and calls to action beside a photograph -->
+    <!-- hero: headline, value proposition and calls to action beside the product family -->
     <main id="top" class="lp-hero">
       <div class="lp-hero__bg" aria-hidden="true" />
       <div class="lp-hero__in lp-wrap">
@@ -120,29 +124,11 @@ const security = computed(() => [
           </ul>
         </div>
 
-        <figure class="lp-hero__media x-enter">
-          <img
-            src="/img/stock/cafe-counter.webp"
-            srcset="/img/stock/cafe-counter-sm.webp 560w, /img/stock/cafe-counter.webp 1600w"
-            sizes="(max-width: 1023px) 92vw, 560px"
-            :alt="t('landing.photo.hero')"
-            width="1600"
-            height="1200"
-            fetchpriority="high"
-          />
-          <div class="lp-chip lp-chip--sales" aria-hidden="true">
-            <span class="x-art x-art--emerald"><TrendingUp :size="18" /></span>
-            <span><small>{{ t('landing.kpis.sales') }}</small><b class="x-tabular">BHD 2,846.750</b></span>
-          </div>
-          <div class="lp-chip lp-chip--kot" aria-hidden="true">
-            <span class="x-art x-art--amber"><UtensilsCrossed :size="18" /></span>
-            <span><small>{{ t('landing.hero.chipKot') }}</small><b>{{ t('landing.hero.chipKotValue') }}</b></span>
-          </div>
-        </figure>
+        <HeroProduct class="lp-hero__media x-enter" />
       </div>
     </main>
 
-    <!-- capabilities, alternating photo right / left -->
+    <!-- capabilities, alternating visual right / left -->
     <section
       v-for="(c, i) in capabilities"
       :id="c.id"
@@ -161,15 +147,19 @@ const security = computed(() => [
           </ul>
           <RouterLink class="lp-link" to="/signin">{{ t(`landing.${c.key}.cta`) }} <ArrowRight class="lp-arrow" :size="17" aria-hidden="true" /></RouterLink>
         </div>
-        <div class="lp-photo" :class="`lp-photo--${c.tone}`" data-reveal>
-          <img
-            :src="`/img/stock/${c.photo}.webp`"
-            :srcset="`/img/stock/${c.photo}-sm.webp 560w, /img/stock/${c.photo}.webp 1200w`"
-            sizes="(max-width: 1023px) 92vw, 680px"
-            :alt="c.alt"
-            loading="lazy"
-            decoding="async"
-          />
+        <div class="lp-stage" :class="`lp-stage--${c.tone}`" data-reveal>
+          <ProductPanel v-if="c.panel" :kind="c.panel" :label="c.alt" />
+          <div v-else class="lp-shot">
+            <span class="lp-shot__bar" aria-hidden="true"><i /><i /><i /><span>pos.xentraerp.net</span></span>
+            <img
+              :src="`/img/product/${c.shot}.webp`"
+              :srcset="`/img/product/${c.shot}-sm.webp 800w, /img/product/${c.shot}.webp 1600w`"
+              sizes="(max-width: 1023px) 92vw, 680px"
+              :alt="c.alt"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -200,7 +190,7 @@ const security = computed(() => [
       </div>
     </section>
 
-    <!-- made for: the only photography on the page -->
+    <!-- made for -->
     <section id="made-for" class="lp-for" aria-labelledby="for-title">
       <div class="lp-wrap lp-stack">
         <div class="lp-head" data-reveal>
@@ -209,16 +199,10 @@ const security = computed(() => [
           <p class="lp-sub">{{ t('landing.for.body') }}</p>
         </div>
         <ul class="lp-for__grid">
-          <li v-for="m in madeFor" :key="m.photo" class="lp-for__card" data-reveal>
-            <img
-              :src="`/img/stock/${m.photo}.webp`"
-              :srcset="`/img/stock/${m.photo}-sm.webp 560w, /img/stock/${m.photo}.webp 1200w`"
-              sizes="(max-width: 767px) 92vw, 380px"
-              :alt="m.alt"
-              loading="lazy"
-              decoding="async"
-            />
-            <span>{{ m.label }}</span>
+          <li v-for="m in madeFor" :key="m.id" class="lp-card lp-for__card" data-reveal>
+            <span class="lp-icon lp-icon--lg x-art" :class="`x-art--${m.tone}`" aria-hidden="true"><component :is="m.icon" :size="24" :stroke-width="1.8" /></span>
+            <h3>{{ m.label }}</h3>
+            <p>{{ m.body }}</p>
           </li>
         </ul>
       </div>
@@ -352,7 +336,7 @@ const security = computed(() => [
 .lp-hero__bg::before { content: ''; position: absolute; inset: 0; opacity: 0.22;
   background-image: linear-gradient(var(--x-border) 1px, transparent 1px), linear-gradient(90deg, var(--x-border) 1px, transparent 1px);
   background-size: 64px 64px; mask-image: radial-gradient(70% 60% at 40% 0%, #000 20%, transparent 70%); -webkit-mask-image: radial-gradient(70% 60% at 40% 0%, #000 20%, transparent 70%); }
-.lp-hero__in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(40px, 6vw, 96px); align-items: center; padding-block: clamp(48px, 7vw, 96px) var(--s3); }
+.lp-hero__in { display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: clamp(40px, 5vw, 72px); align-items: center; padding-block: clamp(48px, 7vw, 96px) var(--s3); }
 .lp-hero__story { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .lp-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--x-surface); border: 1px solid var(--x-border); box-shadow: var(--x-shadow-xs); font-size: var(--small); font-weight: 600; }
 .lp-badge span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--x-brand-gradient); color: #fff; }
@@ -362,13 +346,6 @@ const security = computed(() => [
 .lp-trust li { display: inline-flex; align-items: center; gap: 8px; font-size: var(--small); font-weight: 500; color: var(--x-text-muted); white-space: nowrap; }
 .lp-trust li svg { color: var(--x-success); }
 .lp-hero__media { position: relative; margin: 0; min-width: 0; }
-.lp-hero__media > img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 40px 80px -32px rgba(15, 23, 42, 0.45); }
-.lp-chip { position: absolute; display: flex; align-items: center; gap: 12px; padding: 12px 16px 12px 12px; border-radius: 16px; background: var(--x-surface-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--x-border); box-shadow: 0 16px 32px -16px rgba(15, 23, 42, 0.35); }
-.lp-chip > .x-art { width: 40px; height: 40px; border-radius: 12px; flex: none; }
-.lp-chip small { display: block; font-size: 12px; font-weight: 600; color: var(--x-text-muted); }
-.lp-chip b { font-family: var(--x-font-display); font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
-.lp-chip--sales { inset-inline-start: -24px; inset-block-end: 32px; }
-.lp-chip--kot { inset-inline-end: -16px; inset-block-start: 28px; }
 
 /* section headings */
 .lp-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; max-width: 760px; margin-inline: auto; }
@@ -381,7 +358,7 @@ const security = computed(() => [
 [data-reveal] { opacity: 0; transform: translateY(16px); transition: opacity 600ms var(--x-ease), transform 600ms var(--x-ease); }
 [data-reveal].is-in { opacity: 1; transform: none; }
 
-/* capability sections: copy beside a photograph, alternating sides */
+/* capability sections: copy beside a product visual, alternating sides */
 .lp-cap { padding-block: var(--s3); }
 .lp-cap--first { border-block-start: 1px solid var(--x-border); background: var(--x-surface); }
 .lp-cap--tint { background: var(--x-bg); }
@@ -394,15 +371,20 @@ const security = computed(() => [
 .lp-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .lp-checks li { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; font-weight: 500; line-height: 1.5; }
 .lp-checks svg { color: var(--x-success); flex: none; margin-top: 2px; }
-.lp-photo { position: relative; min-width: 0; padding: clamp(10px, 1.4vw, 16px); border-radius: calc(var(--r) + 8px);
-  background: linear-gradient(150deg, var(--stage-a), var(--stage-b)); }
-.lp-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); box-shadow: 0 24px 48px -28px rgba(15, 23, 42, 0.5); }
-.lp-photo--amber { --stage-a: #fffbeb; --stage-b: #fde9c4; }
-.lp-photo--sky { --stage-a: #f0f9ff; --stage-b: #d6ecfb; }
-.lp-photo--emerald { --stage-a: #ecfdf5; --stage-b: #cdf3e2; }
-.lp-photo--rose { --stage-a: #fff1f2; --stage-b: #fbd9de; }
-.lp-photo--violet { --stage-a: #f5f3ff; --stage-b: #e2dcfd; }
-:root[data-theme='dark'] .lp-photo { --stage-a: #111a2e; --stage-b: #17233d; }
+.lp-stage { position: relative; min-width: 0; padding: clamp(12px, 2vw, 28px); border-radius: calc(var(--r) + 8px);
+  background: linear-gradient(150deg, var(--stage-a), var(--stage-b)); border: 1px solid color-mix(in srgb, var(--stage-b) 60%, var(--x-border)); }
+.lp-stage--amber { --stage-a: #fffbeb; --stage-b: #fde9c4; }
+.lp-stage--sky { --stage-a: #f0f9ff; --stage-b: #d6ecfb; }
+.lp-stage--emerald { --stage-a: #ecfdf5; --stage-b: #cdf3e2; }
+.lp-stage--rose { --stage-a: #fff1f2; --stage-b: #fbd9de; }
+.lp-stage--violet { --stage-a: #f5f3ff; --stage-b: #e2dcfd; }
+:root[data-theme='dark'] .lp-stage { --stage-a: #111a2e; --stage-b: #17233d; }
+/* a real screen in a light browser frame */
+.lp-shot { border-radius: 14px; overflow: hidden; background: var(--x-surface); border: 1px solid var(--x-border); box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05), 0 32px 64px -28px rgba(15, 23, 42, 0.4); }
+.lp-shot__bar { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--x-surface-2, var(--x-bg)); border-bottom: 1px solid var(--x-border); }
+.lp-shot__bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--x-surface-3); }
+.lp-shot__bar span { margin-inline: auto; padding: 2px 14px; border-radius: 6px; background: var(--x-surface-3); font-size: 11px; color: var(--x-text-muted); }
+.lp-shot img { display: block; width: 100%; height: auto; }
 
 /* cards: one treatment for KPI and feature cards */
 .lp-card { border-radius: var(--r); background: var(--x-surface); border: 1px solid color-mix(in srgb, var(--x-border) 70%, transparent);
@@ -429,11 +411,9 @@ const security = computed(() => [
 /* made for */
 .lp-for { padding-block: var(--s3); background: var(--x-bg); }
 .lp-for__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
-.lp-for__card { position: relative; border-radius: var(--r); overflow: hidden; aspect-ratio: 4 / 3; box-shadow: 0 12px 32px -16px rgba(15, 23, 42, 0.3); }
-.lp-for__card img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 600ms var(--x-ease); }
-.lp-for__card:hover img { transform: scale(1.04); }
-.lp-for__card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(15, 23, 42, 0.72)); }
-.lp-for__card span { position: absolute; z-index: 1; inset-inline-start: var(--s1); inset-block-end: 20px; color: #fff; font-family: var(--x-font-display); font-size: var(--h3); font-weight: 700; }
+.lp-for__card { padding: 32px; display: flex; flex-direction: column; gap: 14px; }
+.lp-for__card h3 { margin: 6px 0 0; font-family: var(--x-font-display); font-size: var(--h3); font-weight: 700; }
+.lp-for__card p { margin: 0; color: var(--x-text-muted); font-size: 16px; line-height: 1.6; }
 
 /* features */
 .lp-features { padding-block: var(--s3); background: var(--x-surface); border-block: 1px solid var(--x-border); }
@@ -482,8 +462,6 @@ const security = computed(() => [
   .lp { --s3: 72px; }
   .lp-hero__in { grid-template-columns: 1fr; min-height: 0; max-height: none; padding-block: var(--s1) var(--s2); }
   .lp-hero__media { max-width: 640px; width: 100%; margin-inline: auto; }
-  .lp-chip--sales { inset-inline-start: 12px; }
-  .lp-chip--kot { inset-inline-end: 12px; }
   .lp-cap__in, .lp-sec__in { grid-template-columns: 1fr; }
   .lp-cap--flip .lp-cap__in { grid-template-columns: 1fr; }
   .lp-cap--flip .lp-cap__copy { order: 0; }
@@ -495,7 +473,6 @@ const security = computed(() => [
   .lp-nav__in { gap: 12px; min-height: 64px; }
   .lp-nav__end .lp-btn { display: none; }
   .lp-brand__word { font-size: 18px; }
-  .lp-chip--kot { display: none; }
   .lp-kpi-grid, .lp-fgrid, .lp-sec__grid, .lp-for__grid { grid-template-columns: 1fr; }
   .lp-ctas .lp-btn { flex: 1 1 100%; }
   .lp-foot__in { justify-content: center; text-align: center; padding-bottom: 96px; }
