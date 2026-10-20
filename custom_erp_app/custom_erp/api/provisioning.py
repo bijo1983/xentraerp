@@ -141,7 +141,7 @@ def _company_abbr(company_name: str) -> str:
 	return abbr[:5]
 
 
-def run_default_setup(company_name: str, country: str | None, time_zone: str | None):
+def run_default_setup(company_name: str, country: str | None, time_zone: str | None, currency: str | None = None):
 	"""Auto-configure a fresh site's locale and default masters, the same
 	things ERPNext's own Setup Wizard would create — a default Company
 	(whose insert already cascades into a default Chart of Accounts,
@@ -158,7 +158,11 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 	from frappe.geo.country_info import get_country_info
 
 	info = dict(get_country_info(country)) if country else {}
-	currency = info.get("currency")
+	# The tenant's base currency (set from its country at signup), else the country's own.
+	currency = currency or info.get("currency")
+	if currency and frappe.db.exists("Currency", currency):
+		# ERPNext ships most currencies disabled; the Setup Wizard enables the chosen one.
+		frappe.db.set_value("Currency", currency, "enabled", 1)
 	tz = time_zone or (info.get("timezones") or [None])[0]
 
 	# Currency lives on Company/Global Defaults, not System Settings —
@@ -200,16 +204,32 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 		company.insert(ignore_permissions=True)
 		frappe.db.set_default("company", company.name)
 		frappe.db.set_single_value("Global Defaults", "default_company", company.name)
+		# set_single_value skips Global Defaults' on_update, which is what normally
+		# writes the session defaults new documents take their currency from — set
+		# those too, or every new transaction opens in the site's install currency.
 		if currency:
 			frappe.db.set_single_value("Global Defaults", "default_currency", currency)
+			frappe.db.set_default("currency", currency)
 		if country:
 			frappe.db.set_single_value("Global Defaults", "country", country)
+			frappe.db.set_default("country", country)
 		# New tenants bill exact amounts. ERPNext's default (rounding on) rounds to a whole
 		# unit for currencies with no smallest fraction set — BHD 2.500 was billed 2.000.
 		# Only on first setup: a tenant's own choice (Settings → Bill rounding) survives re-runs.
 		from custom_erp.api.rounding import set_rounding_off_for_new_tenant
 
 		set_rounding_off_for_new_tenant()
+
+	# New documents take their currency from the session default; keep it on the
+	# company's currency (a tenant set up before this was fixed was left on INR, the
+	# install currency). Re-running setup from the admin "Manage" action repairs it.
+	default_company = frappe.db.get_single_value("Global Defaults", "default_company")
+	company_currency = default_company and frappe.db.get_value("Company", default_company, "default_currency")
+	if company_currency:
+		if frappe.db.get_default("currency") != company_currency:
+			frappe.db.set_default("currency", company_currency)
+		if frappe.db.get_single_value("Global Defaults", "default_currency") != company_currency:
+			frappe.db.set_single_value("Global Defaults", "default_currency", company_currency)
 
 	_ensure_fiscal_year()
 
@@ -274,6 +294,13 @@ def run_default_setup(company_name: str, country: str | None, time_zone: str | N
 	if not frappe.db.get_single_value("Buying Settings", "buying_price_list"):
 		frappe.db.set_single_value("Buying Settings", "buying_price_list", "Standard Buying")
 
+	# POS role profiles (Waiter, Host, Cashier, Kitchen, Shift Supervisor, Floor Manager,
+	# Branch Manager, Auditor) are ready on every tenant, so the moment POS is part of the
+	# subscription the administrator can map them to staff. Only adds what is missing.
+	from custom_erp.api import pos_roles
+
+	pos_roles.ensure_defaults(force=True)
+
 	frappe.db.commit()
 
 
@@ -303,10 +330,14 @@ def _ensure_fiscal_year():
 		frappe.db.set_default("year_end_date", str(end))
 
 
-def _run_default_setup_on_site(site_name: str, company_name: str, country: str | None, time_zone: str | None):
+def _run_default_setup_on_site(
+	site_name: str, company_name: str, country: str | None, time_zone: str | None, currency: str | None = None
+):
 	"""Run run_default_setup on the target site as an isolated `bench
 	execute` subprocess, guaranteeing the correct site context."""
-	kwargs = json.dumps({"company_name": company_name, "country": country, "time_zone": time_zone})
+	kwargs = json.dumps(
+		{"company_name": company_name, "country": country, "time_zone": time_zone, "currency": currency}
+	)
 	subprocess.run(
 		[
 			"bench", "--site", site_name, "execute",
@@ -336,6 +367,8 @@ def get_default_setup_status():
 		and bool(frappe.db.get_single_value("Buying Settings", "buying_price_list")),
 		"letter_head": bool(frappe.db.get_value("Letter Head", {"is_default": 1})),
 		"fiscal_year": bool(frappe.db.get_single_value("Global Defaults", "current_fiscal_year")),
+		"pos_role_profiles": bool(frappe.db.table_exists("XentraERP POS Role Profile"))
+		and frappe.db.count("XentraERP POS Role Profile", {"is_standard": 1}) > 0,
 	}
 
 
@@ -367,7 +400,7 @@ def reconfigure_tenant_defaults(tenant_name: str):
 
 	try:
 		_run_default_setup_on_site(
-			tenant.site_name, tenant.organization_name, tenant.country, tenant.time_zone
+			tenant.site_name, tenant.organization_name, tenant.country, tenant.time_zone, tenant.base_currency
 		)
 	except subprocess.CalledProcessError as e:
 		frappe.throw((e.stderr or e.stdout or str(e))[:2000])
@@ -399,6 +432,7 @@ def _run_site_creation(tenant_name: str, site_name: str):
 	tenant_org_name = frappe.db.get_value("XentraERP Tenant", tenant_name, "organization_name")
 	tenant_country = frappe.db.get_value("XentraERP Tenant", tenant_name, "country")
 	tenant_time_zone = frappe.db.get_value("XentraERP Tenant", tenant_name, "time_zone")
+	tenant_currency = frappe.db.get_value("XentraERP Tenant", tenant_name, "base_currency")
 
 	try:
 		subprocess.run(
@@ -437,7 +471,7 @@ def _run_site_creation(tenant_name: str, site_name: str):
 			timeout=600,
 		)
 
-		_run_default_setup_on_site(site_name, tenant_org_name, tenant_country, tenant_time_zone)
+		_run_default_setup_on_site(site_name, tenant_org_name, tenant_country, tenant_time_zone, tenant_currency)
 
 		_create_admin_user_on_site(
 			site_name, tenant_admin_email, tenant_admin_name or "Administrator"

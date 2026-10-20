@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/utils';
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
@@ -32,7 +33,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
     tooltip: {
       y: {
         formatter: (val: number) =>
-          new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val),
+          formatCurrency(val),
       },
     },
   };

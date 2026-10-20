@@ -179,6 +179,10 @@ def complete_signup(
 
 	if not admin_email or not admin_mobile:
 		frappe.throw("Email and mobile number are required.")
+	# The country decides the tenant's base currency, time zone and number formats.
+	country = (country or "").strip()
+	if not country or not frappe.db.exists("Country", country):
+		frappe.throw("Please select your country.")
 
 	subdomain = (subdomain or "").strip().lower() or _generate_subdomain()
 	if frappe.db.exists("XentraERP Tenant", {"subdomain": subdomain}):
@@ -201,7 +205,7 @@ def complete_signup(
 			"tenant_admin_mobile": admin_mobile,
 			"email_verified": 0,
 			"mobile_verified": 0,
-			"country": country or None,
+			"country": country,
 			"time_zone": time_zone or None,
 		}
 	)

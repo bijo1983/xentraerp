@@ -578,6 +578,18 @@ def list_kots(statuses=None, pos_profile: str | None = None):
 	return [_kot_payload(frappe.get_doc("XentraERP KOT", r.name)) for r in rows]
 
 
+def _serve_order_kots(order: str):
+	"""Closing the bill finishes the order's tickets: every KOT still New, Preparing or
+	Ready is marked Served, so the kitchen board doesn't keep tickets for a table that has
+	settled up. Items added after a re-open go out on a new ticket as usual."""
+	for name in frappe.get_all(
+		"XentraERP KOT", filters={"pos_order": order, "status": ["in", ACTIVE_KOT]}, pluck="name"
+	):
+		kot = frappe.get_doc("XentraERP KOT", name)
+		kot.status = "Served"
+		kot.save(ignore_permissions=True)
+
+
 @frappe.whitelist()
 def set_kot_status(kot: str, status: str):
 	_require_fnb("kot")
@@ -832,6 +844,7 @@ def close_bill(order: str):
 	doc.bill_closed = 1
 	doc.bill_closed_at = now_datetime()
 	doc.save(ignore_permissions=True)
+	_serve_order_kots(doc.name)
 	frappe.db.commit()
 	return {"order": _order_payload(doc), "totals": totals}
 
@@ -943,6 +956,7 @@ def bill_order(order: str, payment_method: str | None = None, payments=None, all
 		doc.save(ignore_permissions=True)
 	if doc.status == "Billed":
 		_complete_reservation(doc.name, "Completed")
+		_serve_order_kots(doc.name)  # billed without closing the check first
 	frappe.db.commit()
 	return {
 		**result,

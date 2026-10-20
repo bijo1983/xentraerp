@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api, errorMessage, ApiError } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useToast } from '@/composables/useToast'
+import { History, MonitorSmartphone, ShieldCheck, Users } from 'lucide-vue-next'
 import { UiBanner, UiButton, UiCard, UiCategoryChips, UiConfirmDialog, UiEmptyState, UiInput, UiModal, UiSkeleton, UiStatusBadge } from '@/ui'
 
 const AUTH = 'custom_erp.api.pos_auth.'
@@ -117,14 +118,14 @@ const typeLabel = (v: string | null) => (v ? t(`device.${v.replace(/\s+/g, '').t
 
 <template>
   <div class="sec">
-    <UiCategoryChips :model-value="sub" :options="subs" :label="t('admin.securityTab')" @update:model-value="pick" />
+    <UiCategoryChips :icons="false" :model-value="sub" :options="subs" :label="t('admin.securityTab')" @update:model-value="pick" />
 
     <UiSkeleton v-if="loading" :lines="4" height="40px" />
 
     <template v-else-if="sub === 'devices'">
       <UiBanner tone="info">{{ t('security.devicesIntro') }}</UiBanner>
       <div class="row-end"><UiButton @click="(adding = true), (newCode = null)">{{ t('security.addDevice') }}</UiButton></div>
-      <UiEmptyState v-if="!devices.length" :title="t('security.noDevices')" icon="▢" />
+      <UiEmptyState v-if="!devices.length" :title="t('security.noDevices')" :icon="MonitorSmartphone" />
       <UiCard v-else :padded="false">
         <table class="simple-table sec-table">
           <thead><tr><th>{{ t('security.device') }}</th><th>{{ t('security.type') }}</th><th>{{ t('security.where') }}</th><th>{{ t('security.status') }}</th><th>{{ t('security.lastUsed') }}</th><th /></tr></thead>
@@ -143,7 +144,7 @@ const typeLabel = (v: string | null) => (v ? t(`device.${v.replace(/\s+/g, '').t
     </template>
 
     <template v-else-if="sub === 'sessions'">
-      <UiEmptyState v-if="!sessions.length" :title="t('security.noSessions')" icon="○" />
+      <UiEmptyState v-if="!sessions.length" :title="t('security.noSessions')" :icon="ShieldCheck" />
       <UiCard v-else :padded="false">
         <table class="simple-table sec-table">
           <thead><tr><th>{{ t('security.user') }}</th><th>{{ t('security.signIn') }}</th><th>{{ t('security.device') }}</th><th>{{ t('security.started') }}</th><th>{{ t('security.lastSeen') }}</th><th /></tr></thead>
@@ -162,7 +163,7 @@ const typeLabel = (v: string | null) => (v ? t(`device.${v.replace(/\s+/g, '').t
     </template>
 
     <template v-else-if="sub === 'history'">
-      <UiEmptyState v-if="!history.length" :title="t('security.noHistory')" icon="○" />
+      <UiEmptyState v-if="!history.length" :title="t('security.noHistory')" :icon="History" />
       <UiCard v-else :padded="false">
         <table class="simple-table sec-table">
           <thead><tr><th>{{ t('security.when') }}</th><th>{{ t('security.kind') }}</th><th>{{ t('security.result') }}</th><th>{{ t('security.user') }}</th><th>{{ t('security.device') }}</th><th>IP</th></tr></thead>
@@ -181,7 +182,7 @@ const typeLabel = (v: string | null) => (v ? t(`device.${v.replace(/\s+/g, '').t
     </template>
 
     <template v-else>
-      <UiEmptyState v-if="!staff.length" :title="t('security.noStaff')" icon="○" />
+      <UiEmptyState v-if="!staff.length" :title="t('security.noStaff')" :icon="Users" />
       <UiCard v-else :padded="false">
         <table class="simple-table sec-table">
           <thead><tr><th>{{ t('security.person') }}</th><th>{{ t('security.staffNo') }}</th><th>{{ t('security.status') }}</th><th /></tr></thead>

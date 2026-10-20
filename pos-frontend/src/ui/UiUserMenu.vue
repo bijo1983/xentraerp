@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
 // The signed-in person's menu (shell header). Items are filtered by the caller.
 import { computed, nextTick, ref } from 'vue'
 import { t } from '@/lib/i18n'
 
-export interface UserMenuItem { key: string; label: string; hint?: string; icon?: string; danger?: boolean }
+export interface UserMenuItem { key: string; label: string; hint?: string; icon?: string | Component; danger?: boolean }
 const props = defineProps<{ name: string; role?: string; items: UserMenuItem[] }>()
 const emit = defineEmits<{ (e: 'select', key: string): void }>()
 const open = ref(false)
@@ -40,13 +42,13 @@ function onKey(e: KeyboardEvent) {
         <b>{{ name }}</b>
         <small v-if="role">{{ role }}</small>
       </span>
-      <span aria-hidden="true">▾</span>
+      <ChevronDown :size="16" aria-hidden="true" class="x-umenu__caret" />
     </button>
     <div v-if="open" class="x-umenu__back" @click="open = false" />
     <ul v-if="open" ref="menu" class="x-umenu__list" role="menu">
       <li v-for="it in items" :key="it.key" role="none">
         <button type="button" role="menuitem" class="x-umenu__item" :class="{ danger: it.danger }" @click="pick(it.key)">
-          <span class="x-umenu__icon" aria-hidden="true">{{ it.icon || '•' }}</span>
+          <span class="x-umenu__icon" aria-hidden="true"><component :is="it.icon" v-if="it.icon && typeof it.icon !== 'string'" :size="18" /><template v-else>{{ it.icon || '•' }}</template></span>
           <span><b>{{ it.label }}</b><small v-if="it.hint">{{ it.hint }}</small></span>
         </button>
       </li>
@@ -57,7 +59,8 @@ function onKey(e: KeyboardEvent) {
 <style scoped>
 .x-umenu { position: relative; }
 .x-umenu__btn { display: flex; align-items: center; gap: var(--x-space-2); border: 1px solid var(--x-border); background: var(--x-surface); color: var(--x-text); border-radius: var(--x-radius-full); padding: 4px var(--x-space-3) 4px 4px; min-height: 40px; font: inherit; cursor: pointer; }
-.x-umenu__avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--x-brand-navy); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.x-umenu__caret { color: var(--x-text-muted); }
+.x-umenu__avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--x-brand-gradient); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .x-umenu__who { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; text-align: start; }
 .x-umenu__who b { font-size: var(--x-text-sm); }
 .x-umenu__who small { font-size: 11px; color: var(--x-text-muted); }
@@ -68,5 +71,6 @@ function onKey(e: KeyboardEvent) {
 .x-umenu__item span:last-child { display: flex; flex-direction: column; }
 .x-umenu__item small { color: var(--x-text-muted); font-size: 12px; }
 .x-umenu__item.danger { color: var(--x-danger-text); }
-.x-umenu__icon { width: 24px; text-align: center; }
+.x-umenu__icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--x-surface-3); color: var(--x-text-muted); flex: none; }
+.x-umenu__item.danger .x-umenu__icon { background: var(--x-danger-soft); color: var(--x-danger); }
 </style>

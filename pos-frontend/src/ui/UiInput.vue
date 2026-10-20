@@ -59,20 +59,23 @@ const describedBy = computed(() => [props.hint ? `${id}-hint` : '', props.error 
 
 <style scoped>
 .x-field { display: flex; flex-direction: column; gap: var(--x-space-1); }
-.x-field__label { font-size: var(--x-text-sm); font-weight: var(--x-weight-semibold); color: var(--x-text); }
+.x-field__label { font-size: var(--x-text-sm); font-weight: var(--x-weight-semibold); color: var(--x-text); letter-spacing: -0.005em; }
 .x-field__control {
   display: flex; align-items: center; gap: var(--x-space-2);
-  background: var(--x-surface); border: 1px solid var(--x-border-strong); border-radius: var(--x-radius-md);
+  background: var(--x-surface); border: 1px solid var(--x-border); border-radius: var(--x-radius-md); box-shadow: var(--x-shadow-xs);
   padding-inline: var(--x-space-3);
   transition: border-color var(--x-duration), box-shadow var(--x-duration);
 }
+.x-field__control:hover { border-color: var(--x-border-strong); }
 .x-field__control:focus-within { border-color: var(--x-primary); box-shadow: var(--x-focus-ring); }
+.x-field__control :deep(svg) { color: var(--x-text-faint); flex: none; }
 .has-error .x-field__control { border-color: var(--x-danger); }
 .x-field__input {
   flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--x-text);
   font: inherit; min-height: var(--x-touch);
 }
-.x-field__input--lg { min-height: 52px; font-size: var(--x-text-lg); }
+.x-field__input--lg { min-height: 54px; font-size: 17px; font-weight: 500; }
+.x-field__input::placeholder { color: var(--x-text-faint); font-weight: 400; }
 .x-field__input:focus-visible { outline: none; }
 .x-field__hint { margin: 0; font-size: var(--x-text-xs); color: var(--x-text-muted); }
 .x-field__error { margin: 0; font-size: var(--x-text-xs); color: var(--x-danger-text); }

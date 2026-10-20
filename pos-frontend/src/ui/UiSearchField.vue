@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/lib/i18n'
+import { Search } from 'lucide-vue-next'
 
 defineProps<{ modelValue: string; placeholder?: string; label?: string; autofocus?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void; (e: 'search', v: string): void }>()
@@ -7,7 +8,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void; (e: 'searc
 
 <template>
   <div class="x-search" role="search">
-    <span class="x-search__icon" aria-hidden="true">⌕</span>
+    <Search class="x-search__icon" :size="18" aria-hidden="true" />
     <input
       type="search"
       class="x-search__input"

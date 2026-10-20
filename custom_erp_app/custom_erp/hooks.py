@@ -34,6 +34,11 @@ doc_events = {
         # server-side, not just steered client-side by the POS app.
         "validate": "custom_erp.api.pos.validate_pos_invoice_profile",
     },
+    "User": {
+        # Frappe v14 crashes building the welcome email when no outgoing email
+        # account exists, and the user is never created.
+        "before_insert": "custom_erp.api.users.skip_welcome_email_without_mail",
+    },
     "POS Profile": {
         # A new register follows the tenant's bill-rounding setting (ERPNext defaults it to rounding on).
         "before_insert": "custom_erp.api.rounding.profile_follows_tenant",

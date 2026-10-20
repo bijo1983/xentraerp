@@ -30,12 +30,18 @@ export interface CompiledField {
   mandatory_depends_on?: string;
   /** Frappe's own flag for "show this field as a grid column" — used to keep ChildTable's compact columns limited to what ERPNext itself shows, instead of every field on the child doctype. */
   in_list_view?: boolean;
+  /** Still editable after the document is submitted. */
+  allow_on_submit?: boolean;
+  /** Left out when the document is duplicated or amended. */
+  no_copy?: boolean;
 }
 
 export interface CompiledMeta {
   doctype: string;
   fields: CompiledField[];
   is_submittable: boolean;
+  /** Field holding the record's display title (e.g. customer_name), when the doctype sets one. */
+  title_field?: string;
 }
 
 const FIELDTYPE_MAP: Record<string, ComponentType> = {
@@ -103,9 +109,11 @@ export function compileMeta(rawMeta: any): CompiledMeta {
       depends_on: f.depends_on,
       mandatory_depends_on: f.mandatory_depends_on,
       in_list_view: !!f.in_list_view,
+      allow_on_submit: !!f.allow_on_submit,
+      no_copy: !!f.no_copy,
     }));
 
-  return { doctype: rawMeta.name, fields, is_submittable: !!rawMeta.is_submittable };
+  return { doctype: rawMeta.name, fields, is_submittable: !!rawMeta.is_submittable, title_field: rawMeta.title_field || undefined };
 }
 
 // ---------------------------------------------------------------------------

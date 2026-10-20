@@ -4,13 +4,13 @@
 // Every new order starts with Dine in / Take away.
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { Armchair, ChefHat, ChevronLeft, ChevronRight, Phone, ScanBarcode, Users } from 'lucide-vue-next'
+import { useAuthStore, NO_PROFILE } from '@/stores/auth'
 import { usePosStore } from '@/stores/pos'
 import { api } from '@/lib/api'
 import FloorPlan, { type PlanTable } from '@/components/FloorPlan.vue'
 import NewOrderDialog from '@/components/NewOrderDialog.vue'
 import ReservationDialog, { type Booking } from '@/components/ReservationDialog.vue'
-import SessionMenu from '@/components/SessionMenu.vue'
 
 interface FloorOrder { name: string; guests: number; total: number; waiter: string | null; bill_closed: number; merged: boolean; part_paid?: boolean; primary_table: string; kots_pending: number }
 interface FloorTable extends PlanTable {
@@ -25,7 +25,7 @@ const FNB = 'custom_erp.api.pos_fnb.'
 const router = useRouter()
 const auth = useAuthStore()
 const pos = usePosStore()
-const profile = computed(() => auth.posProfile!)
+const profile = computed(() => auth.posProfile ?? NO_PROFILE)
 
 const tables = ref<FloorTable[]>([])
 const bookings = ref<Booking[]>([])
@@ -47,6 +47,7 @@ const bookingOpen = ref(false)
 const editing = ref<Booking | null>(null)
 
 async function load() {
+  if (!auth.posProfile) return // leaving: the register was just cleared
   try {
     const [t, b, ta] = await Promise.all([
       api.call<FloorTable[]>(FNB + 'list_tables', { pos_profile: profile.value.name }),
@@ -211,9 +212,9 @@ async function run(fn: () => Promise<void>) {
         <button class="gtab" :class="{ on: tab === 'dine' }" @click="tab = 'dine'">On Dine <span class="n">{{ counts.dine }}</span></button>
       </div>
       <div class="row" style="justify-content: space-between; margin-bottom: 10px">
-        <button class="btn btn-ghost mini" @click="shiftDay(-1)">‹</button>
+        <button class="btn btn-ghost mini" @click="shiftDay(-1)" aria-label="Previous day"><ChevronLeft :size="18" class="flip-rtl" /></button>
         <b>{{ dayLabel }}</b>
-        <button class="btn btn-ghost mini" @click="shiftDay(1)">›</button>
+        <button class="btn btn-ghost mini" @click="shiftDay(1)" aria-label="Next day"><ChevronRight :size="18" class="flip-rtl" /></button>
       </div>
       <input v-model="search" class="fld" style="width: 100%; margin-bottom: 10px" placeholder="Search customers" />
       <button v-if="pos.can('reserve')" class="btn btn-primary mini" style="width: 100%; margin-bottom: 12px" @click="openBooking(null)">+ New reservation</button>
@@ -226,7 +227,7 @@ async function run(fn: () => Promise<void>) {
             <b style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ c.name }}</b>
             <span class="sub2">{{ c.meal }}</span>
           </div>
-          <div class="gmeta"><span>🪑 {{ c.tables }}</span><span>👥 {{ c.guests }}</span><span v-if="c.phone">📞 {{ c.phone }}</span></div>
+          <div class="gmeta"><span><Armchair :size="13" /> {{ c.tables }}</span><span><Users :size="13" /> {{ c.guests }}</span><span v-if="c.phone"><Phone :size="13" /> {{ c.phone }}</span></div>
         </div>
         <span class="pill" :class="c.status === 'Paid' ? 'ok' : c.status === 'Part paid' ? 'warn' : ''" style="align-self: flex-start">{{ c.status }}</span>
       </button>
@@ -238,10 +239,9 @@ async function run(fn: () => Promise<void>) {
         <span v-if="profile.location" class="pill">{{ profile.location_name || profile.location }}</span>
         <button class="btn btn-primary mini" style="width: auto; margin-top: 0" @click="startOrder">+ New order</button>
         <div class="topbar-actions" style="flex: 0 1 auto">
-          <button class="btn btn-ghost mini" @click="router.push('/kitchen')">🍳 Kitchen (KOT)</button>
-          <button v-if="pos.can('bill') && pos.hasRetail" class="btn btn-ghost mini" @click="router.push('/terminal')">🛒 Quick sale</button>
+          <button class="btn btn-ghost mini" @click="router.push('/kitchen')"><ChefHat :size="16" /> Kitchen (KOT)</button>
+          <button v-if="pos.can('bill') && pos.hasRetail" class="btn btn-ghost mini" @click="router.push('/terminal')"><ScanBarcode :size="16" /> Quick sale</button>
         </div>
-        <SessionMenu style="margin-left: auto" />
       </div>
       <div class="row" style="margin: 8px 0 4px">
         <button class="cat-chip" :class="{ active: zone === 'all' }" @click="zone = 'all'">All areas</button>

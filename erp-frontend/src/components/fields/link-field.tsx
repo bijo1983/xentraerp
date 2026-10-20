@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, ArrowUpRight } from 'lucide-react';
+import { withTenant } from '@/lib/tenant';
 import { Input } from '@/components/ui/input';
 import { createPortal } from 'react-dom';
 import { QuickCreateDialog } from '@/components/dynamic/quick-create-dialog';
@@ -14,6 +15,10 @@ interface Props {
   onOpenPicker?: () => void;
   /** Offers "+ Create new <target>" in the dropdown when nothing (or nothing exact) matches. Default true — set false to avoid recursive nesting inside QuickCreateDialog's own Link fields. */
   allowCreate?: boolean;
+  /** Narrows the search (e.g. { company, is_group: 0 }), like Desk's set_query. */
+  filters?: Record<string, unknown>;
+  /** When given, a filled field shows a button that opens the linked record in a new tab. */
+  tenantCode?: string | null;
 }
 
 interface Suggestion {
@@ -21,7 +26,7 @@ interface Suggestion {
   label: string;
 }
 
-export function LinkField({ target, value, disabled, onChange, onOpenPicker, allowCreate = true }: Props) {
+export function LinkField({ target, value, disabled, onChange, onOpenPicker, allowCreate = true, filters, tenantCode }: Props) {
   const [query, setQuery] = useState(value);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -39,8 +44,9 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
     setDropdownStyle({ position: 'fixed', top: rect.bottom, left: rect.left, width: rect.width, zIndex: 9999 });
   };
 
+  // An empty query lists the first records, like Desk does on focus.
   const search = (q: string) => {
-    if (!target || q.length < 1) { setSuggestions([]); setOpen(false); return; }
+    if (!target) { setSuggestions([]); setOpen(false); return; }
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
       try {
@@ -50,7 +56,7 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
           ignore_user_permissions: '0',
           reference_doctype: '',
           query: '',
-          filters: '{}',
+          filters: JSON.stringify(filters || {}),
           page_length: '20',
         });
         const r = await fetch(`/api/method/xentraerp.desk.search.search_link?${params}`, { credentials: 'include' });
@@ -60,10 +66,13 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
           label: x.description ? `${x.value} — ${x.description}` : x.value,
         }));
         setSuggestions(results);
+        suggestionsRef.current = results;
+        setActive(-1);
+        if (!focused.current) return;
         // Keep the dropdown open even with zero matches when we can offer
         // "+ Create new" — that empty state is exactly the moment a user
         // typing a genuinely new customer/item/etc. needs it.
-        if (results.length > 0 || allowCreate) {
+        if (results.length > 0 || (allowCreate && q)) {
           positionDropdown();
           setOpen(true);
         } else {
@@ -76,7 +85,36 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
     }, 300);
   };
 
+  const suggestionsRef = useRef<Suggestion[]>([]);
+  const focused = useRef(false);
+  const [active, setActive] = useState(-1);
+
+  // Leaving the field: an emptied field clears the value, an exact match is
+  // taken, and anything else goes back to the last real value (a link can
+  // only hold an existing record).
+  // Runs from a timeout after blur, so it reads refs: a suggestion clicked
+  // in the meantime has already updated them.
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const committed = useRef(value);
+  useEffect(() => { committed.current = value; }, [value]);
+  const resolveOnBlur = () => {
+    const q = queryRef.current;
+    if (q === committed.current) return;
+    const typed = q.trim();
+    if (!typed) {
+      committed.current = '';
+      onChange('');
+      return;
+    }
+    const exact = suggestionsRef.current.find((s) => s.value.toLowerCase() === typed.toLowerCase());
+    if (exact) select(exact.value);
+    else setQuery(committed.current);
+  };
+
   const select = (v: string) => {
+    committed.current = v;
+    queryRef.current = v;
     setQuery(v);
     onChange(v);
     setOpen(false);
@@ -88,6 +126,9 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
     setOpen(true);
   };
 
+  // Only for a value that is actually set (not mid-typing) and a real record.
+  const canOpen = tenantCode !== undefined && !!target && !!value && query === value;
+
   return (
     <div className="relative">
       <Input
@@ -95,11 +136,37 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
         value={query}
         disabled={disabled || !target}
         placeholder={target ? `Search ${target}…` : 'Select type first'}
-        className={onOpenPicker ? 'pr-8' : undefined}
+        className={onOpenPicker || canOpen ? 'pr-8' : undefined}
         onChange={(e) => { setQuery(e.target.value); search(e.target.value); }}
-        onFocus={() => { if (suggestions.length || (allowCreate && query)) openDropdown(); }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onFocus={() => {
+          focused.current = true;
+          if (suggestions.length) openDropdown();
+          else search(query === value ? '' : query);
+        }}
+        onBlur={() => {
+          focused.current = false;
+          setTimeout(() => {
+            setOpen(false);
+            resolveOnBlur();
+          }, 150);
+        }}
         onKeyDown={(e) => {
+          if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            const n = suggestions.length;
+            if (!n) return;
+            setActive((i) => (e.key === 'ArrowDown' ? (i + 1) % n : (i - 1 + n) % n));
+            return;
+          }
+          if (open && e.key === 'Enter' && active >= 0 && suggestions[active]) {
+            e.preventDefault();
+            select(suggestions[active].value);
+            return;
+          }
+          if (e.key === 'Escape' && open) {
+            setOpen(false);
+            return;
+          }
           // Enter with no dropdown open (nothing to pick inline, or the
           // user wants a fuller search than the quick autocomplete) opens
           // the richer picker dialog, mirroring ERPNext's own item-grid
@@ -110,6 +177,18 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
           }
         }}
       />
+      {canOpen && !onOpenPicker && (
+        <a
+          href={withTenant(`/app/${encodeURIComponent(target)}/${encodeURIComponent(value)}`, tenantCode ?? null)}
+          target="_blank"
+          rel="noopener noreferrer"
+          tabIndex={-1}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-smooth hover:bg-accent hover:text-foreground"
+          title={`Open ${target} ${value}`}
+        >
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </a>
+      )}
       {onOpenPicker && (
         <button
           type="button"
@@ -138,10 +217,10 @@ export function LinkField({ target, value, disabled, onChange, onOpenPicker, all
           {suggestions.length === 0 && query && (
             <li className="px-3 py-2 text-xs text-muted-foreground">No matching {target} found</li>
           )}
-          {suggestions.map((s) => (
+          {suggestions.map((s, i) => (
             <li
               key={s.value}
-              className="cursor-pointer px-3 py-1.5 hover:bg-accent"
+              className={`cursor-pointer px-3 py-1.5 hover:bg-accent ${i === active ? 'bg-accent' : ''}`}
               onMouseDown={() => select(s.value)}
             >
               {s.label}

@@ -258,6 +258,33 @@ def resolve_tenant_site(tenant_code: str):
 	return {"active": active, "site_name": r.site_name if active else None}
 
 
+@frappe.whitelist(allow_guest=True)
+def get_entitlements(tenant_code: str):
+	"""get_enabled_modules plus the report bundle of the tenant's plan.
+
+	`reports` maps each module the plan limits to selected reports onto those
+	report names; a module that isn't in it has all of its reports. Guest-accessible
+	for the same server-to-server reason as get_enabled_modules.
+	"""
+	_require_internal_token()
+	tenant = frappe.get_all(
+		"XentraERP Tenant",
+		filters={"tenant_code": tenant_code},
+		fields=["enabled_modules", "status", "plan"],
+		limit_page_length=1,
+	)
+	if not tenant or tenant[0].status not in ("Trial", "Active"):
+		return {"modules": [], "reports": {}}
+	t = tenant[0]
+	reports: dict[str, list[str]] = {}
+	if t.plan and frappe.db.exists("XentraERP Plan", t.plan):
+		plan = frappe.get_doc("XentraERP Plan", t.plan)
+		for m in plan.modules:
+			if m.report_access == "Selected Reports":
+				reports[m.module_code] = [r.report for r in plan.reports if r.module_code == m.module_code]
+	return {"modules": [m for m in (t.enabled_modules or "").split(",") if m], "reports": reports}
+
+
 @frappe.whitelist()
 def tenant_stats():
 	"""Aggregate counts for the admin dashboard."""

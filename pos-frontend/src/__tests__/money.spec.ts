@@ -62,3 +62,17 @@ describe('currency precision comes from the currency, never a literal', () => {
     expect(formatMoney(1, 'BHD', { locale: 'en' })).toMatch(/1\.000/)
   })
 })
+
+describe('currency symbol follows the screen language', () => {
+  it('shows an Arabic-script ERPNext symbol only when the screen is in Arabic', () => {
+    setCompanyCurrency({ code: 'BHD', fraction_units: 1000, symbol: '.د.ب', symbol_on_right: 1 })
+    expect(formatMoney(1.5, 'BHD')).toBe('BHD 1.500')
+    expect(formatMoney(1.5, 'BHD')).not.toMatch(/[؀-ۿ]/)
+    setLocale('ar')
+    expect(formatMoney(1.5, 'BHD')).toMatch(/د\.ب/)
+  })
+  it('keeps a Latin symbol in either language', () => {
+    registerCurrency({ code: 'USD', decimals: 2, symbol: '$' })
+    expect(formatMoney(3, 'USD')).toBe('$ 3.00')
+  })
+})

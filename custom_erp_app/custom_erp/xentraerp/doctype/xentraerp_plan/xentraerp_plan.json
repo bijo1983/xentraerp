@@ -1,0 +1,148 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "plan_name",
+  "is_active",
+  "sort_order",
+  "is_custom",
+  "custom_for",
+  "description",
+  "column_break_pricing",
+  "price_monthly",
+  "price_annual",
+  "max_users",
+  "section_break_modules",
+  "modules",
+  "section_break_reports",
+  "reports"
+ ],
+ "fields": [
+  {
+   "fieldname": "plan_name",
+   "fieldtype": "Data",
+   "label": "Plan Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Display Order"
+  },
+  {
+   "fieldname": "is_custom",
+   "fieldtype": "Check",
+   "label": "Customizable",
+   "default": "0",
+   "description": "A template: assigning it to a tenant creates that tenant's own copy of the plan to tailor."
+  },
+  {
+   "fieldname": "custom_for",
+   "fieldtype": "Link",
+   "label": "Custom Plan For",
+   "options": "XentraERP Tenant",
+   "read_only": 1,
+   "description": "Set on a tenant's own copy of a customizable plan."
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_pricing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "price_monthly",
+   "fieldtype": "Float",
+   "label": "Monthly Price",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "price_annual",
+   "fieldtype": "Float",
+   "label": "Annual Price"
+  },
+  {
+   "fieldname": "max_users",
+   "fieldtype": "Int",
+   "label": "Max Users",
+   "description": "0 = unlimited"
+  },
+  {
+   "fieldname": "section_break_modules",
+   "fieldtype": "Section Break",
+   "label": "Modules"
+  },
+  {
+   "fieldname": "modules",
+   "fieldtype": "Table",
+   "label": "Modules",
+   "options": "XentraERP Plan Module"
+  },
+  {
+   "fieldname": "section_break_reports",
+   "fieldtype": "Section Break",
+   "label": "Report Bundle"
+  },
+  {
+   "fieldname": "reports",
+   "fieldtype": "Table",
+   "label": "Reports",
+   "options": "XentraERP Plan Report"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-08 06:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "sort_order",
+ "sort_order": "ASC",
+ "states": [],
+ "name": "XentraERP Plan",
+ "autoname": "field:plan_name",
+ "naming_rule": "By fieldname",
+ "track_changes": 1,
+ "title_field": "plan_name"
+}

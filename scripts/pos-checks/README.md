@@ -14,6 +14,10 @@ Run from `/home/frappe/innovegic-bench/sites` with the bench Python (tenant `197
     (registers, shifts, orders, day-end report), location ↔ cost center rules, and Retail / F&B / both per location
   - `roles_takeaway_reservations_suite.py` — Waiter/Cashier/Supervisor/Kitchen rights, take-away, auto-KOT,
     reservations, menu management, item notes (incl. the AI path with the network call mocked)
+  - `role_profiles_suite.py` — POS role profiles: standard catalogue seeded (and re-seeding keeps a tenant's edits),
+    rights limited to the access level, mapping a profile to staff, the exact rights it gives at the till, disable /
+    level-change fallbacks, old `pos_role` callers, administrators, and the migration patch for existing staff.
+    Run after `bench migrate` (the patch creates the table and the User field).
   - `auth_suite.py` — **POS upgrade Phase 1**: staff number + PIN, per-user / per-IP progressive lockout, generic
     errors, login log (no PINs logged), administrators refused at PIN sign-in, device approval codes (one use,
     expiry, revoke), device type ↔ role rules and session modes, Waiter/order-device 403s on bill/pay/shift, a waiter
