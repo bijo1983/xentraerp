@@ -39,6 +39,13 @@ class XentraERPTenant(Document):
 		if not self.tenant_code:
 			self.tenant_code = generate_tenant_code(self.organization_name)
 
+		# The tenant's base currency is its country's currency (BHD for Bahrain, AED for the
+		# UAE, ...) unless the platform admin has set one; provisioning uses it for the Company.
+		if self.country and not self.base_currency:
+			from frappe.geo.country_info import get_country_info
+
+			self.base_currency = (get_country_info(self.country) or {}).get("currency") or None
+
 		if self.status == "Trial" and not self.trial_end_date:
 			self.trial_start_date = self.trial_start_date or today()
 			self.trial_end_date = add_months(self.trial_start_date, 1)
