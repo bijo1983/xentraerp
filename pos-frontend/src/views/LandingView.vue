@@ -1,19 +1,22 @@
 <script setup lang="ts">
-// Public landing page at "/". Marketing only: every "Sign in" leads to the separate sign-in page
-// (/signin, SignInView). No lifestyle or stock photography: the hero pairs the headline with
-// the product family drawn as floating panels (HeroProduct); capabilities alternate copy with
-// real XentraERP POS screens (public/img/product, sample data) or drawn product panels
-// (ProductPanel); then sample KPIs, the businesses it is made for, features, security and a
-// closing call to action. Spacing follows one scale: 24px between components,
-// 48px inside sections, 96px between major sections.
+// Public landing page at "/" (pos.xentraerp.net — the POS front of the XentraERP platform).
+// Marketing only: every "Sign in" leads to the separate sign-in page (/signin, SignInView).
+// Order: hero (headline, calls to action, credibility cards, the product ecosystem around the
+// XentraERP hub — HeroProduct), who chooses it, a product story (five sections alternating
+// visual left / right, each a real screen in a device mockup or a drawn panel, with a glass
+// "insight" card), the XentraERP platform the POS belongs to, the operating pillars (scale,
+// control, visibility, automation, security, analytics), security and a closing call to action.
+// No stock photography. Spacing follows one scale: 24px between components, 48px inside
+// sections, 96px between major sections.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  ArrowRight, Banknote, Boxes, Building2, ChartColumn, CircleCheck, Fingerprint, Globe, KeyRound, Layers, MonitorSmartphone,
-  Coffee, Printer, Receipt, ShieldCheck, ShoppingBag, Sparkles, Store, Timer, Users, UtensilsCrossed, Wallet,
+  Activity, ArrowRight, Boxes, Building2, ChartColumn, ChartLine, ChefHat, CircleCheck, Cloud, Coffee, Eye, Factory,
+  Fingerprint, FolderKanban, Gauge, Handshake, KeyRound, Landmark, Layers, MonitorSmartphone, Network, Receipt,
+  ShieldCheck, ShoppingBag, ShoppingCart, Soup, Sparkles, Store, Timer, Truck, Users, UtensilsCrossed, Workflow,
 } from 'lucide-vue-next'
 import brandMark from '@/assets/brand-mark.png'
 import LocaleSwitch from '@/components/shell/LocaleSwitch.vue'
-import CountUp from '@/components/landing/CountUp.vue'
+import DeviceFrame from '@/components/landing/DeviceFrame.vue'
 import HeroProduct from '@/components/landing/HeroProduct.vue'
 import ProductPanel from '@/components/landing/ProductPanel.vue'
 import { useReveal } from '@/composables/useReveal'
@@ -38,45 +41,74 @@ const sections = computed(() => [
   { id: 'retail', label: t('landing.nav.retail') },
   { id: 'analytics', label: t('landing.nav.analytics') },
   { id: 'inventory', label: t('landing.nav.inventory') },
-  { id: 'branches', label: t('landing.nav.branches') },
-])
-const trust = computed(() => [
-  { icon: MonitorSmartphone, text: t('landing.trust.devices') },
-  { icon: Fingerprint, text: t('landing.trust.pin') },
-  { icon: KeyRound, text: t('landing.trust.mfa') },
+  { id: 'platform', label: t('landing.nav.platform') },
 ])
 
-// Capability sections alternate visual right / left: a real screen (shot) or a drawn panel.
-type Capability = { id: string; icon: typeof UtensilsCrossed; tone: string; key: string; alt: string; shot?: string; panel?: 'inventory' | 'branches' }
-const capabilities = computed<Capability[]>(() => [
-  { id: 'restaurant', icon: UtensilsCrossed, tone: 'amber', shot: 'restaurant-order', alt: t('landing.shot.order'), key: 'fnb' },
-  { id: 'retail', icon: ShoppingBag, tone: 'sky', shot: 'retail-checkout', alt: t('landing.shot.retail'), key: 'retail' },
-  { id: 'analytics', icon: ChartColumn, tone: 'emerald', shot: 'management-dashboard', alt: t('landing.shot.dashboard'), key: 'analytics' },
-  { id: 'inventory', icon: Boxes, tone: 'rose', panel: 'inventory', alt: t('landing.shot.inventory'), key: 'inventory' },
-  { id: 'branches', icon: Building2, tone: 'violet', panel: 'branches', alt: t('landing.shot.branches'), key: 'branches' },
+// credibility cards under the hero buttons
+const metrics = computed(() =>
+  [
+    { id: 'tx', icon: Receipt },
+    { id: 'registers', icon: MonitorSmartphone },
+    { id: 'branches', icon: Building2 },
+    { id: 'inventory', icon: Boxes },
+    { id: 'cloud', icon: Cloud },
+    { id: 'security', icon: ShieldCheck },
+  ].map((m) => ({ ...m, value: t(`landing.metrics.${m.id}.value`), label: t(`landing.metrics.${m.id}.label`) })),
+)
+
+const why = computed(() =>
+  [
+    { id: 'restaurants', icon: UtensilsCrossed, tone: 'amber' },
+    { id: 'retail', icon: Store, tone: 'sky' },
+    { id: 'groups', icon: Network, tone: 'violet' },
+    { id: 'franchises', icon: Handshake, tone: 'emerald' },
+    { id: 'cafes', icon: Coffee, tone: 'rose' },
+    { id: 'foodcourts', icon: Soup, tone: 'orange' },
+  ].map((w) => ({ ...w, title: t(`landing.why.${w.id}.title`), body: t(`landing.why.${w.id}.body`) })),
+)
+
+// Product story, visual left first, then alternating. Each visual is a real screen (shot) in a
+// device frame or a drawn panel, with one glass insight card (illustrative sample data).
+type Story = {
+  id: string; key: string; icon: typeof UtensilsCrossed; tone: string; alt: string
+  frame: 'laptop' | 'tablet' | 'browser' | 'bare'; shot?: string; panel?: 'inventory' | 'branches'
+  insight: { icon: typeof UtensilsCrossed; title: string; sub: string }
+}
+const stories = computed<Story[]>(() => [
+  { id: 'restaurant', key: 'fnb', icon: UtensilsCrossed, tone: 'amber', frame: 'tablet', shot: 'restaurant-order', alt: t('landing.shot.order'),
+    insight: { icon: ChefHat, title: 'Kitchen ticket sent', sub: 'Table A4 · 3 dishes · 12s ago' } },
+  { id: 'retail', key: 'retail', icon: ShoppingBag, tone: 'sky', frame: 'browser', shot: 'retail-checkout', alt: t('landing.shot.retail'),
+    insight: { icon: CircleCheck, title: 'Paid · BHD 15.700', sub: 'Card 10.000 + Cash 5.700' } },
+  { id: 'analytics', key: 'analytics', icon: ChartColumn, tone: 'emerald', frame: 'laptop', shot: 'management-dashboard', alt: t('landing.shot.dashboard'),
+    insight: { icon: Gauge, title: 'Shift closed · variance 0.000', sub: 'Expected = counted, per currency' } },
+  { id: 'inventory', key: 'inventory', icon: Boxes, tone: 'rose', frame: 'bare', panel: 'inventory', alt: t('landing.shot.inventory'),
+    insight: { icon: Truck, title: 'Reorder suggested', sub: '3 items below reorder level' } },
+  { id: 'branches', key: 'branches', icon: Building2, tone: 'violet', frame: 'bare', panel: 'branches', alt: t('landing.shot.branches'),
+    insight: { icon: Activity, title: '10 registers live', sub: '4 locations · one group report' } },
 ])
 
-const kpis = computed(() => [
-  { icon: Wallet, tone: 'sky', label: t('landing.kpis.sales'), to: 2846.75, decimals: 3, prefix: 'BHD', note: t('landing.kpis.salesNote'), spark: [12, 18, 15, 24, 30, 27, 38, 44] },
-  { icon: Receipt, tone: 'emerald', label: t('landing.kpis.tx'), to: 186, decimals: 0, prefix: '', note: t('landing.kpis.txNote'), spark: [8, 14, 11, 20, 26, 22, 30, 34] },
-  { icon: Boxes, tone: 'amber', label: t('landing.kpis.inventory'), to: 412, decimals: 0, prefix: '', note: t('landing.kpis.invNote'), spark: [20, 16, 24, 22, 28, 26, 32, 30] },
-  { icon: Building2, tone: 'violet', label: t('landing.kpis.branches'), to: 3, decimals: 0, prefix: '', note: t('landing.kpis.branchNote'), spark: [10, 10, 20, 20, 20, 30, 30, 30] },
+// the XentraERP modules the POS posts into, around it
+const modules = computed(() => [
+  { icon: Landmark, label: t('landing.platform.m.accounting') },
+  { icon: Boxes, label: t('landing.platform.m.inventory') },
+  { icon: ShoppingCart, label: t('landing.platform.m.buying') },
+  { icon: Handshake, label: t('landing.platform.m.selling') },
+  { icon: Users, label: t('landing.platform.m.hr') },
+  { icon: Factory, label: t('landing.platform.m.manufacturing') },
+  { icon: FolderKanban, label: t('landing.platform.m.projects') },
+  { icon: ChartLine, label: t('landing.platform.m.reports') },
 ])
-const sparkPath = (pts: number[]) => pts.map((v, i) => `${i ? 'L' : 'M'}${(i / (pts.length - 1)) * 100},${40 - v * 0.8}`).join(' ')
 
-const madeFor = computed(() => [
-  { id: 'restaurants', icon: UtensilsCrossed, tone: 'amber', label: t('landing.for.restaurants'), body: t('landing.for.restaurantsBody') },
-  { id: 'cafes', icon: Coffee, tone: 'rose', label: t('landing.for.cafes'), body: t('landing.for.cafesBody') },
-  { id: 'retail', icon: Store, tone: 'sky', label: t('landing.for.retail'), body: t('landing.for.retailBody') },
-])
-const features = computed(() => [
-  { icon: Users, tone: 'sky', title: t('landing.f1.title'), body: t('landing.f1.body') },
-  { icon: Wallet, tone: 'emerald', title: t('landing.f2.title'), body: t('landing.f2.body') },
-  { icon: Banknote, tone: 'amber', title: t('landing.f3.title'), body: t('landing.f3.body') },
-  { icon: Printer, tone: 'violet', title: t('landing.f4.title'), body: t('landing.f4.body') },
-  { icon: Globe, tone: 'rose', title: t('landing.f5.title'), body: t('landing.f5.body') },
-  { icon: Layers, tone: 'sky', title: t('landing.f6.title'), body: t('landing.f6.body') },
-])
+const pillars = computed(() =>
+  [
+    { id: 'scale', icon: Layers, tone: 'sky' },
+    { id: 'control', icon: Users, tone: 'violet' },
+    { id: 'visibility', icon: Eye, tone: 'emerald' },
+    { id: 'automation', icon: Workflow, tone: 'amber' },
+    { id: 'security', icon: ShieldCheck, tone: 'rose' },
+    { id: 'analytics', icon: ChartColumn, tone: 'teal' },
+  ].map((p) => ({ ...p, title: t(`landing.pillars.${p.id}.title`), body: t(`landing.pillars.${p.id}.body`) })),
+)
 const security = computed(() => [
   { icon: MonitorSmartphone, title: t('landing.security.s1.title'), body: t('landing.security.s1.body') },
   { icon: Fingerprint, title: t('landing.security.s2.title'), body: t('landing.security.s2.body') },
@@ -107,7 +139,7 @@ const security = computed(() => [
       </div>
     </header>
 
-    <!-- hero: headline, value proposition and calls to action beside the product family -->
+    <!-- hero: headline, calls to action and credibility cards beside the product ecosystem -->
     <main id="top" class="lp-hero">
       <div class="lp-hero__bg" aria-hidden="true" />
       <div class="lp-hero__in lp-wrap">
@@ -117,110 +149,125 @@ const security = computed(() => [
           <p class="lp-hero__lead x-enter">{{ t('landing.lead') }}</p>
           <div class="lp-ctas x-enter">
             <RouterLink class="lp-btn lp-btn--primary" to="/signin">{{ t('landing.cta.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></RouterLink>
-            <a class="lp-btn lp-btn--ghost" href="#restaurant">{{ t('landing.cta.secondary') }}</a>
+            <a class="lp-btn lp-btn--ghost" href="#platform">{{ t('landing.cta.secondary') }}</a>
           </div>
-          <ul class="lp-trust x-enter" :aria-label="t('landing.trust.label')">
-            <li v-for="x in trust" :key="x.text"><component :is="x.icon" :size="16" aria-hidden="true" />{{ x.text }}</li>
-          </ul>
         </div>
-
         <HeroProduct class="lp-hero__media x-enter" />
+      </div>
+
+      <div class="lp-wrap">
+        <ul class="lp-metrics x-enter" :aria-label="t('landing.metrics.label')">
+          <li v-for="m in metrics" :key="m.id" class="lp-metric">
+            <span class="lp-metric__ic" aria-hidden="true"><component :is="m.icon" :size="18" :stroke-width="2" /></span>
+            <b>{{ m.value }}</b>
+            <span>{{ m.label }}</span>
+          </li>
+        </ul>
       </div>
     </main>
 
-    <!-- capabilities, alternating visual right / left -->
-    <section
-      v-for="(c, i) in capabilities"
-      :id="c.id"
-      :key="c.id"
-      class="lp-cap"
-      :class="{ 'lp-cap--flip': i % 2 === 1, 'lp-cap--tint': i % 2 === 1, 'lp-cap--first': i === 0 }"
-      :aria-labelledby="`${c.id}-title`"
-    >
-      <div class="lp-cap__in lp-wrap">
-        <div class="lp-cap__copy" data-reveal>
-          <p class="lp-eyebrow"><span class="x-art" :class="`x-art--${c.tone}`" aria-hidden="true"><component :is="c.icon" :size="18" :stroke-width="1.8" /></span>{{ t(`landing.${c.key}.eyebrow`) }}</p>
-          <h2 :id="`${c.id}-title`" class="lp-h2">{{ t(`landing.${c.key}.title`) }}</h2>
-          <p class="lp-sub">{{ t(`landing.${c.key}.body`) }}</p>
-          <ul class="lp-checks">
-            <li v-for="b in ['b1', 'b2', 'b3']" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.${c.key}.${b}`) }}</li>
-          </ul>
-          <RouterLink class="lp-link" to="/signin">{{ t(`landing.${c.key}.cta`) }} <ArrowRight class="lp-arrow" :size="17" aria-hidden="true" /></RouterLink>
+    <!-- who chooses it -->
+    <section id="why" class="lp-why" aria-labelledby="why-title">
+      <div class="lp-wrap lp-stack">
+        <div class="lp-head" data-reveal>
+          <p class="lp-eyebrow lp-eyebrow--plain">{{ t('landing.why.eyebrow') }}</p>
+          <h2 id="why-title" class="lp-h2">{{ t('landing.why.title') }}</h2>
+          <p class="lp-sub">{{ t('landing.why.body') }}</p>
         </div>
-        <div class="lp-stage" :class="`lp-stage--${c.tone}`" data-reveal>
-          <ProductPanel v-if="c.panel" :kind="c.panel" :label="c.alt" />
-          <div v-else class="lp-shot">
-            <span class="lp-shot__bar" aria-hidden="true"><i /><i /><i /><span>pos.xentraerp.net</span></span>
+        <ul class="lp-why__grid">
+          <li v-for="w in why" :key="w.id" class="lp-card lp-why__card" data-reveal>
+            <span class="lp-icon lp-icon--lg x-art" :class="`x-art--${w.tone}`" aria-hidden="true"><component :is="w.icon" :size="24" :stroke-width="1.8" /></span>
+            <div>
+              <h3>{{ w.title }}</h3>
+              <p>{{ w.body }}</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- product story, visual left first, alternating -->
+    <section
+      v-for="(s, i) in stories"
+      :id="s.id"
+      :key="s.id"
+      class="lp-story"
+      :class="{ 'lp-story--flip': i % 2 === 1, 'lp-story--tint': i % 2 === 1 }"
+      :aria-labelledby="`${s.id}-title`"
+    >
+      <div class="lp-story__in lp-wrap">
+        <div class="lp-stage" :class="`lp-stage--${s.tone}`" data-reveal>
+          <DeviceFrame :kind="s.frame">
+            <ProductPanel v-if="s.panel" :kind="s.panel" :label="s.alt" />
             <img
-              :src="`/img/product/${c.shot}.webp`"
-              :srcset="`/img/product/${c.shot}-sm.webp 800w, /img/product/${c.shot}.webp 1600w`"
+              v-else
+              :src="`/img/product/${s.shot}.webp`"
+              :srcset="`/img/product/${s.shot}-sm.webp 800w, /img/product/${s.shot}.webp 1600w`"
               sizes="(max-width: 1023px) 92vw, 680px"
-              :alt="c.alt"
+              :alt="s.alt"
+              width="1600"
+              height="1000"
               loading="lazy"
               decoding="async"
             />
+            <template #insight>
+              <span class="lp-insight">
+                <span class="lp-insight__ic x-art" :class="`x-art--${s.tone}`"><component :is="s.insight.icon" :size="18" :stroke-width="2" /></span>
+                <span><b>{{ s.insight.title }}</b><small>{{ s.insight.sub }}</small></span>
+              </span>
+            </template>
+          </DeviceFrame>
+        </div>
+        <div class="lp-story__copy" data-reveal>
+          <p class="lp-eyebrow"><span class="x-art" :class="`x-art--${s.tone}`" aria-hidden="true"><component :is="s.icon" :size="18" :stroke-width="1.8" /></span>{{ t(`landing.${s.key}.eyebrow`) }}<em class="lp-pillar">{{ t(`landing.${s.key}.pillar`) }}</em></p>
+          <h2 :id="`${s.id}-title`" class="lp-h2">{{ t(`landing.${s.key}.title`) }}</h2>
+          <p class="lp-sub">{{ t(`landing.${s.key}.body`) }}</p>
+          <ul class="lp-checks">
+            <li v-for="b in ['b1', 'b2', 'b3']" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.${s.key}.${b}`) }}</li>
+          </ul>
+          <RouterLink class="lp-link" to="/signin">{{ t(`landing.${s.key}.cta`) }} <ArrowRight class="lp-arrow" :size="17" aria-hidden="true" /></RouterLink>
+        </div>
+      </div>
+    </section>
+
+    <!-- the XentraERP platform the POS belongs to -->
+    <section id="platform" class="lp-platform" aria-labelledby="platform-title">
+      <div class="lp-wrap lp-platform__in">
+        <div class="lp-platform__copy" data-reveal>
+          <p class="lp-eyebrow lp-eyebrow--dark"><span aria-hidden="true"><Layers :size="18" /></span>{{ t('landing.platform.eyebrow') }}</p>
+          <h2 id="platform-title" class="lp-h2">{{ t('landing.platform.title') }}</h2>
+          <p class="lp-sub">{{ t('landing.platform.body') }}</p>
+          <ul class="lp-checks lp-checks--dark">
+            <li v-for="b in ['b1', 'b2', 'b3']" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.platform.${b}`) }}</li>
+          </ul>
+          <a class="lp-btn lp-btn--light" href="https://xentraerp.net">{{ t('landing.platform.cta') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></a>
+        </div>
+        <div class="lp-eco" data-reveal>
+          <div class="lp-eco__core">
+            <img :src="brandMark" alt="" width="44" height="44" />
+            <b>XentraERP</b>
+            <span>POS</span>
           </div>
+          <ul class="lp-eco__mods" :aria-label="t('landing.platform.modulesLabel')">
+            <li v-for="m in modules" :key="m.label"><component :is="m.icon" :size="18" aria-hidden="true" />{{ m.label }}</li>
+          </ul>
         </div>
       </div>
     </section>
 
-    <!-- KPIs -->
-    <section id="kpis" class="lp-kpis" aria-labelledby="kpis-title">
+    <!-- operating pillars -->
+    <section id="pillars" class="lp-pillars" aria-labelledby="pillars-title">
       <div class="lp-wrap lp-stack">
         <div class="lp-head" data-reveal>
-          <p class="lp-eyebrow lp-eyebrow--plain">{{ t('landing.kpis.eyebrow') }}</p>
-          <h2 id="kpis-title" class="lp-h2">{{ t('landing.kpis.title') }}</h2>
-          <p class="lp-sub">{{ t('landing.kpis.body') }}</p>
+          <p class="lp-eyebrow lp-eyebrow--plain">{{ t('landing.pillars.eyebrow') }}</p>
+          <h2 id="pillars-title" class="lp-h2">{{ t('landing.pillars.title') }}</h2>
+          <p class="lp-sub">{{ t('landing.pillars.body') }}</p>
         </div>
-        <ul class="lp-kpi-grid">
-          <li v-for="k in kpis" :key="k.label" class="lp-card lp-kpi" data-reveal>
-            <div class="lp-kpi__top">
-              <span class="lp-icon x-art" :class="`x-art--${k.tone}`" aria-hidden="true"><component :is="k.icon" :size="20" :stroke-width="1.8" /></span>
-              <span class="lp-kpi__label">{{ k.label }}</span>
-            </div>
-            <b class="lp-kpi__value x-tabular"><small v-if="k.prefix">{{ k.prefix }}</small><CountUp :to="k.to" :decimals="k.decimals" /></b>
-            <svg class="lp-kpi__spark" :class="`is-${k.tone}`" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
-              <path :d="`${sparkPath(k.spark)} L100,40 L0,40 Z`" class="area" />
-              <path :d="sparkPath(k.spark)" class="line" />
-            </svg>
-            <small class="lp-kpi__note">{{ k.note }}</small>
-          </li>
-        </ul>
-        <p class="lp-note">{{ t('landing.kpis.sample') }}</p>
-      </div>
-    </section>
-
-    <!-- made for -->
-    <section id="made-for" class="lp-for" aria-labelledby="for-title">
-      <div class="lp-wrap lp-stack">
-        <div class="lp-head" data-reveal>
-          <p class="lp-eyebrow lp-eyebrow--plain">{{ t('landing.for.label') }}</p>
-          <h2 id="for-title" class="lp-h2">{{ t('landing.for.title') }}</h2>
-          <p class="lp-sub">{{ t('landing.for.body') }}</p>
-        </div>
-        <ul class="lp-for__grid">
-          <li v-for="m in madeFor" :key="m.id" class="lp-card lp-for__card" data-reveal>
-            <span class="lp-icon lp-icon--lg x-art" :class="`x-art--${m.tone}`" aria-hidden="true"><component :is="m.icon" :size="24" :stroke-width="1.8" /></span>
-            <h3>{{ m.label }}</h3>
-            <p>{{ m.body }}</p>
-          </li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- features -->
-    <section id="features" class="lp-features" aria-labelledby="features-title">
-      <div class="lp-wrap lp-stack">
-        <div class="lp-head" data-reveal>
-          <p class="lp-eyebrow lp-eyebrow--plain">{{ t('landing.features.eyebrow') }}</p>
-          <h2 id="features-title" class="lp-h2">{{ t('landing.features.title') }}</h2>
-          <p class="lp-sub">{{ t('landing.features.body') }}</p>
-        </div>
-        <ul class="lp-fgrid">
-          <li v-for="f in features" :key="f.title" class="lp-card lp-fcard" data-reveal>
-            <span class="lp-icon lp-icon--lg x-art" :class="`x-art--${f.tone}`" aria-hidden="true"><component :is="f.icon" :size="22" :stroke-width="1.8" /></span>
-            <h3>{{ f.title }}</h3>
-            <p>{{ f.body }}</p>
+        <ul class="lp-pgrid">
+          <li v-for="p in pillars" :key="p.id" class="lp-pcard" data-reveal>
+            <span class="lp-icon lp-icon--lg x-art" :class="`x-art--${p.tone}`" aria-hidden="true"><component :is="p.icon" :size="22" :stroke-width="1.8" /></span>
+            <h3>{{ p.title }}</h3>
+            <p>{{ p.body }}</p>
           </li>
         </ul>
       </div>
@@ -263,6 +310,7 @@ const security = computed(() => [
     <footer class="lp-foot">
       <div class="lp-foot__in lp-wrap">
         <span class="lp-brand lp-brand--sm"><img :src="brandMark" alt="" width="24" height="24" /><span class="lp-brand__word">Xentra<b>ERP</b></span></span>
+        <span>{{ t('landing.footer.platform') }} <a href="https://xentraerp.net">xentraerp.net</a></span>
         <span>© {{ year }} XentraERP · {{ t('landing.footer.rights') }}</span>
       </div>
     </footer>
@@ -275,11 +323,12 @@ const security = computed(() => [
 /* One scale for the whole page: 24px between components, 48px inside a section, 96px between
    major sections; 24px radius for cards and panels, 12px for controls; three type sizes. */
 .lp {
-  --s1: 24px; --s2: 48px; --s3: 96px;
+  --s1: 24px; --s2: 48px; --s3: 112px;
   --r: 24px; --r-sm: 12px;
-  --h1: clamp(40px, 4.4vw, 60px); --h2: clamp(30px, 3vw, 42px); --h3: 20px;
+  --h1: clamp(40px, 4.4vw, 60px); --h2: clamp(30px, 3vw, 44px); --h3: 19px;
   --lead: clamp(17px, 1.3vw, 19px); --body: 17px; --small: 14px;
   --measure: 62ch;
+  --lift: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 40px -20px rgba(15, 23, 42, 0.18);
   min-height: 100dvh; background: var(--x-bg); color: var(--x-text); font-family: var(--x-font-sans); overflow-x: clip; scroll-behavior: smooth;
 }
 .lp :is(h1, h2, h3) { text-wrap: balance; overflow-wrap: normal; hyphens: manual; }
@@ -326,105 +375,135 @@ const security = computed(() => [
 .lp-nav__end { display: flex; align-items: center; gap: 12px; margin-inline-start: auto; }
 
 /* hero */
-.lp-hero { position: relative; isolation: isolate; }
+.lp-hero { position: relative; isolation: isolate; padding-block-end: var(--s2); }
 .lp-hero__bg { position: absolute; inset: -72px 0 0; z-index: -1; pointer-events: none; overflow: hidden;
   background:
-    radial-gradient(48% 60% at 85% 18%, color-mix(in srgb, var(--x-primary) 9%, transparent), transparent 70%),
-    radial-gradient(40% 50% at 8% 4%, color-mix(in srgb, var(--x-brand-teal) 7%, transparent), transparent 70%);
+    radial-gradient(50% 60% at 78% 22%, color-mix(in srgb, var(--x-primary) 12%, transparent), transparent 70%),
+    radial-gradient(40% 50% at 6% 2%, color-mix(in srgb, var(--x-brand-teal) 9%, transparent), transparent 70%),
+    linear-gradient(to bottom, transparent 70%, var(--x-surface));
 }
 /* the grid is a faint texture only, fading out well before the content ends */
 .lp-hero__bg::before { content: ''; position: absolute; inset: 0; opacity: 0.22;
   background-image: linear-gradient(var(--x-border) 1px, transparent 1px), linear-gradient(90deg, var(--x-border) 1px, transparent 1px);
   background-size: 64px 64px; mask-image: radial-gradient(70% 60% at 40% 0%, #000 20%, transparent 70%); -webkit-mask-image: radial-gradient(70% 60% at 40% 0%, #000 20%, transparent 70%); }
-.lp-hero__in { display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: clamp(40px, 5vw, 72px); align-items: center; padding-block: clamp(48px, 7vw, 96px) var(--s3); }
+.lp-hero__in { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(32px, 4vw, 64px); align-items: center; padding-block: clamp(40px, 6vw, 80px) var(--s2); }
 .lp-hero__story { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .lp-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--x-surface); border: 1px solid var(--x-border); box-shadow: var(--x-shadow-xs); font-size: var(--small); font-weight: 600; }
 .lp-badge span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--x-brand-gradient); color: #fff; }
-.lp-hero__title { margin: 0; font-family: var(--x-font-display); font-weight: 800; font-size: var(--h1); line-height: 1.08; letter-spacing: -0.03em; max-width: 22ch; color: var(--x-text); }
-.lp-hero__lead { margin: 0; font-size: var(--lead); line-height: 1.6; color: var(--x-text-muted); max-width: 56ch; }
-.lp-trust { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 12px 24px; }
-.lp-trust li { display: inline-flex; align-items: center; gap: 8px; font-size: var(--small); font-weight: 500; color: var(--x-text-muted); white-space: nowrap; }
-.lp-trust li svg { color: var(--x-success); }
+.lp-hero__title { margin: 0; font-family: var(--x-font-display); font-weight: 800; font-size: var(--h1); line-height: 1.06; letter-spacing: -0.035em; max-width: 20ch; color: var(--x-text); }
+.lp-hero__lead { margin: 0; font-size: var(--lead); line-height: 1.6; color: var(--x-text-muted); max-width: 54ch; }
 .lp-hero__media { position: relative; margin: 0; min-width: 0; }
 
+/* credibility cards: one glass strip of six KPIs */
+.lp-metrics { list-style: none; margin: 0; padding: 8px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; border-radius: calc(var(--r) + 4px);
+  background: color-mix(in srgb, var(--x-surface) 70%, transparent); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--x-border); box-shadow: var(--lift); }
+.lp-metric { display: flex; flex-direction: column; gap: 4px; padding: 18px 20px; min-width: 0; }
+.lp-metric + .lp-metric { border-inline-start: 1px solid var(--x-border); }
+.lp-metric__ic { display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 8px; border-radius: 10px; color: #fff; background: var(--x-brand-gradient); box-shadow: 0 8px 16px -8px color-mix(in srgb, var(--x-primary) 70%, transparent); }
+.lp-metric b { font-family: var(--x-font-display); font-size: clamp(19px, 1.6vw, 22px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+.lp-metric > span:last-child { font-size: 13.5px; font-weight: 500; color: var(--x-text-muted); line-height: 1.35; }
+
 /* section headings */
-.lp-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; max-width: 760px; margin-inline: auto; }
-.lp-eyebrow { display: inline-flex; align-items: center; gap: 12px; margin: 0; font-size: 15px; font-weight: 700; color: var(--x-text); }
+.lp-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; max-width: 780px; margin-inline: auto; }
+.lp-eyebrow { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; font-size: 15px; font-weight: 700; color: var(--x-text); }
 .lp-eyebrow > span { width: 40px; height: 40px; border-radius: var(--r-sm); flex: none; }
-.lp-eyebrow--plain { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--x-primary-text); }
-.lp-h2 { margin: 0; font-family: var(--x-font-display); font-weight: 800; font-size: var(--h2); line-height: 1.12; letter-spacing: -0.025em; color: var(--x-text); max-width: 22ch; }
+.lp-eyebrow--plain { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--x-primary-text); }
+.lp-pillar { font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; color: var(--x-primary-text); background: color-mix(in srgb, var(--x-primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--x-primary) 20%, transparent); }
+.lp-h2 { margin: 0; font-family: var(--x-font-display); font-weight: 800; font-size: var(--h2); line-height: 1.1; letter-spacing: -0.03em; color: var(--x-text); max-width: 22ch; }
 .lp-sub { margin: 0; font-size: var(--lead); line-height: 1.65; color: var(--x-text-muted); max-width: var(--measure); }
-.lp-note { margin: 0; text-align: center; font-size: 13px; color: var(--x-text-faint); }
 [data-reveal] { opacity: 0; transform: translateY(16px); transition: opacity 600ms var(--x-ease), transform 600ms var(--x-ease); }
 [data-reveal].is-in { opacity: 1; transform: none; }
 
-/* capability sections: copy beside a product visual, alternating sides */
-.lp-cap { padding-block: var(--s3); }
-.lp-cap--first { border-block-start: 1px solid var(--x-border); background: var(--x-surface); }
-.lp-cap--tint { background: var(--x-bg); }
-.lp-cap:not(.lp-cap--tint):not(.lp-cap--first) { background: var(--x-surface); }
-.lp-cap__in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 80px); align-items: center; }
-.lp-cap--flip .lp-cap__in { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-.lp-cap--flip .lp-cap__copy { order: 2; }
-.lp-cap__copy { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); min-width: 0; }
-.lp-cap__copy .lp-sub { font-size: var(--body); }
-.lp-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.lp-checks li { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; font-weight: 500; line-height: 1.5; }
-.lp-checks svg { color: var(--x-success); flex: none; margin-top: 2px; }
-.lp-stage { position: relative; min-width: 0; padding: clamp(12px, 2vw, 28px); border-radius: calc(var(--r) + 8px);
-  background: linear-gradient(150deg, var(--stage-a), var(--stage-b)); border: 1px solid color-mix(in srgb, var(--stage-b) 60%, var(--x-border)); }
-.lp-stage--amber { --stage-a: #fffbeb; --stage-b: #fde9c4; }
-.lp-stage--sky { --stage-a: #f0f9ff; --stage-b: #d6ecfb; }
-.lp-stage--emerald { --stage-a: #ecfdf5; --stage-b: #cdf3e2; }
-.lp-stage--rose { --stage-a: #fff1f2; --stage-b: #fbd9de; }
-.lp-stage--violet { --stage-a: #f5f3ff; --stage-b: #e2dcfd; }
-:root[data-theme='dark'] .lp-stage { --stage-a: #111a2e; --stage-b: #17233d; }
-/* a real screen in a light browser frame */
-.lp-shot { border-radius: 14px; overflow: hidden; background: var(--x-surface); border: 1px solid var(--x-border); box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05), 0 32px 64px -28px rgba(15, 23, 42, 0.4); }
-.lp-shot__bar { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--x-surface-2, var(--x-bg)); border-bottom: 1px solid var(--x-border); }
-.lp-shot__bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--x-surface-3); }
-.lp-shot__bar span { margin-inline: auto; padding: 2px 14px; border-radius: 6px; background: var(--x-surface-3); font-size: 11px; color: var(--x-text-muted); }
-.lp-shot img { display: block; width: 100%; height: auto; }
-
-/* cards: one treatment for KPI and feature cards */
-.lp-card { border-radius: var(--r); background: var(--x-surface); border: 1px solid color-mix(in srgb, var(--x-border) 70%, transparent);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px -16px rgba(15, 23, 42, 0.14);
-  transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration), opacity 600ms var(--x-ease); }
-.lp-card:hover { transform: translateY(-4px); box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 24px 48px -20px rgba(15, 23, 42, 0.24); }
+/* cards */
+.lp-card { border-radius: var(--r); background: var(--x-surface); border: 1px solid color-mix(in srgb, var(--x-border) 70%, transparent); box-shadow: var(--lift);
+  transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration), border-color var(--x-duration), opacity 600ms var(--x-ease); }
+.lp-card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--x-primary) 30%, var(--x-border)); box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 28px 56px -24px rgba(15, 23, 42, 0.28); }
 .lp-icon { width: 44px; height: 44px; border-radius: var(--r-sm); flex: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
 .lp-icon--lg { width: 52px; height: 52px; border-radius: 14px; }
 
-/* KPIs */
-.lp-kpis { padding-block: var(--s3); background: var(--x-surface); border-block-start: 1px solid var(--x-border); }
-.lp-kpi-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); }
-.lp-kpi { padding: var(--s1); display: flex; flex-direction: column; gap: 16px; background: var(--x-bg); }
-.lp-kpi__top { display: flex; align-items: center; gap: 12px; }
-.lp-kpi__label { font-size: 15px; font-weight: 600; color: var(--x-text-muted); }
-.lp-kpi__value { display: flex; align-items: baseline; gap: 6px; font-family: var(--x-font-display); font-size: clamp(26px, 2.2vw, 32px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; white-space: nowrap; }
-.lp-kpi__value small { font-size: 0.5em; font-weight: 700; color: var(--x-text-muted); letter-spacing: 0; }
-.lp-kpi__spark { width: 100%; height: 48px; display: block; }
-.lp-kpi__spark .line { fill: none; stroke: var(--sp); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
-.lp-kpi__spark .area { fill: var(--sp); opacity: 0.1; }
-.lp-kpi__spark.is-sky { --sp: #0284c7; } .lp-kpi__spark.is-emerald { --sp: #059669; } .lp-kpi__spark.is-amber { --sp: #d97706; } .lp-kpi__spark.is-violet { --sp: #7c3aed; }
-.lp-kpi__note { font-size: var(--small); line-height: 1.5; color: var(--x-text-muted); }
+/* who chooses it */
+.lp-why { padding-block: var(--s3); background: var(--x-surface); border-block-start: 1px solid var(--x-border); }
+.lp-why__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
+.lp-why__card { padding: 28px; display: flex; align-items: flex-start; gap: 18px; background: var(--x-bg); }
+.lp-why__card h3 { margin: 4px 0 8px; font-family: var(--x-font-display); font-size: var(--h3); font-weight: 700; letter-spacing: -0.01em; }
+.lp-why__card p { margin: 0; color: var(--x-text-muted); font-size: 15.5px; line-height: 1.6; }
 
-/* made for */
-.lp-for { padding-block: var(--s3); background: var(--x-bg); }
-.lp-for__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
-.lp-for__card { padding: 32px; display: flex; flex-direction: column; gap: 14px; }
-.lp-for__card h3 { margin: 6px 0 0; font-family: var(--x-font-display); font-size: var(--h3); font-weight: 700; }
-.lp-for__card p { margin: 0; color: var(--x-text-muted); font-size: 16px; line-height: 1.6; }
+/* product story: device visual beside copy, visual left first */
+.lp-story { padding-block: calc(var(--s3) * 0.85); background: var(--x-surface); }
+.lp-story--tint { background: var(--x-bg); }
+.lp-story__in { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(40px, 6vw, 96px); align-items: center; }
+.lp-story--flip .lp-story__in { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+.lp-story--flip .lp-stage { order: 2; }
+.lp-story__copy { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); min-width: 0; }
+.lp-story__copy .lp-sub { font-size: var(--body); }
+.lp-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.lp-checks li { display: flex; align-items: flex-start; gap: 12px; font-size: 16px; font-weight: 500; line-height: 1.5; }
+.lp-checks svg { color: var(--x-success); flex: none; margin-top: 2px; }
+/* the stage: a soft gradient field with a faint grid, the device sits on it */
+.lp-stage { position: relative; isolation: isolate; min-width: 0; padding: clamp(24px, 4vw, 56px) clamp(16px, 3.5vw, 48px) clamp(40px, 5vw, 64px); border-radius: calc(var(--r) + 8px);
+  background: radial-gradient(80% 70% at 30% 20%, var(--stage-a), transparent), linear-gradient(150deg, var(--stage-a), var(--stage-b));
+  border: 1px solid color-mix(in srgb, var(--stage-b) 60%, var(--x-border)); }
+.lp-stage::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0.5;
+  background-image: linear-gradient(color-mix(in srgb, var(--stage-c) 18%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--stage-c) 18%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px; mask-image: radial-gradient(70% 70% at 50% 40%, #000, transparent); -webkit-mask-image: radial-gradient(70% 70% at 50% 40%, #000, transparent); }
+.lp-stage--amber { --stage-a: #fffbeb; --stage-b: #fde9c4; --stage-c: #d97706; }
+.lp-stage--sky { --stage-a: #f0f9ff; --stage-b: #d6ecfb; --stage-c: #0284c7; }
+.lp-stage--emerald { --stage-a: #ecfdf5; --stage-b: #cdf3e2; --stage-c: #059669; }
+.lp-stage--rose { --stage-a: #fff1f2; --stage-b: #fbd9de; --stage-c: #e11d48; }
+.lp-stage--violet { --stage-a: #f5f3ff; --stage-b: #e2dcfd; --stage-c: #7c3aed; }
+:root[data-theme='dark'] .lp-stage { --stage-a: #111a2e; --stage-b: #17233d; }
+.lp-insight { display: flex; align-items: center; gap: 12px; }
+.lp-insight__ic { width: 38px; height: 38px; border-radius: 10px; flex: none; }
+.lp-insight b { display: block; font-size: 14.5px; font-weight: 700; color: var(--x-text); white-space: nowrap; }
+.lp-insight small { display: block; font-size: 12.5px; color: var(--x-text-muted); white-space: nowrap; }
 
-/* features */
-.lp-features { padding-block: var(--s3); background: var(--x-surface); border-block: 1px solid var(--x-border); }
-.lp-fgrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
-.lp-fcard { padding: 32px; display: flex; flex-direction: column; gap: 16px; background: #fff; }
-:root[data-theme='dark'] .lp-fcard { background: var(--x-surface-2); }
-.lp-fcard h3 { margin: 8px 0 0; font-family: var(--x-font-display); font-size: var(--h3); font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; }
-.lp-fcard p { margin: 0; color: var(--x-text-muted); font-size: 16px; line-height: 1.6; max-width: var(--measure); }
+/* platform: the POS inside XentraERP */
+.lp-platform { position: relative; overflow: hidden; color: #e2e8f0;
+  background: radial-gradient(50% 70% at 85% 30%, rgba(37, 99, 235, 0.35), transparent 65%), radial-gradient(40% 60% at 10% 100%, rgba(20, 184, 166, 0.22), transparent 60%), #0b1120; }
+.lp-platform__in { padding-block: var(--s3); display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(40px, 6vw, 96px); align-items: center; }
+.lp-platform__copy { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); }
+.lp-platform .lp-h2 { color: #fff; }
+.lp-platform .lp-sub { color: #94a3b8; font-size: var(--body); }
+.lp-checks--dark li { color: #e2e8f0; }
+.lp-checks--dark svg { color: #5eead4; }
+.lp-eco { position: relative; display: grid; place-items: center; aspect-ratio: 1 / 0.82; }
+/* rings behind the hub */
+.lp-eco::before, .lp-eco::after { content: ''; position: absolute; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; border: 1px dashed rgba(148, 163, 184, 0.25); }
+.lp-eco::before { width: 58%; aspect-ratio: 1; }
+.lp-eco::after { width: 92%; aspect-ratio: 1; border-style: solid; border-color: rgba(148, 163, 184, 0.12); }
+.lp-eco__core { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 30px; border-radius: 28px; color: #fff;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)); border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.1), 0 30px 60px -24px rgba(37, 99, 235, 0.6); }
+.lp-eco__core img { border-radius: 12px; }
+.lp-eco__core b { font-family: var(--x-font-display); font-size: 20px; font-weight: 800; }
+.lp-eco__core span { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 3px 9px; border-radius: 999px; background: var(--x-brand-gradient); }
+/* modules placed on the outer ring */
+.lp-eco__mods { list-style: none; margin: 0; padding: 0; position: absolute; inset: 0; }
+.lp-eco__mods li { --a: calc(var(--i) * 45deg - 90deg); position: absolute; left: calc(50% + cos(var(--a)) * 42%); top: calc(50% + sin(var(--a)) * 46%); translate: -50% -50%;
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; white-space: nowrap; font-size: 14px; font-weight: 600; color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.6); }
+.lp-eco__mods li svg { color: #93c5fd; }
+.lp-eco__mods li:nth-child(1) { --i: 0; } .lp-eco__mods li:nth-child(2) { --i: 1; } .lp-eco__mods li:nth-child(3) { --i: 2; } .lp-eco__mods li:nth-child(4) { --i: 3; }
+.lp-eco__mods li:nth-child(5) { --i: 4; } .lp-eco__mods li:nth-child(6) { --i: 5; } .lp-eco__mods li:nth-child(7) { --i: 6; } .lp-eco__mods li:nth-child(8) { --i: 7; }
+
+/* pillars */
+.lp-pillars { position: relative; padding-block: var(--s3); background:
+  radial-gradient(40% 50% at 10% 10%, color-mix(in srgb, var(--x-primary) 8%, transparent), transparent 70%),
+  radial-gradient(40% 50% at 90% 90%, color-mix(in srgb, var(--x-brand-teal) 8%, transparent), transparent 70%), var(--x-bg); }
+.lp-pgrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
+.lp-pcard { position: relative; overflow: hidden; padding: 32px; display: flex; flex-direction: column; gap: 14px; border-radius: var(--r);
+  background: color-mix(in srgb, var(--x-surface) 78%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--x-border) 80%, transparent); box-shadow: var(--lift);
+  transition: transform var(--x-duration) var(--x-ease), box-shadow var(--x-duration), opacity 600ms var(--x-ease); }
+/* a gradient hairline along the top edge */
+.lp-pcard::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--x-brand-gradient); opacity: 0.85; }
+.lp-pcard:hover { transform: translateY(-4px); box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 28px 56px -24px rgba(15, 23, 42, 0.28); }
+.lp-pcard h3 { margin: 8px 0 0; font-family: var(--x-font-display); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.lp-pcard p { margin: 0; color: var(--x-text-muted); font-size: 16px; line-height: 1.6; }
 
 /* security */
-.lp-sec { background: radial-gradient(70% 60% at 85% 20%, rgba(37, 99, 235, 0.28), transparent 60%), #0b1120; color: #e2e8f0; }
+.lp-sec { background: radial-gradient(70% 60% at 85% 20%, rgba(37, 99, 235, 0.28), transparent 60%), #0b1120; color: #e2e8f0; border-block-start: 1px solid rgba(255, 255, 255, 0.06); }
 .lp-sec__in { padding-block: var(--s3); display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 80px); align-items: center; }
 .lp-sec__copy { display: flex; flex-direction: column; gap: var(--s1); align-items: flex-start; }
 .lp-sec .lp-h2 { color: #fff; }
@@ -432,7 +511,7 @@ const security = computed(() => [
 .lp-eyebrow--dark { color: #bfdbfe; }
 .lp-eyebrow--dark > span { display: grid; place-items: center; background: rgba(147, 197, 253, 0.12); color: #93c5fd; }
 .lp-sec__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s1); }
-.lp-sec__grid li { display: flex; flex-direction: column; gap: 8px; padding: var(--s1); border-radius: var(--r); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); transition: background var(--x-duration), border-color var(--x-duration), transform var(--x-duration) var(--x-ease), opacity 600ms var(--x-ease); }
+.lp-sec__grid li { display: flex; flex-direction: column; gap: 8px; padding: var(--s1); border-radius: var(--r); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(8px); transition: background var(--x-duration), border-color var(--x-duration), transform var(--x-duration) var(--x-ease), opacity 600ms var(--x-ease); }
 .lp-sec__grid li:hover { background: rgba(255, 255, 255, 0.07); border-color: rgba(147, 197, 253, 0.3); transform: translateY(-4px); }
 .lp-sec__grid b { color: #fff; font-size: 17px; }
 .lp-sec__grid span:last-child { color: #94a3b8; font-size: 15px; line-height: 1.55; }
@@ -440,7 +519,7 @@ const security = computed(() => [
 
 /* closing call to action */
 .lp-final { padding-block: var(--s3); background: var(--x-bg); }
-.lp-final__card { padding: clamp(40px, 6vw, 72px) var(--s1); border-radius: var(--r); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--s1); color: #fff;
+.lp-final__card { padding: clamp(40px, 6vw, 80px) var(--s1); border-radius: var(--r); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--s1); color: #fff;
   background: radial-gradient(60% 80% at 100% 0%, rgba(20, 184, 166, 0.35), transparent 60%), linear-gradient(120deg, #0f172a 10%, #1e3a8a 70%, #1d4ed8); box-shadow: 0 32px 64px -32px rgba(30, 58, 138, 0.6); }
 .lp-final .lp-h2 { color: #fff; }
 .lp-final .lp-sub { color: rgba(226, 232, 240, 0.85); }
@@ -450,22 +529,25 @@ const security = computed(() => [
 
 .lp-foot { background: var(--x-surface); border-block-start: 1px solid var(--x-border); }
 .lp-foot__in { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px var(--s1); padding-block: var(--s1); font-size: 13.5px; color: var(--x-text-muted); }
+.lp-foot__in a { color: var(--x-primary-text); font-weight: 600; text-decoration: none; }
 .lp-sticky { display: none; }
 .lp-sticky { transition: opacity var(--x-duration), transform var(--x-duration) var(--x-ease); }
 .lp-sticky.is-hidden { opacity: 0; transform: translateY(16px); pointer-events: none; }
 
 @media (max-width: 1179px) {
   .lp-nav__links { display: none; }
-  .lp-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lp-metric:nth-child(4) { border-inline-start: 0; }
+  .lp-metric:nth-child(n + 4) { border-block-start: 1px solid var(--x-border); }
+  .lp-why__grid, .lp-pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 1023px) {
-  .lp { --s3: 72px; }
-  .lp-hero__in { grid-template-columns: 1fr; min-height: 0; max-height: none; padding-block: var(--s1) var(--s2); }
-  .lp-hero__media { max-width: 640px; width: 100%; margin-inline: auto; }
-  .lp-cap__in, .lp-sec__in { grid-template-columns: 1fr; }
-  .lp-cap--flip .lp-cap__in { grid-template-columns: 1fr; }
-  .lp-cap--flip .lp-cap__copy { order: 0; }
-  .lp-fgrid { grid-template-columns: 1fr 1fr; }
+  .lp { --s3: 80px; }
+  .lp-hero__in { grid-template-columns: 1fr; padding-block: var(--s1) var(--s2); }
+  .lp-hero__media { max-width: 680px; width: 100%; margin-inline: auto; }
+  .lp-story__in, .lp-story--flip .lp-story__in, .lp-sec__in, .lp-platform__in { grid-template-columns: 1fr; }
+  .lp-story--flip .lp-stage { order: 0; }
+  .lp-eco { max-width: 560px; width: 100%; margin-inline: auto; }
   .lp-sticky { display: flex; position: fixed; inset-inline: 16px; inset-block-end: max(16px, env(safe-area-inset-bottom)); z-index: var(--x-z-sticky); justify-content: center; align-items: center; min-height: 54px; border-radius: var(--x-radius-full); background: var(--x-primary); color: #fff; font-weight: 700; text-decoration: none; box-shadow: var(--x-shadow-brand); }
 }
 @media (max-width: 767px) {
@@ -473,7 +555,19 @@ const security = computed(() => [
   .lp-nav__in { gap: 12px; min-height: 64px; }
   .lp-nav__end .lp-btn { display: none; }
   .lp-brand__word { font-size: 18px; }
-  .lp-kpi-grid, .lp-fgrid, .lp-sec__grid, .lp-for__grid { grid-template-columns: 1fr; }
+  .lp-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-metric { padding: 14px; }
+  .lp-metric + .lp-metric { border-inline-start: 0; }
+  .lp-metric:nth-child(even) { border-inline-start: 1px solid var(--x-border); }
+  .lp-metric:nth-child(n + 3) { border-block-start: 1px solid var(--x-border); }
+  .lp-why__grid, .lp-pgrid, .lp-sec__grid { grid-template-columns: 1fr; }
+  .lp-stage { padding-bottom: 64px; }
+  .lp-insight :is(b, small) { white-space: normal; }
+  /* the module ring becomes a two-column list under the hub */
+  .lp-eco { aspect-ratio: auto; display: flex; flex-direction: column; gap: var(--s1); }
+  .lp-eco::before, .lp-eco::after { display: none; }
+  .lp-eco__mods { position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+  .lp-eco__mods li { position: static; translate: none; justify-content: flex-start; }
   .lp-ctas .lp-btn { flex: 1 1 100%; }
   .lp-foot__in { justify-content: center; text-align: center; padding-bottom: 96px; }
 }
