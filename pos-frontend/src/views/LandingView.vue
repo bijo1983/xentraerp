@@ -11,7 +11,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   Activity, ArrowRight, Boxes, Building2, ChartColumn, ChartLine, ChefHat, CircleCheck, Cloud, Coffee, Eye, Factory,
-  Fingerprint, FolderKanban, Gauge, Handshake, KeyRound, Landmark, Layers, MonitorSmartphone, Network, Receipt,
+  Fingerprint, Gauge, Handshake, KeyRound, Landmark, Layers, MonitorSmartphone, Network, Receipt,
   ShieldCheck, ShoppingBag, ShoppingCart, Soup, Sparkles, Store, Timer, Truck, Users, UtensilsCrossed, Workflow,
 } from 'lucide-vue-next'
 import brandMark from '@/assets/brand-mark.png'
@@ -23,6 +23,13 @@ import { useReveal } from '@/composables/useReveal'
 import { t } from '@/lib/i18n'
 
 const year = new Date().getFullYear()
+// "Book a demo" opens the visitor's mail app with a prefilled request to the sales inbox;
+// plans and prices live on the corporate site's pricing section.
+const demoEmail = 'info@innovegicit.com'
+const demoHref = `mailto:${demoEmail}?subject=${encodeURIComponent('XentraERP POS demo request')}&body=${encodeURIComponent(
+  'Hello XentraERP team,\n\nI would like a demo of XentraERP POS.\n\nName:\nCompany:\nBusiness type (restaurant / café / retail):\nNumber of outlets:\nCountry:\nPhone:\n',
+)}`
+const pricingHref = 'https://xentraerp.net/#pricing'
 const root = ref<HTMLElement | null>(null)
 useReveal(root)
 
@@ -72,18 +79,24 @@ const why = computed(() =>
 type Story = {
   id: string; key: string; icon: typeof UtensilsCrossed; tone: string; alt: string
   frame: 'laptop' | 'tablet' | 'browser' | 'bare'; shot?: string; panel?: 'inventory' | 'branches'
+  bullets: string[]
   insight: { icon: typeof UtensilsCrossed; title: string; sub: string }
 }
 const stories = computed<Story[]>(() => [
   { id: 'restaurant', key: 'fnb', icon: UtensilsCrossed, tone: 'amber', frame: 'tablet', shot: 'restaurant-order', alt: t('landing.shot.order'),
+    bullets: ['b1', 'b2', 'b3', 'b4'],
     insight: { icon: ChefHat, title: 'Kitchen ticket sent', sub: 'Table A4 · 3 dishes · 12s ago' } },
   { id: 'retail', key: 'retail', icon: ShoppingBag, tone: 'sky', frame: 'browser', shot: 'retail-checkout', alt: t('landing.shot.retail'),
-    insight: { icon: CircleCheck, title: 'Paid · BHD 15.700', sub: 'Card 10.000 + Cash 5.700' } },
+    bullets: ['b1', 'b2', 'b4', 'b5', 'b6', 'b3'],
+    insight: { icon: CircleCheck, title: 'Paid · USD 31.40', sub: 'Card 20.00 + Cash 11.40' } },
   { id: 'analytics', key: 'analytics', icon: ChartColumn, tone: 'emerald', frame: 'laptop', shot: 'management-dashboard', alt: t('landing.shot.dashboard'),
-    insight: { icon: Gauge, title: 'Shift closed · variance 0.000', sub: 'Expected = counted, per currency' } },
+    bullets: ['b1', 'b2', 'b3'],
+    insight: { icon: Gauge, title: 'Shift closed · variance 0.00', sub: 'Expected = counted, per currency' } },
   { id: 'inventory', key: 'inventory', icon: Boxes, tone: 'rose', frame: 'bare', panel: 'inventory', alt: t('landing.shot.inventory'),
+    bullets: ['b1', 'b2', 'b3'],
     insight: { icon: Truck, title: 'Reorder suggested', sub: '3 items below reorder level' } },
   { id: 'branches', key: 'branches', icon: Building2, tone: 'violet', frame: 'bare', panel: 'branches', alt: t('landing.shot.branches'),
+    bullets: ['b1', 'b2', 'b3'],
     insight: { icon: Activity, title: '10 registers live', sub: '4 locations · one group report' } },
 ])
 
@@ -95,7 +108,7 @@ const modules = computed(() => [
   { icon: Handshake, label: t('landing.platform.m.selling') },
   { icon: Users, label: t('landing.platform.m.hr') },
   { icon: Factory, label: t('landing.platform.m.manufacturing') },
-  { icon: FolderKanban, label: t('landing.platform.m.projects') },
+  { icon: Store, label: t('landing.platform.m.pos'), pos: true },
   { icon: ChartLine, label: t('landing.platform.m.reports') },
 ])
 
@@ -126,15 +139,16 @@ const security = computed(() => [
       <div class="lp-nav__in">
         <a class="lp-brand" href="#top">
           <img :src="brandMark" alt="" width="36" height="36" />
-          <span class="lp-brand__word">Xentra<b>ERP</b></span>
-          <span class="lp-brand__tag">POS</span>
+          <span class="lp-brand__word">Xentra<b>ERP</b> POS</span>
         </a>
         <nav class="lp-nav__links" :aria-label="t('landing.nav.label')">
           <a v-for="s in sections" :key="s.id" :href="`#${s.id}`">{{ s.label }}</a>
+          <a :href="pricingHref">{{ t('landing.nav.pricing') }}</a>
         </nav>
         <div class="lp-nav__end">
           <LocaleSwitch />
-          <RouterLink class="lp-btn lp-btn--dark lp-btn--sm" to="/signin">{{ t('auth.signIn') }}</RouterLink>
+          <RouterLink class="lp-nav__signin" to="/signin">{{ t('auth.signIn') }}</RouterLink>
+          <a class="lp-btn lp-btn--dark lp-btn--sm" :href="demoHref">{{ t('landing.cta.demo') }}</a>
         </div>
       </div>
     </header>
@@ -148,8 +162,8 @@ const security = computed(() => [
           <h1 class="lp-hero__title x-enter">{{ t('landing.headline') }}</h1>
           <p class="lp-hero__lead x-enter">{{ t('landing.lead') }}</p>
           <div class="lp-ctas x-enter">
-            <RouterLink class="lp-btn lp-btn--primary" to="/signin">{{ t('landing.cta.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></RouterLink>
-            <a class="lp-btn lp-btn--ghost" href="#platform">{{ t('landing.cta.secondary') }}</a>
+            <a class="lp-btn lp-btn--primary" :href="demoHref">{{ t('landing.cta.demo') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></a>
+            <a class="lp-btn lp-btn--ghost" :href="pricingHref">{{ t('landing.cta.pricing') }}</a>
           </div>
         </div>
         <HeroProduct class="lp-hero__media x-enter" />
@@ -223,7 +237,7 @@ const security = computed(() => [
           <h2 :id="`${s.id}-title`" class="lp-h2">{{ t(`landing.${s.key}.title`) }}</h2>
           <p class="lp-sub">{{ t(`landing.${s.key}.body`) }}</p>
           <ul class="lp-checks">
-            <li v-for="b in ['b1', 'b2', 'b3']" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.${s.key}.${b}`) }}</li>
+            <li v-for="b in s.bullets" :key="b"><CircleCheck :size="20" aria-hidden="true" />{{ t(`landing.${s.key}.${b}`) }}</li>
           </ul>
           <RouterLink class="lp-link" to="/signin">{{ t(`landing.${s.key}.cta`) }} <ArrowRight class="lp-arrow" :size="17" aria-hidden="true" /></RouterLink>
         </div>
@@ -246,10 +260,10 @@ const security = computed(() => [
           <div class="lp-eco__core">
             <img :src="brandMark" alt="" width="44" height="44" />
             <b>XentraERP</b>
-            <span>POS</span>
+            <span>{{ t('landing.platform.core') }}</span>
           </div>
           <ul class="lp-eco__mods" :aria-label="t('landing.platform.modulesLabel')">
-            <li v-for="m in modules" :key="m.label"><component :is="m.icon" :size="18" aria-hidden="true" />{{ m.label }}</li>
+            <li v-for="m in modules" :key="m.label" :class="{ 'is-pos': m.pos }"><component :is="m.icon" :size="18" aria-hidden="true" />{{ m.label }}</li>
           </ul>
         </div>
       </div>
@@ -299,23 +313,23 @@ const security = computed(() => [
           <h2 id="final-title" class="lp-h2">{{ t('landing.final.title') }}</h2>
           <p class="lp-sub">{{ t('landing.final.body') }}</p>
           <div class="lp-ctas">
-            <RouterLink class="lp-btn lp-btn--light" to="/signin">{{ t('landing.final.primary') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></RouterLink>
-            <a class="lp-btn lp-btn--glass" href="https://xentraerp.net">{{ t('landing.final.secondary') }}</a>
+            <a class="lp-btn lp-btn--light" :href="demoHref">{{ t('landing.cta.demo') }} <ArrowRight class="lp-arrow" :size="18" aria-hidden="true" /></a>
+            <a class="lp-btn lp-btn--glass" :href="pricingHref">{{ t('landing.cta.pricing') }}</a>
           </div>
-          <p class="lp-final__contact">{{ t('landing.contact.body') }} <a href="https://xentraerp.net">xentraerp.net</a></p>
+          <p class="lp-final__contact">{{ t('landing.contact.body') }} <a :href="`mailto:${demoEmail}`">{{ demoEmail }}</a> · <RouterLink to="/signin">{{ t('landing.final.signin') }}</RouterLink></p>
         </div>
       </div>
     </section>
 
     <footer class="lp-foot">
       <div class="lp-foot__in lp-wrap">
-        <span class="lp-brand lp-brand--sm"><img :src="brandMark" alt="" width="24" height="24" /><span class="lp-brand__word">Xentra<b>ERP</b></span></span>
+        <span class="lp-brand lp-brand--sm"><img :src="brandMark" alt="" width="24" height="24" /><span class="lp-brand__word">Xentra<b>ERP</b> POS</span></span>
         <span>{{ t('landing.footer.platform') }} <a href="https://xentraerp.net">xentraerp.net</a></span>
         <span>© {{ year }} XentraERP · {{ t('landing.footer.rights') }}</span>
       </div>
     </footer>
 
-    <RouterLink class="lp-sticky" :class="{ 'is-hidden': !pastHero }" to="/signin" :tabindex="pastHero ? undefined : -1" :aria-hidden="pastHero ? undefined : true">{{ t('auth.signIn') }}</RouterLink>
+    <a class="lp-sticky" :class="{ 'is-hidden': !pastHero }" :href="demoHref" :tabindex="pastHero ? undefined : -1" :aria-hidden="pastHero ? undefined : true">{{ t('landing.cta.demo') }}</a>
   </div>
 </template>
 
@@ -367,12 +381,13 @@ const security = computed(() => [
 .lp-brand img { border-radius: 10px; }
 .lp-brand__word { font-family: var(--x-font-display); font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
 .lp-brand__word b { color: var(--x-primary); }
-.lp-brand__tag { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--x-accent-text); background: var(--x-accent-soft); border-radius: 6px; padding: 3px 7px; }
 .lp-brand--sm .lp-brand__word { font-size: 16px; }
 .lp-nav__links { display: flex; gap: 4px; flex: 1; justify-content: center; }
 .lp-nav__links a { color: var(--x-text-muted); text-decoration: none; font-size: 15px; font-weight: 500; padding: 8px 12px; border-radius: 10px; white-space: nowrap; transition: color var(--x-duration), background var(--x-duration); }
 .lp-nav__links a:hover { color: var(--x-text); background: var(--x-surface-3); }
 .lp-nav__end { display: flex; align-items: center; gap: 12px; margin-inline-start: auto; }
+.lp-nav__signin { color: var(--x-text); text-decoration: none; font-size: 15px; font-weight: 600; padding: 8px 4px; white-space: nowrap; }
+.lp-nav__signin:hover { color: var(--x-primary-text); }
 
 /* hero */
 .lp-hero { position: relative; isolation: isolate; padding-block-end: var(--s2); }
@@ -484,6 +499,8 @@ const security = computed(() => [
   display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; white-space: nowrap; font-size: 14px; font-weight: 600; color: #e2e8f0;
   background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.22); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.6); }
 .lp-eco__mods li svg { color: #93c5fd; }
+.lp-eco__mods li.is-pos { border-color: rgba(45, 212, 191, 0.6); box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.12), 0 12px 24px -12px rgba(0, 0, 0, 0.6); }
+.lp-eco__mods li.is-pos svg { color: #5eead4; }
 .lp-eco__mods li:nth-child(1) { --i: 0; } .lp-eco__mods li:nth-child(2) { --i: 1; } .lp-eco__mods li:nth-child(3) { --i: 2; } .lp-eco__mods li:nth-child(4) { --i: 3; }
 .lp-eco__mods li:nth-child(5) { --i: 4; } .lp-eco__mods li:nth-child(6) { --i: 5; } .lp-eco__mods li:nth-child(7) { --i: 6; } .lp-eco__mods li:nth-child(8) { --i: 7; }
 

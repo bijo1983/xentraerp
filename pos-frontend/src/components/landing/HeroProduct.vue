@@ -27,9 +27,9 @@ const linePath = smooth(pts(thisWeek))
 const areaPath = `${linePath} L300,110 L0,110 Z`
 const prevPath = smooth(pts(lastWeek))
 const branches = [
-  { name: 'Seef Mall', pct: 92, val: '18,420' },
-  { name: 'Adliya', pct: 71, val: '14,205' },
-  { name: 'Riffa', pct: 54, val: '10,870' },
+  { name: 'Downtown', pct: 92, val: '18,420' },
+  { name: 'Riverside', pct: 71, val: '14,205' },
+  { name: 'Airport', pct: 54, val: '10,870' },
 ]
 const spark = smooth(([12, 20, 16, 28, 24, 36, 44] as number[]).map((y, i) => [i * 20, 48 - y]) as [number, number][])
 const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
@@ -88,7 +88,7 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
                     <path :d="linePath" class="line" />
                     <circle cx="300" :cy="104 - thisWeek[thisWeek.length - 1]" r="4" class="dot" />
                   </svg>
-                  <span class="dash__tip">BHD 9,412 <small>today</small></span>
+                  <span class="dash__tip">$9,412 <small>today</small></span>
                 </div>
                 <ul class="dash__branches">
                   <li v-for="b in branches" :key="b.name">
@@ -119,10 +119,10 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
             <span v-for="n in ['Burger', 'Latte', 'Salad', 'Karak', 'Pasta', 'Juice']" :key="n">{{ n }}</span>
           </div>
           <ul class="pos__lines">
-            <li><span>Truffle Burger ×2</span><b>9.000</b></li>
-            <li><span>Spanish Latte ×2</span><b>3.800</b></li>
+            <li><span>Truffle Burger ×2</span><b>18.00</b></li>
+            <li><span>Spanish Latte ×2</span><b>7.60</b></li>
           </ul>
-          <div class="pos__pay"><span>BHD 15.700</span><span class="btn">Charge</span></div>
+          <div class="pos__pay"><span>USD 31.40</span><span class="btn">Charge</span></div>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
         <div class="phone__screen">
           <span class="phone__notch" />
           <small>Today · all branches</small>
-          <b class="phone__big">2,846.750</b>
+          <b class="phone__big">$2,846.75</b>
           <em class="up">▲ 18% vs yesterday</em>
           <svg viewBox="0 0 120 48" class="phone__spark"><path :d="spark" /></svg>
           <ul>

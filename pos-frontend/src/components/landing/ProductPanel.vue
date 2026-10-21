@@ -5,16 +5,16 @@
 defineProps<{ kind: 'inventory' | 'branches'; label: string }>()
 
 const stock = [
-  { item: 'Arabica beans 1kg', wh: 'Seef Mall', qty: 4, par: 25, state: 'low' },
-  { item: 'Burger buns', wh: 'Adliya', qty: 38, par: 60, state: 'watch' },
-  { item: 'Oat milk 1L', wh: 'Seef Mall', qty: 64, par: 40, state: 'ok' },
+  { item: 'Arabica beans 1kg', wh: 'Downtown', qty: 4, par: 25, state: 'low' },
+  { item: 'Burger buns', wh: 'Riverside', qty: 38, par: 60, state: 'watch' },
+  { item: 'Oat milk 1L', wh: 'Downtown', qty: 64, par: 40, state: 'ok' },
   { item: 'Basmati rice 5kg', wh: 'Central', qty: 112, par: 50, state: 'ok' },
-  { item: 'Takeaway cups 12oz', wh: 'Riffa', qty: 9, par: 40, state: 'low' },
+  { item: 'Takeaway cups 12oz', wh: 'Airport', qty: 9, par: 40, state: 'low' },
 ]
 const sites = [
-  { name: 'Seef Mall', code: 'SEEF', sales: 18420, change: 12.4, share: 92, registers: 4, status: 'Open' },
-  { name: 'Adliya', code: 'ADL', sales: 14205, change: 6.1, share: 71, registers: 3, status: 'Open' },
-  { name: 'Riffa', code: 'RIF', sales: 10870, change: -2.3, share: 54, registers: 2, status: 'Open' },
+  { name: 'Downtown', code: 'DTN', sales: 18420, change: 12.4, share: 92, registers: 4, status: 'Open' },
+  { name: 'Riverside', code: 'RVS', sales: 14205, change: 6.1, share: 71, registers: 3, status: 'Open' },
+  { name: 'Airport', code: 'APT', sales: 10870, change: -2.3, share: 54, registers: 2, status: 'Open' },
   { name: 'Central Kitchen', code: 'CK', sales: 4735, change: 3.8, share: 24, registers: 1, status: 'Closing' },
 ]
 const fmt = (n: number) => n.toLocaleString('en-US')
@@ -31,7 +31,7 @@ const fmt = (n: number) => n.toLocaleString('en-US')
 
       <template v-if="kind === 'inventory'">
         <div class="pp__kpis">
-          <div><small>Stock value</small><b>BHD 86,410</b></div>
+          <div><small>Stock value</small><b>USD 86,410</b></div>
           <div><small>Low stock</small><b class="t-rose">12</b></div>
           <div><small>Transfers</small><b>5</b></div>
         </div>
@@ -53,7 +53,7 @@ const fmt = (n: number) => n.toLocaleString('en-US')
 
       <template v-else>
         <div class="pp__kpis">
-          <div><small>Group sales</small><b>BHD 48,230</b></div>
+          <div><small>Group sales</small><b>USD 48,230</b></div>
           <div><small>Branches</small><b>4</b></div>
           <div><small>Registers live</small><b>10</b></div>
         </div>
