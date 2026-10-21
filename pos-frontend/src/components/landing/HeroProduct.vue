@@ -6,7 +6,7 @@
 // device's data lands; flowing lines connect each device to it. Drawn in HTML/SVG so it stays
 // sharp, follows light/dark and needs no image request. Everything is sized in `em` off one base
 // size that scales with the container (container query units). Decorative: one label describes it
-// for screen readers. The figures are illustrative sample data.
+// for screen readers. It shows no figures: values are drawn as neutral placeholder bars (.sk).
 import { t } from '@/lib/i18n'
 
 // Revenue chart: this week vs last week, 0..100 scale, drawn into a 300x110 box.
@@ -27,9 +27,9 @@ const linePath = smooth(pts(thisWeek))
 const areaPath = `${linePath} L300,110 L0,110 Z`
 const prevPath = smooth(pts(lastWeek))
 const branches = [
-  { name: 'Downtown', pct: 92, val: '18,420' },
-  { name: 'Riverside', pct: 71, val: '14,205' },
-  { name: 'Airport', pct: 54, val: '10,870' },
+  { name: 'Downtown', pct: 92 },
+  { name: 'Riverside', pct: 71 },
+  { name: 'Airport', pct: 54 },
 ]
 const spark = smooth(([12, 20, 16, 28, 24, 36, 44] as number[]).map((y, i) => [i * 20, 48 - y]) as [number, number][])
 const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
@@ -69,9 +69,9 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
                 <span class="chip chip--live"><i />Live</span>
               </header>
               <div class="dash__kpis">
-                <div><small>Revenue</small><b>48,230</b><em class="up">▲ 12.4%</em></div>
-                <div><small>Orders</small><b>3,184</b><em class="up">▲ 8.1%</em></div>
-                <div><small>Gross margin</small><b>64.2%</b><em class="up">▲ 2.3%</em></div>
+                <div><small>Revenue</small><i class="sk sk--lg" style="width: 74%" /><em class="up">▲ Up</em></div>
+                <div><small>Orders</small><i class="sk sk--lg" style="width: 58%" /><em class="up">▲ Up</em></div>
+                <div><small>Gross margin</small><i class="sk sk--lg" style="width: 66%" /><em class="up">▲ Up</em></div>
               </div>
               <div class="dash__body">
                 <div class="dash__chart">
@@ -88,13 +88,13 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
                     <path :d="linePath" class="line" />
                     <circle cx="300" :cy="104 - thisWeek[thisWeek.length - 1]" r="4" class="dot" />
                   </svg>
-                  <span class="dash__tip">$9,412 <small>today</small></span>
+                  <span class="dash__tip">Today</span>
                 </div>
                 <ul class="dash__branches">
                   <li v-for="b in branches" :key="b.name">
                     <span class="nm">{{ b.name }}</span>
                     <span class="track"><i :style="{ width: `${b.pct}%` }" /></span>
-                    <b>{{ b.val }}</b>
+                    <i class="sk" />
                   </li>
                 </ul>
               </div>
@@ -107,22 +107,22 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
       <!-- the platform hub every device posts into -->
       <div class="hub">
         <span class="hub__mark">X</span>
-        <span class="hub__txt"><b>XentraERP</b><small>Synced · 2s ago</small></span>
+        <span class="hub__txt"><b>XentraERP</b><small>Synced live</small></span>
         <span class="hub__mods"><i v-for="m in modules" :key="m">{{ m }}</i></span>
       </div>
 
       <!-- POS terminal (tablet, front left) -->
       <div class="tablet">
         <div class="tablet__screen">
-          <header class="pos__bar"><b>Table A4</b><span class="chip chip--muted">4 guests</span></header>
+          <header class="pos__bar"><b>Dine-in</b><span class="chip chip--muted">Table</span></header>
           <div class="pos__grid">
             <span v-for="n in ['Burger', 'Latte', 'Salad', 'Karak', 'Pasta', 'Juice']" :key="n">{{ n }}</span>
           </div>
           <ul class="pos__lines">
-            <li><span>Truffle Burger ×2</span><b>18.00</b></li>
-            <li><span>Spanish Latte ×2</span><b>7.60</b></li>
+            <li><span>Truffle Burger</span><i class="sk" /></li>
+            <li><span>Spanish Latte</span><i class="sk" /></li>
           </ul>
-          <div class="pos__pay"><span>USD 31.40</span><span class="btn">Charge</span></div>
+          <div class="pos__pay"><span>Total</span><span class="btn">Charge</span></div>
         </div>
       </div>
 
@@ -131,19 +131,19 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
         <div class="phone__screen">
           <span class="phone__notch" />
           <small>Today · all branches</small>
-          <b class="phone__big">$2,846.75</b>
-          <em class="up">▲ 18% vs yesterday</em>
+          <i class="sk sk--big" />
+          <em class="up">▲ Ahead of yesterday</em>
           <svg viewBox="0 0 120 48" class="phone__spark"><path :d="spark" /></svg>
           <ul>
-            <li><span>Registers live</span><b>10</b></li>
-            <li><span>Shifts open</span><b>3</b></li>
+            <li><span>Registers</span><b>Live</b></li>
+            <li><span>Shifts</span><b>Open</b></li>
           </ul>
         </div>
       </div>
 
       <!-- live inventory (glass, top right) -->
       <section class="inv">
-        <header><b>Inventory</b><span class="chip chip--rose">3 to reorder</span></header>
+        <header><b>Inventory</b><span class="chip chip--rose">Reorder</span></header>
         <ul>
           <li><span>Coffee beans</span><span class="track track--rose"><i style="width: 18%" /></span></li>
           <li><span>Burger buns</span><span class="track track--amber"><i style="width: 38%" /></span></li>
@@ -155,6 +155,10 @@ const modules = ['Accounts', 'Stock', 'Purchasing', 'Reports']
 </template>
 
 <style scoped>
+/* a value, drawn as a neutral bar instead of a figure; takes the colour of the text around it */
+.sk { display: inline-block; flex: none; width: 3.2em; height: 0.6em; border-radius: 999px; background: currentColor; opacity: 0.16; }
+.sk--lg { display: block; height: 1em; margin-block: 0.25em; opacity: 0.2; }
+.sk--big { display: block; width: 70%; height: 1.4em; margin-block: 0.3em; opacity: 0.35; }
 .hp { margin: 0; container-type: inline-size; min-width: 0; }
 .hp__stage {
   --hp-a: var(--x-primary);

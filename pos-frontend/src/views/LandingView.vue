@@ -74,30 +74,30 @@ const why = computed(() =>
   ].map((w) => ({ ...w, title: t(`landing.why.${w.id}.title`), body: t(`landing.why.${w.id}.body`) })),
 )
 
-// Product story, visual left first, then alternating. Each visual is a real screen (shot) in a
-// device frame or a drawn panel, with one glass insight card (illustrative sample data).
+// Product story, visual left first, then alternating. Each visual is a drawn product panel (no
+// screenshots of real systems, no figures) in a device frame, with one glass insight card.
 type Story = {
   id: string; key: string; icon: typeof UtensilsCrossed; tone: string; alt: string
-  frame: 'laptop' | 'tablet' | 'browser' | 'bare'; shot?: string; panel?: 'inventory' | 'branches'
+  frame: 'laptop' | 'tablet' | 'browser' | 'bare'; panel: 'restaurant' | 'retail' | 'analytics' | 'inventory' | 'branches'
   bullets: string[]
   insight: { icon: typeof UtensilsCrossed; title: string; sub: string }
 }
 const stories = computed<Story[]>(() => [
-  { id: 'restaurant', key: 'fnb', icon: UtensilsCrossed, tone: 'amber', frame: 'tablet', shot: 'restaurant-order', alt: t('landing.shot.order'),
+  { id: 'restaurant', key: 'fnb', icon: UtensilsCrossed, tone: 'amber', frame: 'tablet', panel: 'restaurant', alt: t('landing.shot.order'),
     bullets: ['b1', 'b2', 'b3', 'b4'],
-    insight: { icon: ChefHat, title: 'Kitchen ticket sent', sub: 'Table A4 · 3 dishes · 12s ago' } },
-  { id: 'retail', key: 'retail', icon: ShoppingBag, tone: 'sky', frame: 'browser', shot: 'retail-checkout', alt: t('landing.shot.retail'),
+    insight: { icon: ChefHat, title: 'Kitchen ticket sent', sub: 'Dine-in order · just now' } },
+  { id: 'retail', key: 'retail', icon: ShoppingBag, tone: 'sky', frame: 'browser', panel: 'retail', alt: t('landing.shot.retail'),
     bullets: ['b1', 'b2', 'b4', 'b5', 'b6', 'b3'],
-    insight: { icon: CircleCheck, title: 'Paid · USD 31.40', sub: 'Card 20.00 + Cash 11.40' } },
-  { id: 'analytics', key: 'analytics', icon: ChartColumn, tone: 'emerald', frame: 'laptop', shot: 'management-dashboard', alt: t('landing.shot.dashboard'),
+    insight: { icon: CircleCheck, title: 'Payment complete', sub: 'Card and cash on one bill' } },
+  { id: 'analytics', key: 'analytics', icon: ChartColumn, tone: 'emerald', frame: 'laptop', panel: 'analytics', alt: t('landing.shot.dashboard'),
     bullets: ['b1', 'b2', 'b3'],
-    insight: { icon: Gauge, title: 'Shift closed · variance 0.00', sub: 'Expected = counted, per currency' } },
+    insight: { icon: Gauge, title: 'Shift closed · cash balanced', sub: 'Expected matches counted, per currency' } },
   { id: 'inventory', key: 'inventory', icon: Boxes, tone: 'rose', frame: 'bare', panel: 'inventory', alt: t('landing.shot.inventory'),
     bullets: ['b1', 'b2', 'b3'],
-    insight: { icon: Truck, title: 'Reorder suggested', sub: '3 items below reorder level' } },
+    insight: { icon: Truck, title: 'Reorder suggested', sub: 'Items below their reorder level' } },
   { id: 'branches', key: 'branches', icon: Building2, tone: 'violet', frame: 'bare', panel: 'branches', alt: t('landing.shot.branches'),
     bullets: ['b1', 'b2', 'b3'],
-    insight: { icon: Activity, title: '10 registers live', sub: '4 locations · one group report' } },
+    insight: { icon: Activity, title: 'All registers live', sub: 'Every location in one group report' } },
 ])
 
 // the XentraERP modules the POS posts into, around it
@@ -212,18 +212,7 @@ const security = computed(() => [
       <div class="lp-story__in lp-wrap">
         <div class="lp-stage" :class="`lp-stage--${s.tone}`" data-reveal>
           <DeviceFrame :kind="s.frame">
-            <ProductPanel v-if="s.panel" :kind="s.panel" :label="s.alt" />
-            <img
-              v-else
-              :src="`/img/product/${s.shot}.webp`"
-              :srcset="`/img/product/${s.shot}-sm.webp 800w, /img/product/${s.shot}.webp 1600w`"
-              sizes="(max-width: 1023px) 92vw, 680px"
-              :alt="s.alt"
-              width="1600"
-              height="1000"
-              loading="lazy"
-              decoding="async"
-            />
+            <ProductPanel :kind="s.panel" :label="s.alt" :flat="s.frame !== 'bare'" />
             <template #insight>
               <span class="lp-insight">
                 <span class="lp-insight__ic x-art" :class="`x-art--${s.tone}`"><component :is="s.insight.icon" :size="18" :stroke-width="2" /></span>
