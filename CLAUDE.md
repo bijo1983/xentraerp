@@ -712,6 +712,19 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
 - Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), `roles_takeaway_reservations_suite.py` (118), all rolled back, plus `e2e_http.py` (71, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after — it only removes ZZ rows). The UI screens were type-checked and built, and every API they call
   is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
 
+## Marketing pages (deployed 2026-10-21)
+
+- `erp-frontend/src/app/page.tsx` (xentraerp.net) and `pos-frontend/src/views/LandingView.vue` (pos.xentraerp.net).
+  Positioning: XentraERP is the platform, POS is one module of it — never describe POS as the centre of the ERP.
+- **Pricing on xentraerp.net is hard-coded** (`PLANS`, USD) and must match the `XentraERP Plan` records in the admin
+  portal: Starter 25, POS Starter 29 (POS + Accounting + Inventory), Growth 49, Professional 89, Enterprise 150. The POS
+  Starter plan is advertised but did not exist as a plan record at deploy time. The POS site links to `#pricing` there.
+- "Book a demo" is a `mailto:info@innovegicit.com` link with a prefilled subject/body (no server-side form or SMTP).
+- The POS landing page shows **no screenshots of the real system and no figures**: `ProductPanel` / `HeroProduct` are
+  drawn in HTML, values are neutral placeholder bars (`.sk`). The owner asked for this; keep it that way.
+- Deployed by fast-forwarding this checkout to `claude/web-refresh`; previous builds kept as
+  `pos-frontend/dist-prev-202610210805` and `erp-frontend/.next-old-1792569965` (delete once no rollback is needed).
+
 ## ScheduleVerse (deployed 2026-09-24) — separate app, same box
 
 **Live at `https://schedule.xentraerp.net`** — independent product (FastAPI + Vue 3 + Postgres 16 + Redis 7),
