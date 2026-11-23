@@ -122,6 +122,20 @@ export async function call<T = unknown>(method: string, args?: Record<string, un
   return data.message
 }
 
+/**
+ * Calls a guest method on the XentraERP control plane (the CLINZA signup), whichever clinic the
+ * browser signed in to last: the proxy picks the site from x-xentra-tenant before the cookie, and
+ * "sandbox" is its alias for the default (control-plane) site.
+ */
+export async function controlPlane<T = unknown>(method: string, args?: Record<string, unknown>): Promise<T> {
+  const data = await request<{ message: T }>(`/api/method/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Xentra-Tenant': 'sandbox' },
+    body: JSON.stringify(args || {}),
+  })
+  return data.message
+}
+
 const C = 'custom_erp.api.clinic.'
 /** Shorthand for a clinic API method. */
 export const clinic = <T = unknown>(name: string, args?: Record<string, unknown>) => call<T>(C + name, args)

@@ -15,7 +15,9 @@ declare module 'vue-router' {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'signin', component: () => import('@/views/SignInView.vue'), meta: { public: true, bare: true } },
+    { path: '/', name: 'landing', component: () => import('@/views/LandingView.vue'), meta: { public: true, bare: true } },
+    { path: '/signup', name: 'signup', component: () => import('@/views/SignupView.vue'), meta: { public: true, bare: true } },
+    { path: '/sign-in', name: 'signin', component: () => import('@/views/SignInView.vue'), meta: { public: true, bare: true } },
     { path: '/today', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
     { path: '/appointments', name: 'appointments', component: () => import('@/views/AppointmentsView.vue'), meta: { cap: 'appointments' } },
     { path: '/patients', name: 'patients', component: () => import('@/views/PatientsView.vue'), meta: { cap: 'patients' } },
@@ -36,8 +38,10 @@ router.beforeEach(async (to) => {
   if (!auth.checked) await auth.checkSession()
   if (!auth.user) {
     if (to.meta.public) return true
-    return { name: 'signin', query: to.fullPath !== '/' ? { next: to.fullPath } : {} }
+    return { name: 'signin', query: { next: to.fullPath } }
   }
+  // Signing up is for new clinics; the landing page shows to anyone signed out.
+  if (to.name === 'signup' || to.name === 'unavailable' || to.name === 'not-found') return true
   if (!store.ctx) {
     try {
       await store.load()
@@ -47,7 +51,7 @@ router.beforeEach(async (to) => {
       return { name: 'unavailable', query: { reason: code } }
     }
   }
-  if (to.name === 'signin') return { name: store.ctx?.configured ? 'dashboard' : store.can('setup') ? 'setup' : 'dashboard' }
+  if (to.name === 'signin' || to.name === 'landing') return { name: store.ctx?.configured ? 'dashboard' : store.can('setup') ? 'setup' : 'dashboard' }
   if (to.meta.cap && !store.can(to.meta.cap)) return { name: 'dashboard' }
   return true
 })

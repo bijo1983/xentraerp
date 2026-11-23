@@ -25,8 +25,17 @@ def _validate_identifier(identifier: str, channel: str):
 		frappe.throw("Invalid channel.")
 
 
+# Same OTP purpose as the ERP signup (the OTP DocType's Select only knows signup/login, and a
+# new option would need a control-plane migrate); only the email's brand differs.
+CLINZA_PURPOSE = "signup"
+
+
+def _brand(brand: str | None) -> str:
+	return "CLINZA" if (brand or "").lower() == "clinza" else "XentraERP"
+
+
 @frappe.whitelist(allow_guest=True)
-def request_otp(identifier: str, channel: str, purpose: str = "signup"):
+def request_otp(identifier: str, channel: str, purpose: str = "signup", brand: str | None = None):
 	"""Generate and dispatch a 6-digit OTP to email or mobile."""
 	identifier = (identifier or "").strip().lower() if channel == "email" else (identifier or "").strip()
 	_validate_identifier(identifier, channel)
@@ -62,9 +71,9 @@ def request_otp(identifier: str, channel: str, purpose: str = "signup"):
 		try:
 			frappe.sendmail(
 				recipients=[identifier],
-				subject="Your XentraERP verification code",
+				subject=f"Your {_brand(brand)} verification code",
 				message=(
-					f"<p>Your XentraERP verification code is <b>{otp}</b>.</p>"
+					f"<p>Your {_brand(brand)} verification code is <b>{otp}</b>.</p>"
 					f"<p>This code expires in {OTP_TTL_MINUTES} minutes.</p>"
 				),
 				now=True,
@@ -295,3 +304,113 @@ def tenant_lookup(tenant_code: str):
 	if frappe.conf.get("tenant_lookup_legacy_admin_email"):
 		out["admin_email"] = t.tenant_admin_email
 	return out
+
+
+# ---------------------------------------------------------------------------
+# CLINZA self-signup (clinza.xentraerp.com/signup). The clinic's own landing page and signup run
+# against the control-plane site; registering creates a normal XentraERP Tenant (Pending Approval)
+# with its clinic type, exactly like the ERP signup, but only after the email has been proven:
+# either a 6-digit code sent to it (request_otp with brand "clinza", then verify_otp) or a
+# Google sign-in whose ID token the server verifies itself.
+# ---------------------------------------------------------------------------
+
+
+def _google_client_id() -> str:
+	return frappe.conf.get("clinza_google_client_id") or frappe.conf.get("google_client_id") or ""
+
+
+@frappe.whitelist(allow_guest=True)
+def clinza_signup_options():
+	"""Everything the CLINZA signup page needs in one guest-safe call."""
+	from custom_erp.api.clinic_catalog import public_catalog
+
+	return {
+		"clinic_types": public_catalog()["clinic_types"],
+		"countries": list_countries(),
+		# Empty = Google sign-in is not set up yet; the page then hides the button.
+		"google_client_id": _google_client_id(),
+	}
+
+
+def _mark_email_verified(email: str):
+	frappe.get_doc(
+		{
+			"doctype": "XentraERP OTP",
+			"identifier": email,
+			"channel": "email",
+			"purpose": CLINZA_PURPOSE,
+			"otp_hash": _hash_otp(secrets.token_hex(16)),
+			"expires_at": add_to_date(now_datetime(), minutes=OTP_TTL_MINUTES),
+			"verified": 1,
+		}
+	).insert(ignore_permissions=True)
+	frappe.db.commit()
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def verify_google_identity(credential: str):
+	"""Verify a Google Identity Services ID token server-side (never trust the browser's decode):
+	audience must be our client id, issuer Google, email verified. On success the email counts
+	as verified for the CLINZA signup, and the name is returned to prefill the form."""
+	import requests
+
+	client_id = _google_client_id()
+	if not client_id:
+		frappe.throw("[NOT_CONFIGURED] Google sign-in is not available yet. Use your email instead.")
+	try:
+		r = requests.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": credential or ""}, timeout=10)
+	except Exception:
+		frappe.log_error(title="CLINZA Google token check failed")
+		frappe.throw("[GOOGLE_UNAVAILABLE] Couldn't reach Google to confirm your sign-in. Use your email instead.")
+	info = r.json() if r.status_code == 200 else {}
+	ok = (
+		info.get("aud") == client_id
+		and info.get("iss") in ("accounts.google.com", "https://accounts.google.com")
+		and str(info.get("email_verified")).lower() == "true"
+		and info.get("email")
+	)
+	if not ok:
+		frappe.throw("[INVALID_GOOGLE] Google sign-in could not be verified. Please try again.")
+	email = info["email"].strip().lower()
+	_mark_email_verified(email)
+	return {"email": email, "name": info.get("name") or "", "picture": info.get("picture") or ""}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def register_clinic(
+	clinic_name: str,
+	admin_name: str,
+	email: str,
+	mobile: str,
+	country: str,
+	clinic_type: str,
+	time_zone: str | None = None,
+):
+	"""Create the clinic's XentraERP tenant. Requires a verified email (code or Google)."""
+	email = (email or "").strip().lower()
+	clinic_name = (clinic_name or "").strip()
+	admin_name = (admin_name or "").strip()
+	if not clinic_name or not admin_name:
+		frappe.throw("[MISSING] Enter your clinic's name and your name.")
+	if not (clinic_type or "").strip():
+		frappe.throw("[MISSING] Choose your clinic type.")
+	if not _is_verified(email, "email", CLINZA_PURPOSE):
+		frappe.throw("[NOT_VERIFIED] Please verify your email first. Codes are valid for 10 minutes.")
+	if frappe.db.exists("XentraERP Tenant", {"tenant_admin_email": email, "status": ["not in", ["Rejected", "Cancelled", "Expired", "Archived"]]}):
+		frappe.throw("[EXISTS] A workspace is already registered with this email. Sign in instead, or use another email.")
+
+	result = complete_signup(
+		organization_name=clinic_name,
+		admin_name=admin_name,
+		admin_email=email,
+		admin_mobile=mobile,
+		plan="Free Trial",
+		country=country,
+		time_zone=time_zone,
+		clinic_type=clinic_type,
+	)
+	name = frappe.db.get_value("XentraERP Tenant", {"tenant_code": result["tenant_code"]}, "name")
+	if name:
+		frappe.db.set_value("XentraERP Tenant", name, "email_verified", 1)
+		frappe.db.commit()
+	return result

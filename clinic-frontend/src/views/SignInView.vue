@@ -19,7 +19,6 @@ const email = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
-const SIGNUP = 'https://xentraerp.net/signup?product=clinza'
 
 async function findClinic() {
   error.value = ''
@@ -77,7 +76,7 @@ async function signIn() {
           <UiButton type="submit" size="lg" block :loading="busy">Sign in</UiButton>
           <button type="button" class="link" @click="auth.forgetOrg()">Use a different clinic code</button>
         </form>
-        <p class="small muted signup">New clinic? <a :href="SIGNUP">Start your free trial</a> — choose your clinic type and we set up the rest.</p>
+        <p class="small muted signup">New clinic? <RouterLink to="/signup">Start your free trial</RouterLink> — choose your clinic type and we set up the rest.</p>
       </div>
     </section>
   </div>
