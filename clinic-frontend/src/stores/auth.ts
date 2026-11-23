@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ApiError, getTenantCookie, loggedUser, login, loginOtp, logout, setTenantCookie, tenantLookup } from '@/lib/api'
+import { ApiError, call, getTenantCookie, loggedUser, login, loginOtp, logout, setTenantCookie, tenantLookup } from '@/lib/api'
 
 const ORG_KEY = 'clinza.org'
 
@@ -19,6 +19,8 @@ export const useAuthStore = defineStore('auth', {
     checked: false,
     /** Password accepted, waiting for the authenticator code (never holds the password). */
     pending: null as { email: string; tmpId: string } | null,
+    /** Signed in with a temporary (or the default) password: must choose a new one first. */
+    mustChangePassword: false,
   }),
   actions: {
     async lookup(code: string) {
@@ -57,7 +59,20 @@ export const useAuthStore = defineStore('auth', {
       }
       this.pending = null
       this.user = email.trim().toLowerCase()
+      await this.loadPasswordStatus()
       return 'ok'
+    },
+    async loadPasswordStatus() {
+      try {
+        const st = await call<{ force_password_change?: boolean }>('custom_erp.api.auth.get_login_status')
+        this.mustChangePassword = !!st?.force_password_change
+      } catch {
+        this.mustChangePassword = false
+      }
+    },
+    async changePassword(newPassword: string, currentPassword?: string) {
+      await call('custom_erp.api.auth.change_password', { new_password: newPassword, current_password: currentPassword })
+      this.mustChangePassword = false
     },
     async verifyCode(otp: string) {
       if (!this.pending) throw new ApiError('Your sign-in expired. Enter your password again.', { code: 'EXPIRED' })
@@ -65,6 +80,7 @@ export const useAuthStore = defineStore('auth', {
       await loginOtp(this.pending.email, otp, this.pending.tmpId)
       this.user = this.pending.email.toLowerCase()
       this.pending = null
+      await this.loadPasswordStatus()
     },
     cancelCode() {
       this.pending = null
@@ -73,11 +89,13 @@ export const useAuthStore = defineStore('auth', {
       if (this.org && !getTenantCookie()) setTenantCookie(this.org.code)
       const who = this.org ? await loggedUser() : 'Guest'
       this.user = who && who !== 'Guest' ? who : null
+      if (this.user) await this.loadPasswordStatus()
       this.checked = true
     },
     async signOut() {
       await logout()
       this.user = null
+      this.mustChangePassword = false
     },
   },
 })

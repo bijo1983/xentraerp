@@ -21,6 +21,27 @@ from custom_erp.api.tenants import TENANT_ADMIN_ROLES
 TENANT_SITE_SUFFIX = os.environ.get("TENANT_SITE_SUFFIX", "xentraerp.local")
 BENCH_DIR = os.environ.get("XENTRAERP_BENCH_DIR", os.path.expanduser("~/innovegic-bench"))
 SITE_ADMIN_PASSWORD = "admin"
+TEMP_PASSWORD_ENV = "XENTRA_TEMP_PASSWORD"
+MUST_CHANGE_KEY = "xentra_must_change_password:"  # + user, a site default on the tenant site
+
+
+def validate_temp_password(pwd: str | None) -> str:
+	pwd = (pwd or "").strip()
+	if len(pwd) < 8:
+		frappe.throw("The temporary password must be at least 8 characters.")
+	if pwd == SITE_ADMIN_PASSWORD:
+		frappe.throw("Choose a temporary password other than the old default.")
+	return pwd
+
+
+def mark_must_change_password(user: str, must: bool):
+	"""On the current (tenant) site: remember that the user's password is a temporary one."""
+	key = MUST_CHANGE_KEY + user
+	if must:
+		frappe.db.set_default(key, "1", parent="__default")
+	else:
+		frappe.db.sql("delete from tabDefaultValue where parent='__default' and defkey=%s", (key,))
+		frappe.clear_cache()
 
 
 def _mariadb_root_password() -> str:
@@ -40,9 +61,13 @@ def _require_system_manager():
 
 
 @frappe.whitelist()
-def provision_tenant_site(tenant_name: str):
-	"""Kick off background creation of this tenant's dedicated Frappe site."""
+def provision_tenant_site(tenant_name: str, temp_password: str | None = None):
+	"""Kick off background creation of this tenant's dedicated Frappe site. `temp_password` is
+	the admin's first password (they must change it at first sign-in); without it the old
+	default is used."""
 	_require_system_manager()
+	if temp_password:
+		temp_password = validate_temp_password(temp_password)
 
 	tenant = frappe.get_doc("XentraERP Tenant", tenant_name)
 	if tenant.site_name and tenant.provisioning_status == "Completed":
@@ -51,6 +76,10 @@ def provision_tenant_site(tenant_name: str):
 		frappe.throw("Approve the tenant before provisioning its site.")
 
 	site_name = f"{tenant.tenant_code}.{TENANT_SITE_SUFFIX}"
+	if temp_password:
+		# Kept encrypted (not in the job's arguments, which sit in Redis in plain text).
+		tenant.admin_temp_password = temp_password
+		tenant.save(ignore_permissions=True)
 	tenant.db_set("site_name", site_name)
 	tenant.db_set("provisioning_status", "In Progress")
 	tenant.db_set("provisioning_error", "")
@@ -69,6 +98,7 @@ def provision_tenant_site(tenant_name: str):
 
 
 def create_tenant_admin_user(email: str, first_name: str):
+	# The admin's first password: XENTRA_TEMP_PASSWORD (set by the platform admin) or the old default.
 	"""Create (or reset) the tenant administrator's User on whichever site
 	this runs against. Only ever invoked via `bench --site <site> execute`
 	(see _create_admin_user_on_site) — in-process frappe.init()/connect()
@@ -85,6 +115,7 @@ def create_tenant_admin_user(email: str, first_name: str):
 	at that point) and therefore never reaches this User record. Without
 	this, a tenant admin has System Manager only, which does not grant
 	access to module doctypes like Item/Sales Order/Sales Invoice."""
+	first_password = (os.environ.get(TEMP_PASSWORD_ENV) or "").strip() or SITE_ADMIN_PASSWORD
 	if not frappe.db.exists("User", email):
 		user = frappe.get_doc(
 			{
@@ -93,7 +124,7 @@ def create_tenant_admin_user(email: str, first_name: str):
 				"first_name": first_name,
 				"send_welcome_email": 0,
 				"user_type": "System User",
-				"new_password": SITE_ADMIN_PASSWORD,
+				"new_password": first_password,
 			}
 		)
 		for role in TENANT_ADMIN_ROLES:
@@ -103,7 +134,7 @@ def create_tenant_admin_user(email: str, first_name: str):
 	else:
 		from frappe.utils.password import update_password
 
-		update_password(email, SITE_ADMIN_PASSWORD)
+		update_password(email, first_password, logout_all_sessions=True)
 		# Backfill any roles missing from a user created before this role
 		# list existed (or grew) — same rationale as the mirror-image
 		# backfill in tenants.py._ensure_tenant_admin_user.
@@ -114,10 +145,65 @@ def create_tenant_admin_user(email: str, first_name: str):
 			for role in missing:
 				user.append("roles", {"role": role})
 			user.save(ignore_permissions=True)
+	mark_must_change_password(email, True)
 	frappe.db.commit()
 
 
-def _create_admin_user_on_site(site_name: str, email: str, first_name: str):
+def set_temporary_password(email: str):
+	"""On the tenant site (`bench execute`, password via XENTRA_TEMP_PASSWORD): give the user a
+	temporary password, sign them out everywhere, and make them change it at next sign-in."""
+	from frappe.utils.password import update_password
+
+	pwd = validate_temp_password(os.environ.get(TEMP_PASSWORD_ENV))
+	if not frappe.db.exists("User", email):
+		frappe.throw(f"User {email} does not exist on this site.")
+	update_password(email, pwd)
+	from frappe.sessions import clear_sessions
+
+	clear_sessions(user=email, force=True)
+	frappe.db.set_value("User", email, "enabled", 1)
+	mark_must_change_password(email, True)
+	frappe.db.commit()
+
+
+def _set_temp_password_on_site(site_name: str, email: str, pwd: str):
+	subprocess.run(
+		[
+			"bench", "--site", site_name, "execute",
+			"custom_erp.api.provisioning.set_temporary_password",
+			"--kwargs", json.dumps({"email": email}),
+		],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=120,
+		env={**os.environ, TEMP_PASSWORD_ENV: pwd},
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def reset_tenant_admin_password(tenant_name: str, temp_password: str):
+	"""Platform admin: set a new temporary password for the tenant admin on the tenant's own
+	site. They are signed out everywhere and must choose a new password at next sign-in."""
+	_require_system_manager()
+	pwd = validate_temp_password(temp_password)
+	site_name, email, status = frappe.db.get_value(
+		"XentraERP Tenant", tenant_name, ["site_name", "tenant_admin_email", "provisioning_status"]
+	)
+	if not site_name or status != "Completed":
+		frappe.throw("This tenant's site isn't provisioned yet. Set the password when you provision it.")
+	try:
+		_set_temp_password_on_site(site_name, email, pwd)
+	except subprocess.CalledProcessError as e:
+		frappe.log_error(title=f"Tenant admin password reset failed: {site_name}", message=(e.stderr or e.stdout or "")[-2000:])
+		frappe.throw("Couldn't reset the password on the tenant's site. Details are in the Error Log.")
+	frappe.db.set_value("XentraERP Tenant", tenant_name, "admin_must_change_password", 1)
+	frappe.db.commit()
+	return {"ok": True, "email": email}
+
+
+def _create_admin_user_on_site(site_name: str, email: str, first_name: str, first_password: str | None = None):
 	"""Run create_tenant_admin_user on the target site as an isolated
 	`bench execute` subprocess, guaranteeing the correct site context."""
 	kwargs = json.dumps({"email": email, "first_name": first_name})
@@ -132,6 +218,7 @@ def _create_admin_user_on_site(site_name: str, email: str, first_name: str):
 		capture_output=True,
 		text=True,
 		timeout=120,
+		env={**os.environ, TEMP_PASSWORD_ENV: first_password or ""},
 	)
 
 
@@ -546,9 +633,17 @@ def _run_site_creation(tenant_name: str, site_name: str):
 
 		_run_default_setup_on_site(site_name, tenant_org_name, tenant_country, tenant_time_zone, tenant_currency)
 
+		from frappe.utils.password import get_decrypted_password
+
+		temp_password = get_decrypted_password("XentraERP Tenant", tenant_name, "admin_temp_password", raise_exception=False)
 		_create_admin_user_on_site(
-			site_name, tenant_admin_email, tenant_admin_name or "Administrator"
+			site_name, tenant_admin_email, tenant_admin_name or "Administrator", temp_password
 		)
+		if temp_password:
+			from frappe.utils.password import remove_encrypted_password
+
+			remove_encrypted_password("XentraERP Tenant", tenant_name, "admin_temp_password")
+			frappe.db.commit()
 
 		# CLINZA: a clinic tenant gets its clinic type's charting templates, appointment
 		# types, services and VAT/GST preset (and its admin the clinic roles).
@@ -595,8 +690,12 @@ def _run_site_creation(tenant_name: str, site_name: str):
 					f"<p>Your organization <b>{org_name}</b> is ready to go.</p>"
 					f"<p>Sign in with tenant code <b>{tenant_code}</b> at "
 					f"<a href='{login_url}'>the sign-in page</a>. "
-					f"Use password <b>{SITE_ADMIN_PASSWORD}</b> for your first login — "
-					f"you'll be asked to set a new one.</p>"
+					+ (
+						"Use the temporary password your XentraERP contact gave you for your first login — "
+						if temp_password
+						else f"Use password <b>{SITE_ADMIN_PASSWORD}</b> for your first login — "
+					)
+					+ "you'll be asked to set a new one.</p>"
 					f"<p>Your free trial runs until {trial_end}.</p>"
 				),
 				now=True,

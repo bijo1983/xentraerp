@@ -34,7 +34,11 @@ async function findClinic() {
 
 const otp = ref('')
 
+const newPassword = ref('')
+const confirmPassword = ref('')
+
 async function enter() {
+  if (auth.mustChangePassword) return
   await store.load()
   const next = typeof route.query.next === 'string' ? route.query.next : null
   router.replace(next || (store.ctx?.configured ? '/today' : store.can('setup') ? '/setup' : '/today'))
@@ -80,6 +84,27 @@ async function submitCode() {
   }
 }
 
+async function submitNewPassword() {
+  error.value = ''
+  if (newPassword.value.length < 8) return (error.value = 'Use at least 8 characters.')
+  if (newPassword.value !== confirmPassword.value) return (error.value = "The two passwords don't match.")
+  busy.value = true
+  try {
+    await auth.changePassword(newPassword.value)
+    newPassword.value = confirmPassword.value = ''
+    await enter()
+  } catch (e) {
+    error.value = errorMessage(e, "Couldn't change your password. Please try again.")
+  } finally {
+    busy.value = false
+  }
+}
+
+async function signOutInstead() {
+  await auth.signOut()
+  error.value = ''
+}
+
 function backToPassword() {
   auth.cancelCode()
   otp.value = ''
@@ -108,6 +133,13 @@ function backToPassword() {
         <form v-if="!auth.org" class="stack" @submit.prevent="findClinic">
           <UiInput v-model="code" label="Clinic code" inputmode="numeric" autocomplete="organization" size="lg" required autofocus />
           <UiButton type="submit" size="lg" block :loading="busy">Continue</UiButton>
+        </form>
+        <form v-else-if="auth.user && auth.mustChangePassword" class="stack" @submit.prevent="submitNewPassword">
+          <p class="muted">You signed in with a temporary password. Choose your own password to continue.</p>
+          <UiInput v-model="newPassword" label="New password" type="password" autocomplete="new-password" required autofocus />
+          <UiInput v-model="confirmPassword" label="Confirm new password" type="password" autocomplete="new-password" required />
+          <UiButton type="submit" size="lg" block :loading="busy">Set password and continue</UiButton>
+          <button type="button" class="link" @click="signOutInstead">Sign out</button>
         </form>
         <form v-else-if="auth.pending" class="stack" @submit.prevent="submitCode">
           <p class="muted">Open your authenticator app and enter the 6-digit code for <strong>CLINZA</strong> ({{ auth.pending.email }}).</p>

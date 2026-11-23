@@ -31,15 +31,21 @@ def _ensure_role():
 
 
 def _enable_site_2fa():
-	settings = frappe.get_single("System Settings")
-	changed = False
-	for field, value in (("enable_two_factor_auth", 1), ("two_factor_method", "OTP App"), ("otp_issuer_name", "CLINZA")):
-		if settings.get(field) != value and not (field == "otp_issuer_name" and settings.get(field)):
-			settings.set(field, value)
-			changed = True
-	if changed:
-		settings.flags.ignore_mandatory = True
-		settings.save(ignore_permissions=True)
+	# Set the values directly: saving System Settings with two-factor newly on makes Frappe flag
+	# the built-in "All" role too, which would demand a code from every user on the site.
+	frappe.db.set_single_value("System Settings", "enable_two_factor_auth", 1)
+	frappe.db.set_single_value("System Settings", "two_factor_method", "OTP App")
+	if not frappe.db.get_single_value("System Settings", "otp_issuer_name"):
+		frappe.db.set_single_value("System Settings", "otp_issuer_name", "CLINZA")
+	only_enrolled_users()
+
+
+def only_enrolled_users():
+	"""Two-factor applies through ROLE only: clear the flag on every other role (Frappe sets it on
+	"All" whenever System Settings is saved with two-factor switched on)."""
+	for role in frappe.get_all("Role", filters={"two_factor_auth": 1, "name": ["!=", ROLE]}, pluck="name"):
+		frappe.db.set_value("Role", role, "two_factor_auth", 0)
+	frappe.clear_cache()
 
 
 def install_admin_authenticator(email: str):

@@ -45,6 +45,8 @@ router.beforeEach(async (to) => {
     if (to.meta.public) return true
     return { name: 'signin', query: { next: to.fullPath } }
   }
+  // A temporary password has to be replaced before anything else opens.
+  if (auth.mustChangePassword) return to.name === 'signin' ? true : { name: 'signin' }
   // Signing up is for new clinics; the landing page shows to anyone signed out.
   if (to.name === 'signup' || to.name === 'unavailable' || to.name === 'not-found') return true
   if (!store.ctx) {

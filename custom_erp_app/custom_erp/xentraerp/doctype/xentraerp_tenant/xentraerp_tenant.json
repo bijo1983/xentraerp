@@ -45,6 +45,7 @@
   "approved_by",
   "approved_on",
   "admin_must_change_password",
+  "admin_temp_password",
   "notes"
  ],
  "fields": [
@@ -287,6 +288,14 @@
    "description": "Set when the default 'admin' password is issued on approval; cleared once the tenant admin sets their own password."
   },
   {
+   "fieldname": "admin_temp_password",
+   "fieldtype": "Password",
+   "label": "Admin temporary password (pending)",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Set by the platform admin at Provision Site; used once for the admin user on the new site, then cleared."
+  },
+  {
    "fieldname": "notes",
    "fieldtype": "Text",
    "label": "Internal Notes"
@@ -294,7 +303,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-23 20:30:00.000000",
+ "modified": "2026-11-23 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Xentraerp",
  "name": "XentraERP Tenant",

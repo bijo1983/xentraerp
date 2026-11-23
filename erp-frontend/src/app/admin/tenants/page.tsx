@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { frappe } from '@/lib/frappe';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X, Check, Ban, Copy, CheckCheck, Server, RefreshCw, AlertTriangle, Wrench } from 'lucide-react';
+import { Search, Plus, X, Check, Ban, Copy, CheckCheck, Server, RefreshCw, AlertTriangle, Wrench, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type Plan, assignPlan, listPlans } from '@/lib/plans';
 
@@ -38,6 +38,29 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const FILTERS = ['All', 'Pending Approval', 'Trial', 'Active', 'Suspended', 'Rejected'] as const;
+
+/** A readable random temporary password (no look-alike characters), e.g. "Kp7m-Rw4x-Tq9z". */
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  const s = Array.from(bytes, (b) => chars[b % chars.length]).join('');
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
+}
+
+/** Ask for the tenant admin's temporary password (prefilled); null when cancelled. */
+function askTempPassword(t: { organization_name?: string; tenant_admin_email?: string }, action: string): string | null {
+  for (;;) {
+    const pwd = window.prompt(
+      `${action} — temporary password for ${t.tenant_admin_email || 'the admin'} (${t.organization_name || ''}).\n` +
+        'Give it to them yourself; they must choose a new one when they first sign in. At least 8 characters.',
+      generateTempPassword(),
+    );
+    if (pwd === null) return null;
+    if (pwd.trim().length >= 8 && pwd.trim() !== 'admin') return pwd.trim();
+    alert('Use at least 8 characters (and not "admin").');
+  }
+}
 
 const emptyForm = { organization_name: '', subdomain: '', plan: '', tenant_admin_email: '' };
 
@@ -154,12 +177,29 @@ export default function TenantsPage() {
   }
 
   async function provisionSite(t: Tenant) {
+    const tempPassword = askTempPassword(t, 'Provision site');
+    if (tempPassword === null) return;
     setActingOn(t.name);
     try {
-      await frappe.call('custom_erp.api.provisioning.provision_tenant_site', { tenant_name: t.name });
+      await frappe.call('custom_erp.api.provisioning.provision_tenant_site', { tenant_name: t.name, temp_password: tempPassword });
       await load();
+      alert(`Provisioning started. Once it's done, ${t.tenant_admin_email} signs in with tenant code ${t.tenant_code} and this temporary password:\n\n${tempPassword}`);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Failed to start site provisioning');
+    } finally {
+      setActingOn(null);
+    }
+  }
+
+  async function resetAdminPassword(t: Tenant) {
+    const tempPassword = askTempPassword(t, 'Reset admin password');
+    if (tempPassword === null) return;
+    setActingOn(t.name);
+    try {
+      await frappe.call('custom_erp.api.provisioning.reset_tenant_admin_password', { tenant_name: t.name, temp_password: tempPassword });
+      alert(`Password reset. ${t.tenant_admin_email} has been signed out everywhere and must choose a new password at next sign-in.\n\nTemporary password (tenant code ${t.tenant_code}):\n${tempPassword}`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to reset the password');
     } finally {
       setActingOn(null);
     }
@@ -363,8 +403,17 @@ export default function TenantsPage() {
                   {t.status === 'Pending Approval' ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : t.provisioning_status === 'Completed' ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-green-700">
-                      <Server className="h-3 w-3" /> {t.site_name}
+                    <span className="inline-flex items-center gap-2 text-xs text-green-700">
+                      <span className="inline-flex items-center gap-1"><Server className="h-3 w-3" /> {t.site_name}</span>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
+                        title="Set a new temporary password for the tenant admin"
+                        disabled={actingOn === t.name}
+                        onClick={() => resetAdminPassword(t)}
+                      >
+                        <KeyRound className="h-3 w-3" /> Reset password
+                      </button>
                     </span>
                   ) : t.provisioning_status === 'In Progress' ? (
                     <span className="inline-flex items-center gap-1 text-xs text-blue-700">
