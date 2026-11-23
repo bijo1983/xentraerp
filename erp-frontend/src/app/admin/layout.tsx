@@ -5,13 +5,14 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Package, Settings, CreditCard,
-  BarChart3, Shield, Bell, Building2, ChevronLeft, LogOut,
+  BarChart3, Shield, Bell, Building2, ChevronLeft, LogOut, KeyRound,
   Layers, FileText, Zap, Globe, Server, Activity, FlaskConical
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { frappe } from '@/lib/frappe';
+import { ChangePasswordDialog } from '@/components/layout/change-password-dialog';
 
 const navGroups = [
   {
@@ -60,6 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(true);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   async function handleLogout() {
     await frappe.logout();
@@ -127,6 +129,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <FlaskConical className="h-4 w-4 shrink-0" />
             {open && <span>Sandbox</span>}
           </Link>
+          <button
+            onClick={() => setChangingPassword(true)}
+            title={!open ? 'Change password' : undefined}
+            className="w-full flex items-center gap-2.5 mx-0 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent mb-1"
+          >
+            <KeyRound className="h-4 w-4 shrink-0" />
+            {open && <span>Change password</span>}
+          </button>
+          <ChangePasswordDialog open={changingPassword} onOpenChange={setChangingPassword} />
           <button
             onClick={handleLogout}
             title={!open ? 'Sign Out' : undefined}

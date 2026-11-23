@@ -19,7 +19,8 @@ from frappe.utils import now_datetime
 from custom_erp.api.tenants import TENANT_ADMIN_ROLES
 
 TENANT_SITE_SUFFIX = os.environ.get("TENANT_SITE_SUFFIX", "xentraerp.local")
-BENCH_DIR = os.environ.get("XENTRAERP_BENCH_DIR", os.path.expanduser("~/innovegic-bench"))
+# The bench this code runs in (not ~/innovegic-bench: the web server runs as root, HOME=/root).
+BENCH_DIR = os.environ.get("XENTRAERP_BENCH_DIR") or os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(frappe.__file__)), "..", "..", ".."))
 SITE_ADMIN_PASSWORD = "admin"
 TEMP_PASSWORD_ENV = "XENTRA_TEMP_PASSWORD"
 ADMINISTRATOR_PASSWORD_ENV = "XENTRA_ADMINISTRATOR_PASSWORD"
@@ -569,10 +570,17 @@ def _get_default_setup_status_on_site(site_name: str) -> dict:
 		text=True,
 		timeout=60,
 	)
-	# `bench execute` prints the return value as a Python repr on stdout.
+	# `bench execute` prints the return value on stdout: JSON for dicts (true/false), older
+	# benches a Python repr — accept either.
 	import ast
 
-	return ast.literal_eval(result.stdout.strip().splitlines()[-1])
+	out = result.stdout.strip()
+	start = out.find("{")
+	text = out[start:] if start >= 0 else out.splitlines()[-1]
+	try:
+		return json.loads(text)
+	except ValueError:
+		return ast.literal_eval(text)
 
 
 @frappe.whitelist()

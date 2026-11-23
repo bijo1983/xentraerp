@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Activity, CalendarDays, ConciergeBell, FileHeart, LayoutDashboard, LogOut, Receipt, Settings2, ShieldCheck, Stethoscope, Users } from 'lucide-vue-next'
+import { Activity, CalendarDays, ConciergeBell, FileHeart, KeyRound, LayoutDashboard, LogOut, Receipt, Settings2, ShieldCheck, Stethoscope, Users } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useClinicStore } from '@/stores/clinic'
 import type { Cap } from '@/lib/types'
 import ClinzaMark from '@/components/ClinzaMark.vue'
+import ChangePasswordModal from '@/components/ChangePasswordModal.vue'
+
+const changingPassword = ref(false)
 
 const auth = useAuthStore()
 const store = useClinicStore()
@@ -56,11 +59,13 @@ async function signOut() {
             <div class="me__name">{{ store.ctx?.full_name || auth.user }}</div>
             <div class="me__mail">{{ auth.user }}</div>
           </div>
+          <button type="button" class="me__out" aria-label="Change password" title="Change password" @click="changingPassword = true"><KeyRound :size="17" /></button>
           <button type="button" class="me__out" aria-label="Sign out" title="Sign out" @click="signOut"><LogOut :size="17" /></button>
         </div>
       </div>
     </aside>
     <main class="main"><slot /></main>
+    <ChangePasswordModal :open="changingPassword" @close="changingPassword = false" />
   </div>
 </template>
 
