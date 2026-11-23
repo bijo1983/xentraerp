@@ -13,6 +13,7 @@
   "column_break_org",
   "plan",
   "billing_cycle",
+  "clinic_type",
   "provisioning_status",
   "site_name",
   "site_provisioned_on",
@@ -98,6 +99,12 @@
    "fieldtype": "Select",
    "label": "Billing Cycle",
    "options": "Monthly\nAnnual"
+  },
+  {
+   "fieldname": "clinic_type",
+   "fieldtype": "Data",
+   "label": "Clinic type (CLINZA)",
+   "description": "Code from custom_erp.api.clinic_catalog.CLINIC_TYPES, chosen at signup; empty for non-clinic tenants."
   },
   {
    "default": "Pending",

@@ -702,6 +702,29 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
 - Tests: `scripts/pos-checks/` (see README there): `backend_suite.py` (183), `locations_receipts_suite.py` (91), `staff_suite.py` (28), `roles_takeaway_reservations_suite.py` (118), all rolled back, plus `e2e_http.py` (71, over HTTPS; run `e2e_setup.py` first and `e2e_cleanup.py` after — it only removes ZZ rows). The UI screens were type-checked and built, and every API they call
   is covered by the suites, but the Vue screens have not been driven in a browser (none on this box).
 
+## CLINZA clinic management (branch feature/clinza-app, added 2026-11-23) — NOT deployed yet
+
+Vue app `clinic-frontend/` (same stack/tokens as the POS) for **https://clinza.xentraerp.com** — note `.com`, every
+other app is on `xentraerp.net`; the `.com` DNS zone is not the DigitalOcean `xentraerp.net` one. nginx:
+`scripts/nginx-clinza.xentraerp.com.conf` (+ `nginx-clinza-security-headers.conf`), static `dist`, `/api` → :8083.
+Backend `custom_erp/api/clinic.py` + `clinic_setup.py` + `clinic_catalog.py`; DocTypes `Clinza Settings/Practitioner/
+Patient/Appointment/Encounter/Service/Insurance Payer/Insurance Policy/Claim` (+ child tables). Decision (user): built
+inside XentraERP, not the Frappe Healthcare app.
+- **Clinic type** (`XentraERP Tenant.clinic_type`, picked at signup, `?product=clinza`) → `clinic_setup.apply_clinic_type`
+  on the tenant site at provisioning (or `provisioning.set_tenant_clinic_type`, or CLINZA Setup). Only ever adds.
+- **Billing = submitted Sales Invoices** (remarks start `CLINZA ENC-…`, which is how CLINZA lists/prints them): one to
+  the patient's Customer (group "Patients") and, with a policy, one to the insurer's Customer ("Insurance Payers") for
+  the covered share; a Clinza Claim is opened against the insurer invoice. Payments are Payment Entries.
+- **Tax**: preset by country (GCC VAT AE 5 / SA 15 + ZATCA QR / BH 10 / OM 5 / QA, KW none; India GST with healthcare
+  exempt; EU VAT with Art. 132 exemption) → accounts "Output VAT" or "Output CGST/SGST/IGST", Item Tax Templates
+  "CLINZA <class>" per tax class, Sales Taxes templates "CLINZA VAT" / "CLINZA GST In-State/Out-of-State".
+- **User limit**: `XentraERP Tenant.max_users` (0 = unlimited) now travels in `tenants.get_entitlements`; the User
+  `before_insert` hook `users.enforce_user_limit` refuses new System Users over it (fails open if unknown).
+- New module code `clinic` in `ALL_MODULES`; CLINZA calls require it (same fail-closed check as POS).
+- Verified: pure logic (`python3 scripts/clinic-checks/test_clinic_catalog.py`), vue-tsc/vitest/build, and screens
+  rendered in headless Chromium with mocked API responses. **Not yet run against a real bench** — the first migrate +
+  `apply_clinic_type` on a test tenant is the real test (ERPNext account / template creation).
+
 ## ScheduleVerse (deployed 2026-09-24) — separate app, same box
 
 **Live at `https://schedule.xentraerp.net`** — independent product (FastAPI + Vue 3 + Postgres 16 + Redis 7),

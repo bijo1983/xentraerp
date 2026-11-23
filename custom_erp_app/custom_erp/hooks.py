@@ -37,7 +37,13 @@ doc_events = {
     "User": {
         # Frappe v14 crashes building the welcome email when no outgoing email
         # account exists, and the user is never created.
-        "before_insert": "custom_erp.api.users.skip_welcome_email_without_mail",
+        "before_insert": [
+            "custom_erp.api.users.skip_welcome_email_without_mail",
+            # SaaS user limit (XentraERP Tenant.max_users; 0 = unlimited).
+            "custom_erp.api.users.enforce_user_limit",
+        ],
+        # ...and so does re-enabling a disabled user.
+        "validate": "custom_erp.api.users.enforce_user_limit_on_enable",
     },
     "POS Profile": {
         # A new register follows the tenant's bill-rounding setting (ERPNext defaults it to rounding on).
