@@ -25,7 +25,8 @@
   "bill_section",
   "patient_invoice",
   "payer_invoice",
-  "claim"
+  "claim",
+  "tax_snapshot"
  ],
  "fields": [
   {
@@ -156,6 +157,13 @@
    "label": "Claim",
    "options": "Clinza Claim",
    "read_only": 1
+  },
+  {
+   "fieldname": "tax_snapshot",
+   "fieldtype": "Small Text",
+   "label": "Tax treatment at billing (JSON)",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "links": [],

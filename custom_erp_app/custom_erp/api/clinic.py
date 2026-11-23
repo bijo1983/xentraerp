@@ -821,7 +821,11 @@ def bill_encounter(name: str):
 				due_days=30, tax_id=payer.tax_id)
 			if payer_inv:
 				claim = _create_claim(e, policy, payer_inv)
-	e.db_set({"patient_invoice": patient_inv or None, "payer_invoice": payer_inv or None, "claim": claim or None, "status": "Billed"})
+	# Snapshot of the tax treatment the bill was made under, so reprints after a later
+	# Setup change still say "exempt" / "zero-rated" the way this invoice was taxed.
+	snapshot = json.dumps({"regime": s.tax_regime, "standard_rate": flt(s.standard_rate), "classes": _j(s.tax_classes, {})})
+	e.db_set({"patient_invoice": patient_inv or None, "payer_invoice": payer_inv or None, "claim": claim or None, "status": "Billed",
+		"tax_snapshot": snapshot})
 	if e.appointment:
 		frappe.db.set_value("Clinza Appointment", e.appointment, "status", "Completed")
 	return {"patient_invoice": patient_inv, "payer_invoice": payer_inv, "claim": claim}
@@ -1032,7 +1036,10 @@ def get_invoice_print(name: str):
 	if not (inv.remarks or "").startswith("CLINZA"):
 		frappe.throw("Not a CLINZA invoice.")
 	preset = cat.tax_preset(s.country)
-	preset.update({"regime": s.tax_regime, "classes": _j(s.tax_classes, preset["classes"])})
+	enc_name = (inv.remarks or "").split(" ")[1] if (inv.remarks or "").startswith("CLINZA ENC") else None
+	snapshot = _j(frappe.db.get_value("Clinza Encounter", enc_name, "tax_snapshot"), {}) if enc_name else {}
+	# Classification as billed (snapshot), else today's settings for invoices from before snapshots.
+	preset.update({"regime": snapshot.get("regime") or s.tax_regime, "classes": snapshot.get("classes") or _j(s.tax_classes, preset["classes"])})
 	accounts = {t.account_head: t.description for t in inv.taxes}
 	lines, any_taxable, tax_summary = [], False, {}
 	codes = {}
@@ -1041,12 +1048,14 @@ def get_invoice_print(name: str):
 	for it in inv.items:
 		rates = _j(it.item_tax_rate, {})
 		cls = setup.class_of_template(s, it.item_tax_template)
-		r, exempt = cat.class_rate(preset, cls)
 		comps = {}
 		for acc, rate in rates.items():
 			if acc in accounts:
 				comps[accounts[acc]] = {"rate": flt(rate), "amount": flt(flt(it.net_amount) * flt(rate) / 100, 2)}
 		tax_amt = flt(sum(c["amount"] for c in comps.values()), 2)
+		# The rate actually charged on this line comes from the invoice, never from today's settings.
+		r = flt(sum(c["rate"] for c in comps.values()), 3)
+		exempt = r == 0 and cat.class_rate(preset, cls)[1]
 		if not exempt:
 			any_taxable = True
 		key = "Exempt" if exempt else f"{r:g}%"
@@ -1061,7 +1070,6 @@ def get_invoice_print(name: str):
 	customer = frappe.db.get_value("Customer", inv.customer, ["customer_name", "tax_id", "customer_group"], as_dict=True)
 	patient = frappe.db.get_value("Clinza Patient", {"customer": inv.customer},
 		["name", "patient_name", "id_type", "id_number", "mobile", "state_code", "address"], as_dict=True)
-	enc_name = (inv.remarks or "").split(" ")[1] if (inv.remarks or "").startswith("CLINZA ENC") else None
 	enc = frappe.db.get_value("Clinza Encounter", enc_name, ["name", "patient", "policy", "practitioner", "encounter_date"], as_dict=True) if enc_name else None
 	visit_patient = frappe.db.get_value("Clinza Patient", enc.patient, ["name", "patient_name", "id_type", "id_number", "mobile"], as_dict=True) if enc else None
 	policy = frappe.db.get_value("Clinza Insurance Policy", enc.policy, ["policy_no", "member_id", "payer", "coverage_pct"], as_dict=True) if enc and enc.policy else None
