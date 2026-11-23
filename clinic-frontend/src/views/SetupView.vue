@@ -280,7 +280,7 @@ onMounted(() => {
 
     <!-- Practitioners -->
     <UiCard v-else-if="tab === 'practitioners'" title="Practitioners" :padded="false">
-      <template #actions><UiButton size="sm" @click="pracForm = { slot_minutes: s.slot_minutes || 15, color: '#0d9488' }"><Plus :size="15" /> Add</UiButton></template>
+      <template #actions><UiButton size="sm" @click="pracForm = { slot_minutes: s.slot_minutes || 15, color: '#2563eb' }"><Plus :size="15" /> Add</UiButton></template>
       <div class="tbl-wrap" style="border: 0">
         <table class="tbl">
           <thead><tr><th>Name</th><th>Specialty</th><th>Licence no.</th><th>Sign-in</th></tr></thead>

@@ -1,35 +1,17 @@
 /*
- * CLINZA theme on top of the shared XentraERP tokens (tokens.css, copied from pos-frontend):
- * same spacing, radius, type and status scales; the brand accent is a clinical teal with the
- * XentraERP indigo as secondary. Colours always come in soft/text pairs for chips & badges.
+ * CLINZA uses the XentraERP theme exactly as the POS does (tokens.css, copied from pos-frontend):
+ * brand blue primary, slate surfaces, soft/text colour pairs. Only clinic-specific tokens live here.
  */
 :root {
-  --x-primary: #0d9488;
-  --x-primary-hover: #0f766e;
-  --x-primary-active: #115e59;
-  --x-primary-soft: #f0fdfa;
-  --x-primary-text: #0f766e;
-  --x-accent: #4f46e5;
-  --x-accent-soft: #eef2ff;
-  --x-accent-text: #4338ca;
-  --x-focus-ring: 0 0 0 4px rgba(13, 148, 136, 0.18);
-  --x-shadow-brand: 0 10px 24px -8px rgba(13, 148, 136, 0.55);
-  --x-brand-gradient: linear-gradient(135deg, #0d9488 0%, #0891b2 50%, #4f46e5 120%);
   --sidebar-w: 232px;
 
   /* appointment status pairs */
   --st-booked: #64748b; --st-booked-soft: #f1f5f9;
   --st-confirmed: #4338ca; --st-confirmed-soft: #eef2ff;
   --st-checkedin: #b45309; --st-checkedin-soft: #fffbeb;
-  --st-inconsult: #0f766e; --st-inconsult-soft: #ccfbf1;
+  --st-inconsult: #1d4ed8; --st-inconsult-soft: #dbeafe;
   --st-completed: #047857; --st-completed-soft: #ecfdf5;
   --st-cancelled: #b91c1c; --st-cancelled-soft: #fef2f2;
-}
-:root[data-theme='dark'] {
-  --x-primary-soft: #0b2b29;
-  --x-primary-text: #5eead4;
-  --x-accent-soft: #1e1b4b;
-  --x-accent-text: #a5b4fc;
 }
 
 * { box-sizing: border-box; }

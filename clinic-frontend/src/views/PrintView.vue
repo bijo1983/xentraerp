@@ -283,14 +283,14 @@ onMounted(load)
 .print-root { min-height: 100dvh; background: var(--x-bg-sunken); padding: 24px 16px; }
 .toolbar { max-width: 210mm; margin: 0 auto 12px; display: flex; align-items: center; gap: 12px; }
 .sheet { max-width: 210mm; margin: 0 auto; background: #fff; color: #0f172a; padding: 14mm 14mm 18mm; box-shadow: var(--x-shadow-md); border-radius: 6px; font-size: 12.5px; line-height: 1.45; }
-.lh { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 2px solid #0d9488; }
+.lh { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 2px solid #2563eb; }
 .lh__brand { display: flex; gap: 12px; align-items: flex-start; }
 .lh__logo { width: 56px; height: 56px; object-fit: contain; }
 .lh__name { font-family: var(--x-font-display); font-weight: 800; font-size: 19px; }
 .lh__meta { color: #475569; font-size: 11.5px; }
 .lh__title { text-align: end; }
-.title { font-family: var(--x-font-display); font-weight: 800; font-size: 20px; text-transform: uppercase; letter-spacing: 0.04em; color: #0f766e; }
-.title-ar { font-size: 18px; font-weight: 700; color: #0f766e; }
+.title { font-family: var(--x-font-display); font-weight: 800; font-size: 20px; text-transform: uppercase; letter-spacing: 0.04em; color: #1d4ed8; }
+.title-ar { font-size: 18px; font-weight: 700; color: #1d4ed8; }
 .blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 14px 0; }
 .block { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
 .lbl { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600; }
@@ -314,7 +314,7 @@ onMounted(load)
 .sign { display: flex; justify-content: flex-end; margin-top: 36px; }
 .sign.two { justify-content: space-between; }
 .sign .line { margin-top: 36px; border-top: 1px solid #94a3b8; padding-top: 4px; min-width: 200px; color: #64748b; font-size: 11px; }
-.rx { font-size: 30px; font-weight: 700; color: #0f766e; margin: 4px 0 -4px; }
+.rx { font-size: 30px; font-weight: 700; color: #1d4ed8; margin: 4px 0 -4px; }
 .caps { text-transform: uppercase; }
 .allergy { color: #b91c1c; font-weight: 700; }
 .footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 11px; white-space: pre-wrap; text-align: center; }

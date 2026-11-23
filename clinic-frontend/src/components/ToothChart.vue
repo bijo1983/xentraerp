@@ -212,8 +212,8 @@ const svgStyle = computed(() => (zoom.value ? { width: `${ZOOMS[zoom.value] * 10
 .crown { fill: #fbf6ea; stroke: #a99c82; stroke-width: 1.1; }
 .root { fill: #f0e4c9; stroke: #a99c82; stroke-width: 1; }
 .root.back { fill: #e3d5b4; }
-.fig:hover .crown, .fig:focus-visible .crown { stroke: var(--x-accent); stroke-width: 2; }
-.fig:focus-visible .root { stroke: var(--x-accent); }
+.fig:hover .crown, .fig:focus-visible .crown { stroke: var(--x-primary); stroke-width: 2; }
+.fig:focus-visible .root { stroke: var(--x-primary); }
 .c-danger .crown { fill: #fde3e1; }
 .c-info .crown { fill: #e5effd; }
 .c-primary .crown { fill: #f0d98c; stroke: #a9852a; }
@@ -232,14 +232,14 @@ const svgStyle = computed(() => (zoom.value ? { width: `${ZOOMS[zoom.value] * 10
 .impacted .crown, .impacted .root { stroke-dasharray: 3 2; }
 .extract { stroke: #dc2626; stroke-width: 3; stroke-linecap: round; }
 .surf { fill: var(--x-surface); stroke: #a99c82; stroke-width: 0.8; cursor: pointer; }
-.surf:hover { fill: var(--x-accent-soft); }
+.surf:hover { fill: var(--x-primary-soft); }
 .surf.c-danger { fill: #dc2626; }
 .surf.c-info { fill: #3b82f6; }
 .surf.c-primary { fill: #d4a72c; }
 .surf.c-warning { fill: #f59e0b; }
 .tone-danger { background: var(--x-danger-soft); border-color: var(--x-danger); color: var(--x-danger-text); }
 .tone-info { background: var(--x-info-soft); border-color: var(--x-info); color: var(--x-info-text); }
-.tone-primary { background: var(--x-accent-soft); border-color: var(--x-accent); color: var(--x-accent-text); }
+.tone-primary { background: var(--x-primary-soft); border-color: var(--x-primary); color: var(--x-primary-text); }
 .tone-warning { background: var(--x-warning-soft); border-color: var(--x-warning); color: var(--x-warning-text); }
 .tone-muted { background: var(--x-surface-3); border-style: dashed; color: var(--x-text-faint); }
 .chip.on { outline: 2px solid currentColor; outline-offset: 1px; }

@@ -225,7 +225,7 @@ const RETINA_DOTS = [[-50, -48], [52, 40], [-58, 30], [30, -60], [-18, 62], [60,
 .lash { fill: none; stroke: #3b2a1f; stroke-width: 1.3; stroke-linecap: round; }
 .lidhit { fill: none; stroke: transparent; stroke-width: 12; }
 .lidhit.ab { stroke: rgba(225, 29, 72, 0.16); }
-.lidhit.sel { stroke: rgba(13, 148, 136, 0.3); }
+.lidhit.sel { stroke: rgba(37, 99, 235, 0.3); }
 .retina { stroke: #7b2412; stroke-width: 1; }
 .rd { fill: #c9c5c0; opacity: 0.75; }
 .tear { fill: #7a1a10; stroke: #f2c2a0; stroke-width: 1; }
@@ -236,7 +236,7 @@ const RETINA_DOTS = [[-50, -48], [52, 40], [-58, 30], [30, -60], [-18, 62], [60,
 .artery { fill: none; stroke: #d2402c; stroke-width: 1.7; stroke-linecap: round; }
 .vesselhit { fill: none; stroke: transparent; stroke-width: 9; }
 .ab .vesselhit { stroke: rgba(225, 29, 72, 0.22); }
-.sel .vesselhit { stroke: rgba(13, 148, 136, 0.3); }
+.sel .vesselhit { stroke: rgba(37, 99, 235, 0.3); }
 .macula { fill: rgba(120, 30, 12, 0.45); }
 .fovea { fill: #5a160a; }
 .drusen { fill: #f6e27a; }
@@ -246,15 +246,15 @@ const RETINA_DOTS = [[-50, -48], [52, 40], [-58, 30], [30, -60], [-18, 62], [60,
 .cup { fill: #fff4dc; pointer-events: none; }
 .dh { stroke: #7d0f0a; stroke-width: 2.4; stroke-linecap: round; }
 .ab:not(g):not(.lidhit) { stroke: #e11d48; stroke-width: 2.2; stroke-dasharray: 4 2; }
-.sel:not(g):not(.lidhit) { stroke: var(--x-accent); stroke-width: 2.6; stroke-dasharray: none; }
+.sel:not(g):not(.lidhit) { stroke: var(--x-primary); stroke-width: 2.6; stroke-dasharray: none; }
 .ed__cd { display: flex; flex-direction: column; gap: 4px; font-size: var(--x-text-sm); }
-.ed__cd input { accent-color: var(--x-accent); border: 0; background: none; box-shadow: none; padding: 0; min-height: 0; height: 24px; }
+.ed__cd input { accent-color: var(--x-primary); border: 0; background: none; box-shadow: none; padding: 0; min-height: 0; height: 24px; }
 .ed__regions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .reg { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: start; border: 1px solid var(--x-border); background: var(--x-surface); border-radius: 8px; padding: 5px 8px; font: inherit; cursor: pointer; color: var(--x-text); min-width: 0; }
 .reg__l { font-size: 10.5px; color: var(--x-text-muted); font-weight: 600; }
 .reg__v { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .reg.ab { border-color: var(--x-danger); background: var(--x-danger-soft); color: var(--x-danger-text); }
-.reg.on { outline: 2px solid var(--x-accent); outline-offset: 1px; }
+.reg.on { outline: 2px solid var(--x-primary); outline-offset: 1px; }
 .ed__edit { border: 1px solid var(--x-border); border-radius: var(--x-radius-lg); padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--x-surface); }
 .ed__edit-h { display: flex; justify-content: space-between; align-items: center; }
 .chip.on { outline: 2px solid currentColor; outline-offset: 1px; }

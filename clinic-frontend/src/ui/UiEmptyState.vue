@@ -23,7 +23,7 @@ withDefaults(defineProps<{ title: string; message?: string; icon?: Component | s
 .x-empty__icon { position: relative; width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center; font-size: 26px; margin-block-end: var(--x-space-2); }
 .x-empty__icon::before { content: ''; position: absolute; inset: -10px; border-radius: 28px; border: 1px dashed var(--x-border-strong); }
 .x-empty__icon.is-primary { background: var(--x-primary-soft); color: var(--x-primary-text); }
-.x-empty__icon.is-accent { background: var(--x-accent-soft); color: var(--x-accent-text); }
+.x-empty__icon.is-accent { background: var(--x-primary-soft); color: var(--x-primary-text); }
 .x-empty__icon.is-neutral { background: var(--x-surface-3); color: var(--x-text-muted); }
 .x-empty__title { margin: 0; color: var(--x-text); font-family: var(--x-font-display); font-size: var(--x-text-lg); font-weight: 700; text-wrap: balance; }
 .x-empty__msg { margin: 0; max-width: 40ch; line-height: var(--x-leading); font-size: var(--x-text-sm); text-wrap: pretty; }
