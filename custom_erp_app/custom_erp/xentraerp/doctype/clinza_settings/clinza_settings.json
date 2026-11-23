@@ -29,6 +29,7 @@
   "clinical_section",
   "enabled_templates",
   "appointment_types",
+  "custom_medicines",
   "slot_minutes",
   "opening_time",
   "closing_time",
@@ -162,6 +163,12 @@
    "fieldname": "appointment_types",
    "fieldtype": "Long Text",
    "label": "Appointment types (JSON)"
+  },
+  {
+   "fieldname": "custom_medicines",
+   "fieldtype": "Long Text",
+   "label": "Clinic medicines & brands (JSON)",
+   "hidden": 1
   },
   {
    "fieldname": "slot_minutes",

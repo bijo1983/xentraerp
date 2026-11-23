@@ -13,6 +13,14 @@
   "encounter_date",
   "status",
   "policy",
+  "consult_section",
+  "chief_complaint",
+  "history",
+  "examination",
+  "advice",
+  "follow_up_date",
+  "triage_by",
+  "triage_at",
   "chart_section",
   "templates",
   "chart_data",
@@ -84,6 +92,49 @@
    "fieldtype": "Link",
    "label": "Insurance policy",
    "options": "Clinza Insurance Policy"
+  },
+  {
+   "fieldname": "consult_section",
+   "fieldtype": "Section Break",
+   "label": "Consultation"
+  },
+  {
+   "fieldname": "chief_complaint",
+   "fieldtype": "Small Text",
+   "label": "Chief complaint"
+  },
+  {
+   "fieldname": "history",
+   "fieldtype": "Text",
+   "label": "History of present illness"
+  },
+  {
+   "fieldname": "examination",
+   "fieldtype": "Text",
+   "label": "Examination"
+  },
+  {
+   "fieldname": "advice",
+   "fieldtype": "Text",
+   "label": "Advice / plan"
+  },
+  {
+   "fieldname": "follow_up_date",
+   "fieldtype": "Date",
+   "label": "Follow-up date"
+  },
+  {
+   "fieldname": "triage_by",
+   "fieldtype": "Link",
+   "label": "Triaged by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "triage_at",
+   "fieldtype": "Datetime",
+   "label": "Triaged at",
+   "read_only": 1
   },
   {
    "fieldname": "chart_section",

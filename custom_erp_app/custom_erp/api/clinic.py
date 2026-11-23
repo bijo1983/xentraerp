@@ -29,14 +29,17 @@ from custom_erp.api import clinic_setup as setup
 SETTINGS = "Clinza Settings"
 
 # What each clinic role may do. System Manager = Clinic Manager.
+# Visit flow: front desk (appointments: book, walk-in, check in + token) -> triage (vitals,
+# complaint, priority) -> doctor (chart) -> front desk again (billing).
 CAPS = {
 	"Clinic Receptionist": {"patients", "appointments", "billing"},
-	"Clinic Practitioner": {"patients", "appointments", "chart"},
+	"Clinic Nurse": {"patients", "triage"},
+	"Clinic Practitioner": {"patients", "appointments", "triage", "chart"},
 	"Clinic Billing": {"patients", "billing", "claims", "reports"},
-	"Clinic Manager": {"patients", "appointments", "chart", "billing", "claims", "reports", "setup", "staff"},
+	"Clinic Manager": {"patients", "appointments", "triage", "chart", "billing", "claims", "reports", "setup", "staff"},
 }
 ALL_CAPS = set().union(*CAPS.values())
-APPOINTMENT_STATUSES = ["Booked", "Confirmed", "Checked In", "In Consultation", "Completed", "Cancelled", "No Show"]
+APPOINTMENT_STATUSES = ["Booked", "Confirmed", "Checked In", "Triaged", "In Consultation", "Completed", "Cancelled", "No Show"]
 CLAIM_STATUSES = ["Draft", "Submitted", "Under Review", "Approved", "Partially Approved", "Rejected", "Paid"]
 
 
@@ -595,10 +598,18 @@ def _current_policy(patient: str) -> str | None:
 def start_encounter(patient: str | None = None, appointment: str | None = None, practitioner: str | None = None):
 	"""Open (or return the open) encounter for an appointment / a walk-in patient."""
 	require_cap("chart")
+	name = create_encounter(patient=patient, appointment=appointment, practitioner=practitioner)
+	if appointment:
+		frappe.db.set_value("Clinza Appointment", appointment, {"status": "In Consultation", "called_at": now_datetime()})
+	return get_encounter(name)
+
+
+def create_encounter(patient: str | None = None, appointment: str | None = None, practitioner: str | None = None) -> str:
+	"""The appointment's encounter (created on first use). No permission check: callers do it."""
 	if appointment:
 		appt = frappe.get_doc("Clinza Appointment", appointment)
 		if appt.encounter:
-			return get_encounter(appt.encounter)
+			return appt.encounter
 		patient, practitioner = appt.patient, practitioner or appt.practitioner
 	practitioner = practitioner or frappe.db.get_value("Clinza Practitioner", {"user": frappe.session.user, "disabled": 0}, "name")
 	if not patient or not practitioner:
@@ -618,8 +629,8 @@ def start_encounter(patient: str | None = None, appointment: str | None = None, 
 		enc.append("services", {"item": svc.item, "item_name": svc.name, "qty": 1, "rate": svc.rate, "amount": svc.rate, "tax_class": svc.tax_class, "code": svc.code})
 	enc.insert(ignore_permissions=True)
 	if appointment:
-		frappe.db.set_value("Clinza Appointment", appointment, {"encounter": enc.name, "status": "In Consultation"})
-	return get_encounter(enc.name)
+		frappe.db.set_value("Clinza Appointment", appointment, "encounter", enc.name)
+	return enc.name
 
 
 @frappe.whitelist()
@@ -639,16 +650,27 @@ def get_encounter(name: str):
 	e["patient_doc"]["age"] = _age(e["patient_doc"].date_of_birth)
 	e["practitioner_doc"] = frappe.db.get_value("Clinza Practitioner", e["practitioner"], ["name", "practitioner_name", "specialty", "registration_no"], as_dict=True)
 	e["policy_doc"] = frappe.get_doc("Clinza Insurance Policy", e["policy"]).as_dict() if e.get("policy") else None
-	e["bill_preview"] = _bill_preview(e) if e.get("services") else None
+	if "billing" in caps:
+		e["bill_preview"] = _bill_preview(e) if e.get("services") else None
+	else:
+		# Clinical staff see which procedures were done, never prices, tax or insurance shares.
+		e["services"] = [{"item_name": x.get("item_name"), "qty": x.get("qty"), "code": x.get("code")} for x in e.get("services") or []]
+		e["bill_preview"] = None
+	e["appointment_doc"] = frappe.db.get_value(
+		"Clinza Appointment", e["appointment"], ["name", "token_no", "priority", "status", "appointment_type", "source", "checked_in_at", "triaged_at"], as_dict=True
+	) if e.get("appointment") else None
 	return e
 
 
 @frappe.whitelist()
 def save_encounter(data):
 	"""Save the chart: templates used, chart data, diagnoses (ICD-10), prescriptions,
-	services and the insurance policy. `complete=1` closes the clinical part."""
+	procedures done and (billing staff only) the insurance policy. `complete=1` closes the clinical part."""
 	require_cap("chart")
-	data = _args(data)
+	return _save_encounter(_args(data))
+
+
+def _save_encounter(data: dict):
 	doc = frappe.get_doc("Clinza Encounter", data["name"])
 	if doc.status in ("Billed", "Cancelled"):
 		frappe.throw("[ENCOUNTER_LOCKED] This visit is already billed; it can't be changed.")
@@ -668,13 +690,27 @@ def save_encounter(data):
 		doc.diagnoses = json.dumps(dx)
 	if "notes" in data:
 		doc.notes = data["notes"]
-	if "policy" in data:
+	for k in ("chief_complaint", "history", "examination", "advice"):
+		if k in data:
+			doc.set(k, data[k] or None)
+	if "follow_up_date" in data:
+		doc.follow_up_date = data["follow_up_date"] or None
+	if "policy" in data and "billing" in _caps():
 		doc.policy = data["policy"] or None
 	if "prescriptions" in data:
 		doc.set("prescriptions", [])
 		for rx in data["prescriptions"] or []:
 			if (rx.get("medicine") or "").strip():
-				doc.append("prescriptions", {k: rx.get(k) for k in ("medicine", "strength", "dosage_form", "dose", "frequency", "route", "duration", "quantity", "instructions")})
+				doc.append("prescriptions", {k: rx.get(k) for k in ("medicine", "brand", "strength", "dosage_form", "dose", "frequency", "route", "duration", "quantity", "instructions")})
+		_learn_medicines(data["prescriptions"] or [])
+	if "services" in data and "billing" not in _caps():
+		# Clinical staff record procedures done; prices come from the service list (the front desk can change them when billing).
+		old = {x.item_name: x for x in doc.services}
+		data["services"] = [
+			{"service": l.get("service") or l.get("item_name"), "qty": l.get("qty"),
+			 "rate": old[l.get("item_name")].rate if l.get("item_name") in old else None}
+			for l in data["services"] or []
+		]
 	if "services" in data:
 		doc.set("services", [])
 		for line in data["services"] or []:
@@ -691,6 +727,54 @@ def save_encounter(data):
 			frappe.db.set_value("Clinza Appointment", doc.appointment, "status", "Completed")
 	doc.save(ignore_permissions=True)
 	return get_encounter(doc.name)
+
+
+def _learn_medicines(lines: list[dict]):
+	"""Remember brand names and medicines not in the catalogue, so the clinic gets them as suggestions next time."""
+	known_generics = {m["generic"].lower() for m in cat.MEDICINES}
+	s = frappe.get_single(SETTINGS)
+	custom = _j(s.custom_medicines, [])
+	have = {((c.get("generic") or "").lower(), (c.get("brand") or "").lower(), c.get("strength") or "") for c in custom}
+	changed = False
+	for rx in lines:
+		generic = (rx.get("medicine") or "").strip()
+		brand = (rx.get("brand") or "").strip()
+		if not generic or (generic.lower() in known_generics and not brand):
+			continue
+		key = (generic.lower(), brand.lower(), rx.get("strength") or "")
+		if key in have:
+			continue
+		have.add(key)
+		custom.append({"generic": generic, "brand": brand, "strength": rx.get("strength") or "", "form": rx.get("dosage_form") or "",
+			"route": rx.get("route") or ""})
+		changed = True
+	if changed:
+		frappe.db.set_single_value(SETTINGS, "custom_medicines", json.dumps(custom[-2000:]))
+
+
+@frappe.whitelist()
+def save_billing(name: str, services=None, policy: str | None = None):
+	"""Front desk: the services and prices to bill, and the insurance policy, before billing."""
+	require_cap("billing")
+	doc = frappe.get_doc("Clinza Encounter", name)
+	if doc.status in ("Billed", "Cancelled"):
+		frappe.throw("[ENCOUNTER_LOCKED] This visit is already billed; it can't be changed.")
+	return _save_encounter({"name": name, "services": _j(services, []) if isinstance(services, str) else services or [], "policy": policy or ""})
+
+
+@frappe.whitelist()
+def billing_queue():
+	"""Visits the doctor has completed that are waiting to be billed (front desk)."""
+	require_cap("billing")
+	rows = frappe.get_all(
+		"Clinza Encounter", filters={"status": "Completed"},
+		fields=["name", "patient", "patient_name", "practitioner", "encounter_date", "policy", "appointment", "modified"],
+		order_by="modified asc", limit_page_length=200,
+	)
+	for r in rows:
+		r["token_no"] = frappe.db.get_value("Clinza Appointment", r.appointment, "token_no") if r.appointment else None
+		r["total"] = flt(frappe.db.sql("select coalesce(sum(amount),0) from `tabClinza Encounter Service` where parent=%s", r.name)[0][0])
+	return rows
 
 
 # ---------------------------------------------------------------------------

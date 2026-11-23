@@ -27,7 +27,7 @@ from frappe.utils import cint, flt
 from custom_erp.api import clinic_catalog as cat
 
 SETTINGS = "Clinza Settings"
-ROLES = ["Clinic Manager", "Clinic Practitioner", "Clinic Receptionist", "Clinic Billing"]
+ROLES = ["Clinic Manager", "Clinic Practitioner", "Clinic Nurse", "Clinic Receptionist", "Clinic Billing"]
 TAX_CLASSES = ["healthcare", "cosmetic", "medicine", "goods"]
 CLASS_LABEL = {"healthcare": "Healthcare", "cosmetic": "Cosmetic", "medicine": "Medicines", "goods": "Goods"}
 

@@ -15,6 +15,13 @@
   "duration",
   "status",
   "source",
+  "queue_section",
+  "token_no",
+  "priority",
+  "checked_in_at",
+  "queue_cb",
+  "triaged_at",
+  "called_at",
   "notes",
   "encounter"
  ],
@@ -77,7 +84,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Booked\nConfirmed\nChecked In\nIn Consultation\nCompleted\nCancelled\nNo Show",
+   "options": "Booked\nConfirmed\nChecked In\nTriaged\nIn Consultation\nCompleted\nCancelled\nNo Show",
    "default": "Booked",
    "in_list_view": 1,
    "in_standard_filter": 1
@@ -88,6 +95,47 @@
    "label": "Source",
    "options": "Walk-in\nPhone\nOnline\nReferral",
    "default": "Phone"
+  },
+  {
+   "fieldname": "queue_section",
+   "fieldtype": "Section Break",
+   "label": "Queue"
+  },
+  {
+   "fieldname": "token_no",
+   "fieldtype": "Int",
+   "label": "Token no.",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "Routine\nUrgent\nEmergency",
+   "default": "Routine"
+  },
+  {
+   "fieldname": "checked_in_at",
+   "fieldtype": "Datetime",
+   "label": "Checked in at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "queue_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "triaged_at",
+   "fieldtype": "Datetime",
+   "label": "Triaged at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "called_at",
+   "fieldtype": "Datetime",
+   "label": "Called in at",
+   "read_only": 1
   },
   {
    "fieldname": "notes",
