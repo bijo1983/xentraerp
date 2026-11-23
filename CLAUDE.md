@@ -744,9 +744,9 @@ The secret is kept encrypted in `XentraERP Tenant.admin_totp_secret` (Password f
 `/api/method/login` itself requires the code (returns `tmp_id`; resend `{usr, otp, tmp_id}`); CLINZA sign-in and the
 ERP tenant login handle that step. Install failed during provisioning → note in `provisioning_error`; re-run
 `bench --site xentraerp.net execute custom_erp.api.provisioning.install_tenant_authenticator --kwargs '{"tenant_name": "…"}'`.
-Verified live with a throwaway user (since deleted, control-plane 2FA switched back off). Rollback dirs:
-`erp-frontend-prev-1795464419`, `clinic-frontend-dist-prev-*`. Known gaps: CLINZA sign-in never forces the first
-`admin` password to change; POS `reset_management_2fa` clears the secret but not `_otplogin`.
+Verified live with a throwaway user (since deleted, control-plane 2FA switched back off). **Gotcha:** saving System Settings with 2FA newly on makes Frappe set `two_factor_auth` on the `All` role (= every user); `clinza_2fa` sets the values directly and `only_enrolled_users()` clears it (393645 was repaired 2026-11-23).
+**Tenant admin passwords (2026-11-23, 4dfd56c):** Provision Site asks for a temporary password (encrypted `admin_temp_password`, used once, then removed); admin portal "Reset password" → `provisioning.reset_tenant_admin_password` (bench execute `set_temporary_password` on the tenant site, password via env `XENTRA_TEMP_PASSWORD`, all sessions cleared). Forced change = site default `xentra_must_change_password:<user>` or password still `admin`, checked by `auth.get_login_status` on the tenant site (the control-plane `admin_must_change_password` flag never reached it). CLINZA sign-in + router guard and the ERP login enforce the change step. Rollback dirs:
+`erp-frontend-prev-1795464419`, `clinic-frontend-dist-prev-*`. Known gap: POS `reset_management_2fa` clears the secret but not `_otplogin`.
 
 Vue app `clinic-frontend/` (same stack/tokens as the POS) for **https://clinza.xentraerp.net** (user moved it from
 `.com` to `.net` on 2026-11-23, so DNS is an A record `clinza` in the DigitalOcean `xentraerp.net` zone, like `pos`). nginx:
