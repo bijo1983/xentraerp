@@ -18,6 +18,7 @@
   "site_name",
   "site_provisioned_on",
   "provisioning_error",
+  "site_administrator_password",
   "section_break_locale",
   "country",
   "base_currency",
@@ -133,6 +134,14 @@
    "fieldtype": "Small Text",
    "label": "Provisioning Error",
    "read_only": 1
+  },
+  {
+   "fieldname": "site_administrator_password",
+   "fieldtype": "Password",
+   "label": "Site Administrator password",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Random password of the tenant site's Administrator account, set at provisioning (or by provisioning.rotate_site_administrator_password)."
   },
   {
    "fieldname": "section_break_locale",
@@ -303,7 +312,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-23 22:00:00.000000",
+ "modified": "2026-11-23 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Xentraerp",
  "name": "XentraERP Tenant",

@@ -22,6 +22,7 @@ TENANT_SITE_SUFFIX = os.environ.get("TENANT_SITE_SUFFIX", "xentraerp.local")
 BENCH_DIR = os.environ.get("XENTRAERP_BENCH_DIR", os.path.expanduser("~/innovegic-bench"))
 SITE_ADMIN_PASSWORD = "admin"
 TEMP_PASSWORD_ENV = "XENTRA_TEMP_PASSWORD"
+ADMINISTRATOR_PASSWORD_ENV = "XENTRA_ADMINISTRATOR_PASSWORD"
 MUST_CHANGE_KEY = "xentra_must_change_password:"  # + user, a site default on the tenant site
 
 
@@ -164,6 +165,54 @@ def set_temporary_password(email: str):
 	frappe.db.set_value("User", email, "enabled", 1)
 	mark_must_change_password(email, True)
 	frappe.db.commit()
+
+
+def set_administrator_password():
+	"""On the tenant site (`bench execute`, password via XENTRA_ADMINISTRATOR_PASSWORD): replace
+	the Administrator password and end its sessions."""
+	from frappe.sessions import clear_sessions
+	from frappe.utils.password import update_password
+
+	pwd = (os.environ.get(ADMINISTRATOR_PASSWORD_ENV) or "").strip()
+	if len(pwd) < 16:
+		frappe.throw("Administrator password missing or too short.")
+	update_password("Administrator", pwd)
+	clear_sessions(user="Administrator", force=True)
+	frappe.db.commit()
+
+
+def _set_administrator_password_on_site(site_name: str, tenant_name: str):
+	"""Give the site's Administrator a fresh random password (through the environment, not argv)
+	and keep it, encrypted, on the tenant record for platform support."""
+	import secrets
+
+	pwd = secrets.token_urlsafe(24)
+	subprocess.run(
+		["bench", "--site", site_name, "execute", "custom_erp.api.provisioning.set_administrator_password"],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=120,
+		env={**os.environ, ADMINISTRATOR_PASSWORD_ENV: pwd},
+	)
+	tenant = frappe.get_doc("XentraERP Tenant", tenant_name)
+	tenant.site_administrator_password = pwd
+	tenant.save(ignore_permissions=True)
+	frappe.db.commit()
+
+
+def rotate_site_administrator_password(tenant_name: str):
+	"""System Manager / bench: replace a provisioned tenant site's Administrator password with a new
+	random one (e.g. sites created while it was still 'admin').
+	`bench --site <control plane> execute custom_erp.api.provisioning.rotate_site_administrator_password --kwargs '{"tenant_name": "…"}'`
+	Read it back: `frappe.utils.password.get_decrypted_password("XentraERP Tenant", "<name>", "site_administrator_password")`."""
+	_require_system_manager()
+	site_name, status = frappe.db.get_value("XentraERP Tenant", tenant_name, ["site_name", "provisioning_status"])
+	if not site_name or status != "Completed":
+		frappe.throw("This tenant's site isn't provisioned.")
+	_set_administrator_password_on_site(site_name, tenant_name)
+	return {"ok": True}
 
 
 def _set_temp_password_on_site(site_name: str, email: str, pwd: str):
@@ -599,7 +648,9 @@ def _run_site_creation(tenant_name: str, site_name: str):
 			[
 				"bench", "new-site", site_name,
 				"--mariadb-root-password", root_pw,
-				"--admin-password", SITE_ADMIN_PASSWORD,
+				# Throwaway random value (argv is visible in ps); replaced right after migrate
+				# through the environment by _set_administrator_password_on_site.
+				"--admin-password", __import__("secrets").token_urlsafe(24),
 				"--install-app", "erpnext",
 			],
 			cwd=BENCH_DIR,
@@ -630,6 +681,8 @@ def _run_site_creation(tenant_name: str, site_name: str):
 			text=True,
 			timeout=600,
 		)
+
+		_set_administrator_password_on_site(site_name, tenant_name)
 
 		_run_default_setup_on_site(site_name, tenant_org_name, tenant_country, tenant_time_zone, tenant_currency)
 
