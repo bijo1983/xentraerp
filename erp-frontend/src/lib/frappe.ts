@@ -31,6 +31,16 @@ class FrappeClient {
     return res.data;
   }
 
+  /** Second step of a two-factor login: `tmpId` comes from the first login's response. */
+  async loginOtp(usr: string, otp: string, tmpId: string) {
+    const res = await this.http.post(
+      '/api/method/login',
+      new URLSearchParams({ usr, otp, tmp_id: tmpId }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    return res.data;
+  }
+
   async logout() {
     const res = await this.http.post('/api/method/logout');
     this.clearToken();

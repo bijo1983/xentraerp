@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CalendarCheck2, FileText, ShieldCheck, Stethoscope } from 'lucide-vue-next'
-import { errorMessage } from '@/lib/api'
+import { ApiError, errorMessage } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useClinicStore } from '@/stores/clinic'
 import UiButton from '@/ui/UiButton.vue'
@@ -32,19 +32,58 @@ async function findClinic() {
   }
 }
 
+const otp = ref('')
+
+async function enter() {
+  await store.load()
+  const next = typeof route.query.next === 'string' ? route.query.next : null
+  router.replace(next || (store.ctx?.configured ? '/today' : store.can('setup') ? '/setup' : '/today'))
+}
+
 async function signIn() {
   error.value = ''
   busy.value = true
   try {
-    await auth.signIn(email.value, password.value)
-    await store.load()
-    const next = typeof route.query.next === 'string' ? route.query.next : null
-    router.replace(next || (store.ctx?.configured ? '/today' : store.can('setup') ? '/setup' : '/today'))
+    const step = await auth.signIn(email.value, password.value)
+    password.value = ''
+    if (step === 'code') {
+      otp.value = ''
+      return
+    }
+    await enter()
   } catch (e) {
     error.value = errorMessage(e, "Couldn't sign you in. Check your email and password.")
   } finally {
     busy.value = false
   }
+}
+
+async function submitCode() {
+  const code = otp.value.replace(/\D/g, '')
+  if (code.length !== 6 || busy.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    await auth.verifyCode(code)
+    await enter()
+  } catch (e) {
+    otp.value = ''
+    // Frappe keeps step one for 3 minutes; after that it answers with a server error.
+    if (e instanceof ApiError && (e.status >= 500 || e.code === 'EXPIRED')) {
+      auth.cancelCode()
+      error.value = 'That took too long. Enter your password again.'
+    } else {
+      error.value = errorMessage(e, "That code didn't work. Try the newest code in your authenticator app.")
+    }
+  } finally {
+    busy.value = false
+  }
+}
+
+function backToPassword() {
+  auth.cancelCode()
+  otp.value = ''
+  error.value = ''
 }
 </script>
 
@@ -69,6 +108,12 @@ async function signIn() {
         <form v-if="!auth.org" class="stack" @submit.prevent="findClinic">
           <UiInput v-model="code" label="Clinic code" inputmode="numeric" autocomplete="organization" size="lg" required autofocus />
           <UiButton type="submit" size="lg" block :loading="busy">Continue</UiButton>
+        </form>
+        <form v-else-if="auth.pending" class="stack" @submit.prevent="submitCode">
+          <p class="muted">Open your authenticator app and enter the 6-digit code for <strong>CLINZA</strong> ({{ auth.pending.email }}).</p>
+          <UiInput v-model="otp" label="Authenticator code" inputmode="numeric" autocomplete="one-time-code" :maxlength="6" size="lg" required autofocus />
+          <UiButton type="submit" size="lg" block :loading="busy" :disabled="otp.replace(/\D/g, '').length !== 6">Verify and sign in</UiButton>
+          <button type="button" class="link" @click="backToPassword">Back</button>
         </form>
         <form v-else class="stack" @submit.prevent="signIn">
           <UiInput v-model="email" label="Email" type="email" autocomplete="username" required autofocus />

@@ -32,6 +32,7 @@
   "column_break_admin",
   "email_verified",
   "mobile_verified",
+  "admin_totp_secret",
   "trial_start_date",
   "trial_end_date",
   "section_break_limits",
@@ -209,6 +210,14 @@
    "read_only": 1
   },
   {
+   "fieldname": "admin_totp_secret",
+   "fieldtype": "Password",
+   "label": "Admin authenticator secret",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Set when the clinic admin signed up with an authenticator app (CLINZA). Copied to the admin user's two-factor secret on the tenant site at provisioning."
+  },
+  {
    "fieldname": "trial_start_date",
    "fieldtype": "Date",
    "label": "Trial Start Date"
@@ -285,7 +294,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-06 00:00:00.000000",
+ "modified": "2026-11-23 20:30:00.000000",
  "modified_by": "Administrator",
  "module": "Xentraerp",
  "name": "XentraERP Tenant",

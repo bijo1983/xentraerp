@@ -6,7 +6,7 @@
 import { computed, nextTick, onMounted, ref, watch, type Component } from 'vue'
 import {
   Activity, ArrowLeft, ArrowRight, Baby, BadgeCheck, Building2, CalendarCheck2, Check, Ear, Eye, Flower2,
-  HeartPulse, LoaderCircle, Lock, Mail, Receipt, ShieldCheck, Smile, Sparkles, Stethoscope,
+  HeartPulse, KeyRound, LoaderCircle, Lock, Mail, Receipt, ShieldCheck, Smile, Sparkles, Stethoscope,
 } from 'lucide-vue-next'
 import { controlPlane, errorMessage, ApiError } from '@/lib/api'
 import AuroraBg from '@/components/AuroraBg.vue'
@@ -14,7 +14,7 @@ import ClinzaMark from '@/components/ClinzaMark.vue'
 
 interface ClinicTypeOption { code: string; label: string; templates: string[]; appointment_types: { name: string; minutes: number }[] }
 interface Options { clinic_types: ClinicTypeOption[]; countries: { name: string; isd: string }[]; google_client_id: string }
-type Step = 'email' | 'code' | 'clinic' | 'done'
+type Step = 'email' | 'code' | 'auth' | 'clinic' | 'done'
 
 const ICONS: Record<string, Component> = {
   general: Stethoscope, dental: Smile, dermatology: Sparkles, ophthalmology: Eye, physiotherapy: Activity,
@@ -35,7 +35,9 @@ const email = ref('')
 const code = ref('')
 const devCode = ref('')
 const resendIn = ref(0)
-const via = ref<'google' | 'code' | ''>('')
+const via = ref<'google' | 'code' | 'authenticator' | ''>('')
+const enroll = ref<{ enroll_token: string; secret: string; qr: string; otpauth_uri: string } | null>(null)
+const showSecret = ref(false)
 const googleBox = ref<HTMLElement | null>(null)
 const codeInput = ref<HTMLInputElement | null>(null)
 
@@ -58,7 +60,8 @@ const isd = computed(() => options.value?.countries.find((c) => c.name === count
 const selectedType = computed(() => options.value?.clinic_types.find((c) => c.code === clinicType.value))
 const emailOk = computed(() => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim()))
 const clinicOk = computed(() => clinicType.value && clinicName.value.trim() && adminName.value.trim() && country.value && mobile.value.replace(/\D/g, '').length >= 6 && agree.value)
-const stepNo = computed(() => ({ email: 1, code: 1, clinic: 2, done: 3 })[step.value])
+const stepNo = computed(() => ({ email: 1, code: 1, auth: 1, clinic: 2, done: 3 })[step.value])
+const secretGroups = computed(() => (enroll.value?.secret || '').replace(/(.{4})/g, '$1 ').trim())
 
 onMounted(async () => {
   try {
@@ -161,8 +164,45 @@ async function verifyCode() {
 watch(code, (v) => {
   const digits = v.replace(/\D/g, '').slice(0, 6)
   if (digits !== v) code.value = digits
-  else if (digits.length === 6) verifyCode()
+  else if (digits.length === 6) (step.value === 'auth' ? verifyAuthenticator() : verifyCode())
 })
+
+// ---- Authenticator app (works without email delivery) ----
+async function startAuthenticator() {
+  if (!emailOk.value || busy.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    enroll.value = await controlPlane<{ enroll_token: string; secret: string; qr: string; otpauth_uri: string }>('custom_erp.api.signup.clinza_authenticator_start', { email: email.value.trim() })
+    code.value = ''
+    showSecret.value = false
+    step.value = 'auth'
+  } catch (e) {
+    error.value = errorMessage(e)
+  } finally {
+    busy.value = false
+  }
+  await nextTick()
+  codeInput.value?.focus()
+}
+async function verifyAuthenticator() {
+  if (code.value.length !== 6 || busy.value || !enroll.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    await controlPlane('custom_erp.api.signup.clinza_authenticator_verify', { enroll_token: enroll.value.enroll_token, otp: code.value })
+    via.value = 'authenticator'
+    step.value = 'clinic'
+  } catch (e) {
+    error.value = errorMessage(e)
+    code.value = ''
+    if (e instanceof ApiError && e.code === 'EXPIRED') enroll.value = null
+  } finally {
+    busy.value = false
+  }
+  await nextTick()
+  codeInput.value?.focus()
+}
 
 // ---- Register ----
 async function register() {
@@ -179,6 +219,7 @@ async function register() {
       country: country.value,
       clinic_type: clinicType.value,
       time_zone: timeZone,
+      enroll_token: via.value === 'authenticator' ? enroll.value?.enroll_token : undefined,
     })
     step.value = 'done'
   } catch (e) {
@@ -237,7 +278,29 @@ async function register() {
             </label>
             <button class="su__btn" type="submit" :disabled="!emailOk || busy"><LoaderCircle v-if="busy" :size="18" class="spin" /> Email me a code <ArrowRight v-if="!busy" :size="18" /></button>
           </form>
-          <p class="su__fine2">We'll send a 6-digit code. No password needed.</p>
+          <div class="su__or"><span>or</span></div>
+          <button class="su__btn ghost" type="button" :disabled="!emailOk || busy" @click="startAuthenticator"><KeyRound :size="18" /> Use an authenticator app</button>
+          <p class="su__fine2">Email: we send a 6-digit code. Authenticator: scan a QR code with Google or Microsoft Authenticator — you'll also use it to sign in.</p>
+        </section>
+
+        <!-- 1c. Authenticator -->
+        <section v-else-if="step === 'auth'" class="su__step">
+          <button class="su__back" type="button" @click="step = 'email'"><ArrowLeft :size="16" /> Back</button>
+          <h2>Set up your authenticator</h2>
+          <p class="muted">Scan this with Google Authenticator, Microsoft Authenticator or any authenticator app, then enter the 6-digit code it shows. You'll need this code each time you sign in to <strong>{{ email }}</strong>.</p>
+          <div class="su__qr">
+            <img v-if="enroll?.qr" :src="enroll.qr" alt="QR code for your authenticator app" width="180" height="180" />
+            <div class="su__qr-side">
+              <a v-if="enroll?.otpauth_uri" class="su__link" :href="enroll.otpauth_uri">Open in an authenticator on this phone</a>
+              <button type="button" class="su__link" @click="showSecret = !showSecret">{{ showSecret ? 'Hide setup key' : "Can't scan? Enter a setup key" }}</button>
+              <code v-if="showSecret" class="su__secret">{{ secretGroups }}</code>
+            </div>
+          </div>
+          <label class="su__otp">
+            <input ref="codeInput" v-model="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="6-digit code from your authenticator" :disabled="busy" />
+            <span v-for="i in 6" :key="i" class="su__box" :class="{ fill: code.length >= i, cur: code.length === i - 1 && !busy }">{{ code[i - 1] || '' }}</span>
+          </label>
+          <button class="su__btn" type="button" :disabled="code.length !== 6 || busy" @click="verifyAuthenticator"><LoaderCircle v-if="busy" :size="18" class="spin" /> Verify code</button>
         </section>
 
         <!-- 1b. Code -->
@@ -259,7 +322,7 @@ async function register() {
 
         <!-- 2. Clinic -->
         <section v-else-if="step === 'clinic'" class="su__step">
-          <p class="su__verified"><BadgeCheck :size="16" /> {{ email }} verified{{ via === 'google' ? ' with Google' : '' }}</p>
+          <p class="su__verified"><BadgeCheck :size="16" /> {{ via === 'authenticator' ? `Authenticator set up for ${email}` : `${email} verified${via === 'google' ? ' with Google' : ''}` }}</p>
           <h2>Tell us about your clinic</h2>
           <p class="muted">Your specialty decides the charts, visit types and services we set up. You can change them later.</p>
           <div class="su__types" role="radiogroup" aria-label="Clinic type">
@@ -293,7 +356,8 @@ async function register() {
         <section v-else class="su__step su__done">
           <div class="su__ok"><Check :size="30" /></div>
           <h2>You're on the list</h2>
-          <p class="muted">We're setting up <strong>{{ clinicName }}</strong> as a {{ selectedType?.label.toLowerCase() }} clinic. We'll email <strong>{{ email }}</strong> as soon as it's ready to use.</p>
+          <p v-if="via === 'authenticator'" class="muted">We're setting up <strong>{{ clinicName }}</strong> as a {{ selectedType?.label.toLowerCase() }} clinic. Once it's approved, sign in with your clinic code, <strong>{{ email }}</strong>, your password and the code from your authenticator app.</p>
+          <p v-else class="muted">We're setting up <strong>{{ clinicName }}</strong> as a {{ selectedType?.label.toLowerCase() }} clinic. We'll email <strong>{{ email }}</strong> as soon as it's ready to use.</p>
           <div class="su__code"><span>Your clinic code</span><strong>{{ result?.tenant_code }}</strong><em>You'll enter it when you sign in.</em></div>
           <ol class="su__next">
             <li>Our team approves new clinics, usually within one business day.</li>
@@ -357,6 +421,10 @@ h2 { font-family: var(--x-font-display); font-size: 28px; letter-spacing: -0.025
 .su__box { height: 60px; border-radius: 14px; border: 1.5px solid #dbe1ea; display: grid; place-items: center; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; background: #fff; }
 .su__box.fill { border-color: #94a3b8; }
 .su__otp:focus-within .su__box.cur { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14); }
+.su__qr { display: flex; align-items: center; gap: 18px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 18px; }
+.su__qr img { flex: none; border-radius: 8px; }
+.su__qr-side { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 13.5px; min-width: 0; }
+.su__secret { font-family: ui-monospace, monospace; font-size: 13px; background: #f1f5f9; padding: 8px 10px; border-radius: 8px; word-break: break-all; user-select: all; }
 .su__dev { font-size: 13px; color: #b45309; background: #fffbeb; padding: 8px 12px; border-radius: 10px; margin: 0 0 6px; }
 .su__verified { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #047857; background: #ecfdf5; padding: 5px 10px; border-radius: 99px; margin: 0 0 14px; }
 .su__types { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
@@ -389,6 +457,7 @@ h2 { font-family: var(--x-font-display); font-size: 28px; letter-spacing: -0.025
   .su__card { margin-top: 24px; }
 }
 @media (max-width: 420px) {
+  .su__qr { flex-direction: column; }
   .su__types { grid-template-columns: 1fr; }
   .su__two { grid-template-columns: 1fr; }
   .su__have { font-size: 13px; }

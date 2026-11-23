@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ApiError, getTenantCookie, loggedUser, login, logout, setTenantCookie, tenantLookup } from '@/lib/api'
+import { ApiError, getTenantCookie, loggedUser, login, loginOtp, logout, setTenantCookie, tenantLookup } from '@/lib/api'
 
 const ORG_KEY = 'clinza.org'
 
@@ -17,6 +17,8 @@ export const useAuthStore = defineStore('auth', {
     user: null as string | null,
     org: readOrg(),
     checked: false,
+    /** Password accepted, waiting for the authenticator code (never holds the password). */
+    pending: null as { email: string; tmpId: string } | null,
   }),
   actions: {
     async lookup(code: string) {
@@ -44,11 +46,28 @@ export const useAuthStore = defineStore('auth', {
         /* ignore */
       }
     },
-    async signIn(email: string, password: string) {
+    /** Returns 'code' when the account needs its authenticator code next (see verifyCode). */
+    async signIn(email: string, password: string): Promise<'ok' | 'code'> {
       if (!this.org) throw new ApiError('Enter your clinic code first.')
       setTenantCookie(this.org.code)
-      await login(email.trim(), password)
+      const res = await login(email.trim(), password)
+      if (res?.tmp_id) {
+        this.pending = { email: email.trim(), tmpId: res.tmp_id }
+        return 'code'
+      }
+      this.pending = null
       this.user = email.trim().toLowerCase()
+      return 'ok'
+    },
+    async verifyCode(otp: string) {
+      if (!this.pending) throw new ApiError('Your sign-in expired. Enter your password again.', { code: 'EXPIRED' })
+      if (this.org) setTenantCookie(this.org.code)
+      await loginOtp(this.pending.email, otp, this.pending.tmpId)
+      this.user = this.pending.email.toLowerCase()
+      this.pending = null
+    },
+    cancelCode() {
+      this.pending = null
     },
     async checkSession() {
       if (this.org && !getTenantCookie()) setTenantCookie(this.org.code)

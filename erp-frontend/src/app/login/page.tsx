@@ -12,7 +12,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 type Mode = 'password' | 'tenant';
-type TenantStep = 'code' | 'login' | 'change-password';
+type TenantStep = 'code' | 'login' | 'otp' | 'change-password';
 
 /** The proxy routes read this cookie to pick which tenant's Frappe site to
  * talk to (see erp-frontend/src/lib/tenancy/registry.ts). Clear it to target
@@ -45,6 +45,8 @@ function LoginForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [tenantError, setTenantError] = useState<string | null>(null);
   const [tenantLoading, setTenantLoading] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [tmpId, setTmpId] = useState('');
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +99,15 @@ function LoginForm() {
       let attempt = 0;
       for (;;) {
         try {
-          await frappe.login(adminEmail, tenantPassword);
+          const res = await frappe.login(adminEmail, tenantPassword) as { tmp_id?: string };
+          if (res?.tmp_id) {
+            // Two-factor account (authenticator app): no session until the code is sent.
+            setTmpId(res.tmp_id);
+            setOtp('');
+            setTenantPassword('');
+            setTenantStep('otp');
+            return;
+          }
           await frappe.waitForSession(adminEmail); // ensure the new session cookie is actually usable before proceeding
           break;
         } catch (err) {
@@ -105,14 +115,42 @@ function LoginForm() {
           await new Promise((r) => setTimeout(r, 400));
         }
       }
-      const status = await frappe.call('custom_erp.api.auth.get_login_status') as { force_password_change: boolean };
-      if (status.force_password_change) {
-        setTenantStep('change-password');
-      } else {
-        router.push(`/${tenantCode}/dashboard`);
-      }
+      await afterTenantSession();
     } catch (err: unknown) {
       setTenantError(err instanceof Error ? err.message : 'Incorrect password');
+    } finally {
+      setTenantLoading(false);
+    }
+  };
+
+  const afterTenantSession = async () => {
+    const status = await frappe.call('custom_erp.api.auth.get_login_status') as { force_password_change: boolean };
+    if (status.force_password_change) {
+      setTenantStep('change-password');
+    } else {
+      router.push(`/${tenantCode}/dashboard`);
+    }
+  };
+
+  const submitOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTenantError(null);
+    setTenantLoading(true);
+    setTenantCookie(tenantCode);
+    try {
+      await frappe.loginOtp(adminEmail, otp.replace(/\D/g, ''), tmpId);
+      await frappe.waitForSession(adminEmail);
+      await afterTenantSession();
+    } catch (err: unknown) {
+      setOtp('');
+      const status = (err as { response?: { status?: number } })?.response?.status ?? 0;
+      if (status >= 500) {
+        // Frappe keeps the first step for 3 minutes, then answers with a server error.
+        setTenantStep('login');
+        setTenantError('That took too long. Enter your password again.');
+      } else {
+        setTenantError(status === 401 ? "That code didn't work. Try the newest code in your authenticator app." : err instanceof Error ? err.message : 'Incorrect verification code');
+      }
     } finally {
       setTenantLoading(false);
     }
@@ -235,6 +273,38 @@ function LoginForm() {
                   onClick={() => { setTenantStep('code'); setTenantError(null); setTenantCookie(null); }}
                 >
                   ← Use a different tenant code
+                </button>
+              </form>
+            )}
+
+            {tenantStep === 'otp' && (
+              <form onSubmit={submitOtp} className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Enter the 6-digit code from your authenticator app for <strong>{adminEmail}</strong>.
+                </p>
+                <div className="space-y-2">
+                  <label htmlFor="tenant-otp" className="text-sm font-medium">Authenticator code</label>
+                  <Input
+                    id="tenant-otp"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    className="tracking-widest text-center"
+                    autoFocus
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={tenantLoading || otp.length !== 6}>
+                  {tenantLoading ? 'Verifying…' : 'Verify & Sign In'}
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
+                  onClick={() => { setTenantStep('login'); setTenantError(null); setOtp(''); }}
+                >
+                  ← Back
                 </button>
               </form>
             )}

@@ -330,6 +330,41 @@ def _ensure_fiscal_year():
 		frappe.db.set_default("year_end_date", str(end))
 
 
+def _install_authenticator_on_site(site_name: str, email: str, secret: str):
+	"""Run clinza_2fa.install_admin_authenticator on the tenant site (isolated `bench execute`).
+	The secret goes through the environment, not argv (argv is world-readable in ps)."""
+	from custom_erp.api.clinza_2fa import SECRET_ENV
+
+	subprocess.run(
+		[
+			"bench", "--site", site_name, "execute",
+			"custom_erp.api.clinza_2fa.install_admin_authenticator",
+			"--kwargs", json.dumps({"email": email}),
+		],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=120,
+		env={**os.environ, SECRET_ENV: secret},
+	)
+
+
+def install_tenant_authenticator(tenant_name: str):
+	"""System Manager: (re)install the admin's signup authenticator on a provisioned tenant site,
+	e.g. after it failed during provisioning. `bench --site <control plane> execute
+	custom_erp.api.provisioning.install_tenant_authenticator --kwargs '{"tenant_name": "..."}'`"""
+	from frappe.utils.password import get_decrypted_password
+
+	_require_system_manager()
+	site_name, email = frappe.db.get_value("XentraERP Tenant", tenant_name, ["site_name", "tenant_admin_email"])
+	secret = get_decrypted_password("XentraERP Tenant", tenant_name, "admin_totp_secret", raise_exception=False)
+	if not (site_name and email and secret):
+		frappe.throw("This tenant has no provisioned site or no authenticator secret.")
+	_install_authenticator_on_site(site_name, email, secret)
+	return {"ok": True}
+
+
 def _run_default_setup_on_site(
 	site_name: str, company_name: str, country: str | None, time_zone: str | None, currency: str | None = None
 ):
@@ -521,13 +556,29 @@ def _run_site_creation(tenant_name: str, site_name: str):
 		if clinic_type:
 			_apply_clinic_type_on_site(site_name, clinic_type, tenant_org_name, tenant_admin_email)
 
+		# CLINZA authenticator signup: the admin's sign-in then needs the authenticator code.
+		# Not fatal — the site is usable; the note tells the platform admin to re-run it.
+		auth_note = ""
+		from frappe.utils.password import get_decrypted_password
+
+		totp_secret = get_decrypted_password("XentraERP Tenant", tenant_name, "admin_totp_secret", raise_exception=False)
+		if totp_secret:
+			try:
+				_install_authenticator_on_site(site_name, tenant_admin_email, totp_secret)
+			except subprocess.CalledProcessError as e:
+				auth_note = (
+					"Site ready, but the admin's authenticator was not installed (run "
+					"provisioning.install_tenant_authenticator): " + (e.stderr or e.stdout or str(e))[-1500:]
+				)
+				frappe.log_error(title=f"Tenant authenticator install failed: {site_name}", message=auth_note)
+
 		frappe.db.set_value(
 			"XentraERP Tenant",
 			tenant_name,
 			{
 				"provisioning_status": "Completed",
 				"site_provisioned_on": now_datetime(),
-				"provisioning_error": "",
+				"provisioning_error": auth_note,
 			},
 		)
 		frappe.db.commit()

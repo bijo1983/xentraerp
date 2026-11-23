@@ -385,8 +385,10 @@ def register_clinic(
 	country: str,
 	clinic_type: str,
 	time_zone: str | None = None,
+	enroll_token: str | None = None,
 ):
-	"""Create the clinic's XentraERP tenant. Requires a verified email (code or Google)."""
+	"""Create the clinic's XentraERP tenant. Requires a verified email (code or Google) or a
+	confirmed authenticator enrolment (clinza_authenticator_verify) for this email."""
 	email = (email or "").strip().lower()
 	clinic_name = (clinic_name or "").strip()
 	admin_name = (admin_name or "").strip()
@@ -394,8 +396,10 @@ def register_clinic(
 		frappe.throw("[MISSING] Enter your clinic's name and your name.")
 	if not (clinic_type or "").strip():
 		frappe.throw("[MISSING] Choose your clinic type.")
-	if not _is_verified(email, "email", CLINZA_PURPOSE):
-		frappe.throw("[NOT_VERIFIED] Please verify your email first. Codes are valid for 10 minutes.")
+	enrolment = _confirmed_enrolment(enroll_token, email)
+	email_verified = _is_verified(email, "email", CLINZA_PURPOSE)
+	if not enrolment and not email_verified:
+		frappe.throw("[NOT_VERIFIED] Please verify your email or set up your authenticator app first. This expires after 10–15 minutes.")
 	if frappe.db.exists("XentraERP Tenant", {"tenant_admin_email": email, "status": ["not in", ["Rejected", "Cancelled", "Expired", "Archived"]]}):
 		frappe.throw("[EXISTS] A workspace is already registered with this email. Sign in instead, or use another email.")
 
@@ -411,6 +415,118 @@ def register_clinic(
 	)
 	name = frappe.db.get_value("XentraERP Tenant", {"tenant_code": result["tenant_code"]}, "name")
 	if name:
-		frappe.db.set_value("XentraERP Tenant", name, "email_verified", 1)
+		tenant = frappe.get_doc("XentraERP Tenant", name)
+		if email_verified:
+			tenant.email_verified = 1
+		if enrolment:
+			# Password field: stored encrypted in __Auth, never in the tenant row.
+			tenant.admin_totp_secret = enrolment["secret"]
+		tenant.save(ignore_permissions=True)
 		frappe.db.commit()
+		if enrolment:
+			frappe.cache().delete_value(_totp_key("enroll", enroll_token))
+	result["authenticator"] = bool(enrolment)
 	return result
+
+
+# ---------------------------------------------------------------------------
+# CLINZA authenticator-app signup (no email delivery needed). The person scans a QR code with
+# Google Authenticator / Microsoft Authenticator / 1Password etc. and types one 6-digit code back.
+# That proves they hold the secret, not that they own the email (admin approval still covers
+# that), so the tenant is registered with email_verified = 0. The secret is kept, encrypted, on
+# the tenant and installed as the clinic admin's two-factor secret when the site is provisioned,
+# which makes the authenticator code required at every sign-in (see custom_erp.api.clinza_2fa).
+# ---------------------------------------------------------------------------
+
+TOTP_ENROLL_TTL_SECONDS = 15 * 60
+TOTP_MAX_ATTEMPTS = 5
+TOTP_START_LIMIT = 10  # enrolment starts per IP per window
+TOTP_START_WINDOW_SECONDS = 15 * 60
+
+
+def _totp_key(kind: str, value: str) -> str:
+	return f"clinza:totp_{kind}:{hashlib.sha256(value.encode()).hexdigest()[:32]}"
+
+
+def _qr_svg_data_uri(text: str) -> str:
+	import base64
+	import io
+
+	from pyqrcode import create as qrcreate
+
+	buf = io.BytesIO()
+	qrcreate(text).svg(buf, scale=5, background="#ffffff", module_color="#0f172a", xmldecl=False, svgns=True)
+	return "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _check_new_clinic_email(email: str):
+	if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email or ""):
+		frappe.throw("[BAD_EMAIL] Enter a valid email address.")
+	if frappe.db.exists("XentraERP Tenant", {"tenant_admin_email": email, "status": ["not in", ["Rejected", "Cancelled", "Expired", "Archived"]]}):
+		frappe.throw("[EXISTS] A workspace is already registered with this email. Sign in instead, or use another email.")
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def clinza_authenticator_start(email: str):
+	"""Start authenticator enrolment for a CLINZA signup: a fresh TOTP secret, its QR code and
+	an enrolment token (the secret itself only lives in the cache until it is confirmed)."""
+	import pyotp
+
+	email = (email or "").strip().lower()
+	_check_new_clinic_email(email)
+
+	cache = frappe.cache()
+	ip_key = f"clinza:totp_start:{frappe.local.request_ip or 'unknown'}"
+	count = int(cache.get_value(ip_key) or 0)
+	if count >= TOTP_START_LIMIT:
+		frappe.throw("[RATE_LIMITED] Too many attempts. Please wait a few minutes and try again.", frappe.TooManyRequestsError)
+	cache.set_value(ip_key, count + 1, expires_in_sec=TOTP_START_WINDOW_SECONDS)
+
+	secret = pyotp.random_base32()
+	token = secrets.token_urlsafe(24)
+	cache.set_value(_totp_key("enroll", token), {"email": email, "secret": secret, "attempts": 0}, expires_in_sec=TOTP_ENROLL_TTL_SECONDS)
+	uri = pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name="CLINZA")
+	return {
+		"enroll_token": token,
+		"secret": secret,  # for typing in by hand when the phone can't scan
+		"otpauth_uri": uri,
+		"qr": _qr_svg_data_uri(uri),
+		"expires_in_minutes": TOTP_ENROLL_TTL_SECONDS // 60,
+	}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def clinza_authenticator_verify(enroll_token: str, otp: str):
+	"""Confirm the authenticator: the first 6-digit code it shows. The enrolment then stays
+	confirmed (for register_clinic) until the token expires."""
+	import pyotp
+
+	cache = frappe.cache()
+	key = _totp_key("enroll", enroll_token or "")
+	pending = cache.get_value(key)
+	if not pending:
+		frappe.throw("[EXPIRED] This setup has expired. Start again to get a new QR code.")
+	if pending.get("confirmed"):
+		return {"verified": True, "email": pending["email"]}
+	if int(pending.get("attempts") or 0) >= TOTP_MAX_ATTEMPTS:
+		cache.delete_value(key)
+		frappe.throw("[EXPIRED] Too many incorrect codes. Start again to get a new QR code.")
+
+	code = re.sub(r"\D", "", otp or "")
+	if len(code) != 6 or not pyotp.TOTP(pending["secret"]).verify(code, valid_window=1):
+		pending["attempts"] = int(pending.get("attempts") or 0) + 1
+		cache.set_value(key, pending, expires_in_sec=TOTP_ENROLL_TTL_SECONDS)
+		frappe.throw("[BAD_CODE] That code doesn't match. Check your phone's clock and try the newest code.")
+
+	pending["confirmed"] = 1
+	cache.set_value(key, pending, expires_in_sec=TOTP_ENROLL_TTL_SECONDS)
+	return {"verified": True, "email": pending["email"]}
+
+
+def _confirmed_enrolment(enroll_token: str | None, email: str) -> dict | None:
+	if not enroll_token:
+		return None
+	pending = frappe.cache().get_value(_totp_key("enroll", enroll_token))
+	if pending and pending.get("confirmed") and pending.get("email") == email:
+		return pending
+	return None

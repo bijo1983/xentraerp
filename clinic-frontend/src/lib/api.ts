@@ -140,8 +140,19 @@ const C = 'custom_erp.api.clinic.'
 /** Shorthand for a clinic API method. */
 export const clinic = <T = unknown>(name: string, args?: Record<string, unknown>) => call<T>(C + name, args)
 
-export async function login(usr: string, pwd: string): Promise<void> {
-  await request('/api/method/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usr, pwd }) })
+export interface LoginResult {
+  /** Set when the account uses an authenticator app: no session yet, send the code with loginOtp. */
+  tmp_id?: string
+  verification?: { method?: string; setup?: boolean; prompt?: string }
+}
+
+export async function login(usr: string, pwd: string): Promise<LoginResult> {
+  return request<LoginResult>('/api/method/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usr, pwd }) })
+}
+
+/** Second step of a two-factor sign-in (Frappe keeps the password from step one under tmp_id). */
+export async function loginOtp(usr: string, otp: string, tmpId: string): Promise<LoginResult> {
+  return request<LoginResult>('/api/method/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usr, otp, tmp_id: tmpId }) })
 }
 
 export async function logout(): Promise<void> {
