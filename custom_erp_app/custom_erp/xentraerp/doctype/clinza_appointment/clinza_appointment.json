@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "patient",
+  "patient_name",
+  "practitioner",
+  "appointment_type",
+  "cb1",
+  "appointment_date",
+  "appointment_time",
+  "duration",
+  "status",
+  "source",
+  "notes",
+  "encounter"
+ ],
+ "fields": [
+  {
+   "fieldname": "patient",
+   "fieldtype": "Link",
+   "label": "Patient",
+   "options": "Clinza Patient",
+   "reqd": 1
+  },
+  {
+   "fieldname": "patient_name",
+   "fieldtype": "Data",
+   "label": "Patient Name",
+   "read_only": 1,
+   "in_list_view": 1,
+   "fetch_from": "patient.patient_name"
+  },
+  {
+   "fieldname": "practitioner",
+   "fieldtype": "Link",
+   "label": "Practitioner",
+   "options": "Clinza Practitioner",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "appointment_type",
+   "fieldtype": "Data",
+   "label": "Appointment Type"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "appointment_date",
+   "fieldtype": "Date",
+   "label": "Appointment Date",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "appointment_time",
+   "fieldtype": "Time",
+   "label": "Appointment Time",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "duration",
+   "fieldtype": "Int",
+   "label": "Duration (min)",
+   "default": "15"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Booked\nConfirmed\nChecked In\nIn Consultation\nCompleted\nCancelled\nNo Show",
+   "default": "Booked",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "label": "Source",
+   "options": "Walk-in\nPhone\nOnline\nReferral",
+   "default": "Phone"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "encounter",
+   "fieldtype": "Link",
+   "label": "Encounter",
+   "options": "Clinza Encounter",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Appointment",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "autoname": "APT-.YYYY.-.#####",
+ "title_field": "patient_name",
+ "naming_rule": "Expression (old style)",
+ "show_title_field_in_link": 1
+}

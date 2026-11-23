@@ -40,6 +40,41 @@ def skip_welcome_email_without_mail(doc, method=None):
 		)
 
 
+def user_limit_reached(active_users: int, max_users) -> bool:
+	"""SaaS user limit: max_users 0/None = unlimited (every plan today)."""
+	try:
+		limit = int(max_users or 0)
+	except (TypeError, ValueError):
+		return False
+	return limit > 0 and active_users >= limit
+
+
+def enforce_user_limit(doc, method=None):
+	"""User before_insert: refuse a new staff (System) user once the tenant's subscription
+	limit (`XentraERP Tenant.max_users`, read from the control plane with the module
+	entitlements) is reached. Unlimited (0) by default; unknown entitlements don't block
+	(fails open, so a control-plane outage never stops a clinic adding staff)."""
+	if doc.user_type == "Website User" or doc.name in ("Administrator", "Guest") or frappe.flags.in_install:
+		return
+	if frappe.local.site == (frappe.conf.get("control_plane_host") or ""):
+		return
+	try:
+		from custom_erp.api.pos import tenant_entitlements
+
+		ent = tenant_entitlements()
+	except Exception:
+		return
+	max_users = (ent or {}).get("max_users") or 0
+	if not max_users:
+		return
+	active = frappe.db.count("User", {"enabled": 1, "user_type": "System User", "name": ["not in", ["Administrator", "Guest"]]})
+	if user_limit_reached(active, max_users):
+		frappe.throw(
+			_("Your subscription allows {0} active users. Disable a user or upgrade your plan to add more.").format(max_users),
+			title=_("User limit reached"),
+		)
+
+
 def _require_manager():
 	if "System Manager" not in frappe.get_roles():
 		frappe.throw(_("Only an administrator can manage users."), frappe.PermissionError)

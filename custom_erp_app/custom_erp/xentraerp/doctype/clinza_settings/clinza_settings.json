@@ -1,0 +1,226 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "clinic_name",
+  "clinic_type",
+  "region",
+  "country",
+  "company",
+  "currency",
+  "cb1",
+  "licence_no",
+  "phone",
+  "email",
+  "address",
+  "tax_section",
+  "tax_regime",
+  "tax_id",
+  "tax_id_label",
+  "standard_rate",
+  "state_code",
+  "arabic_invoice",
+  "tax_classes",
+  "tax_template_main",
+  "tax_template_inter",
+  "clinical_section",
+  "enabled_templates",
+  "appointment_types",
+  "slot_minutes",
+  "opening_time",
+  "closing_time",
+  "footer_note",
+  "patient_customer_group",
+  "insurer_customer_group",
+  "configured"
+ ],
+ "fields": [
+  {
+   "fieldname": "clinic_name",
+   "fieldtype": "Data",
+   "label": "Clinic name"
+  },
+  {
+   "fieldname": "clinic_type",
+   "fieldtype": "Data",
+   "label": "Clinic type",
+   "read_only": 0
+  },
+  {
+   "fieldname": "region",
+   "fieldtype": "Data",
+   "label": "Region"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "licence_no",
+   "fieldtype": "Data",
+   "label": "Facility licence no."
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "tax_section",
+   "fieldtype": "Section Break",
+   "label": "Tax"
+  },
+  {
+   "fieldname": "tax_regime",
+   "fieldtype": "Select",
+   "label": "Tax Regime",
+   "options": "VAT\nGST\nNone"
+  },
+  {
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Tax registration no."
+  },
+  {
+   "fieldname": "tax_id_label",
+   "fieldtype": "Data",
+   "label": "Tax ID label"
+  },
+  {
+   "fieldname": "standard_rate",
+   "fieldtype": "Float",
+   "label": "Standard rate (%)"
+  },
+  {
+   "fieldname": "state_code",
+   "fieldtype": "Data",
+   "label": "State code (India)"
+  },
+  {
+   "fieldname": "arabic_invoice",
+   "fieldtype": "Check",
+   "label": "Bilingual (Arabic) documents"
+  },
+  {
+   "fieldname": "tax_classes",
+   "fieldtype": "Long Text",
+   "label": "Rates by tax class (JSON)"
+  },
+  {
+   "fieldname": "tax_template_main",
+   "fieldtype": "Data",
+   "label": "Sales tax template"
+  },
+  {
+   "fieldname": "tax_template_inter",
+   "fieldtype": "Data",
+   "label": "Sales tax template (other state)"
+  },
+  {
+   "fieldname": "clinical_section",
+   "fieldtype": "Section Break",
+   "label": "Clinical"
+  },
+  {
+   "fieldname": "enabled_templates",
+   "fieldtype": "Long Text",
+   "label": "Enabled chart templates (JSON)"
+  },
+  {
+   "fieldname": "appointment_types",
+   "fieldtype": "Long Text",
+   "label": "Appointment types (JSON)"
+  },
+  {
+   "fieldname": "slot_minutes",
+   "fieldtype": "Int",
+   "label": "Slot Minutes",
+   "default": "15"
+  },
+  {
+   "fieldname": "opening_time",
+   "fieldtype": "Time",
+   "label": "Opening Time",
+   "default": "09:00:00"
+  },
+  {
+   "fieldname": "closing_time",
+   "fieldtype": "Time",
+   "label": "Closing Time",
+   "default": "21:00:00"
+  },
+  {
+   "fieldname": "footer_note",
+   "fieldtype": "Small Text",
+   "label": "Document footer"
+  },
+  {
+   "fieldname": "patient_customer_group",
+   "fieldtype": "Data",
+   "label": "Patient customer group"
+  },
+  {
+   "fieldname": "insurer_customer_group",
+   "fieldtype": "Data",
+   "label": "Insurer customer group"
+  },
+  {
+   "fieldname": "configured",
+   "fieldtype": "Check",
+   "label": "Configured"
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Settings",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "issingle": 1
+}

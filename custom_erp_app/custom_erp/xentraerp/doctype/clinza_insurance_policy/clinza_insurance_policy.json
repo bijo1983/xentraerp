@@ -1,0 +1,119 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "patient",
+  "payer",
+  "policy_no",
+  "member_id",
+  "plan_name",
+  "cb1",
+  "coverage_pct",
+  "copay_cap",
+  "valid_from",
+  "valid_to",
+  "preauth_required",
+  "active"
+ ],
+ "fields": [
+  {
+   "fieldname": "patient",
+   "fieldtype": "Link",
+   "label": "Patient",
+   "options": "Clinza Patient",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "payer",
+   "fieldtype": "Link",
+   "label": "Payer",
+   "options": "Clinza Insurance Payer",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "policy_no",
+   "fieldtype": "Data",
+   "label": "Policy No",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "member_id",
+   "fieldtype": "Data",
+   "label": "Member Id"
+  },
+  {
+   "fieldname": "plan_name",
+   "fieldtype": "Data",
+   "label": "Plan Name"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "coverage_pct",
+   "fieldtype": "Float",
+   "label": "Insurer covers (%)",
+   "default": "80"
+  },
+  {
+   "fieldname": "copay_cap",
+   "fieldtype": "Currency",
+   "label": "Patient co-pay cap per visit"
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Date",
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Date",
+   "label": "Valid To"
+  },
+  {
+   "fieldname": "preauth_required",
+   "fieldtype": "Check",
+   "label": "Pre-authorisation required"
+  },
+  {
+   "fieldname": "active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "default": "1",
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Insurance Policy",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "autoname": "POL-.#####",
+ "naming_rule": "Expression (old style)"
+}

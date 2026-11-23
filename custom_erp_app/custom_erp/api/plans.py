@@ -41,6 +41,7 @@ MODULE_LABELS = {
 	"vendor": "Vendor Portal",
 	"documents": "Documents",
 	"lms": "Learning (LMS)",
+	"clinic": "Clinic Management (CLINZA)",
 }
 
 PLAN_FIELDS = [

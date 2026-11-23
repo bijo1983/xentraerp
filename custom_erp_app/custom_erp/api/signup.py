@@ -173,6 +173,7 @@ def complete_signup(
 	country: str | None = None,
 	time_zone: str | None = None,
 	subdomain: str | None = None,
+	clinic_type: str | None = None,
 ):
 	admin_email = (admin_email or "").strip().lower()
 	admin_mobile = (admin_mobile or "").strip()
@@ -183,6 +184,15 @@ def complete_signup(
 	country = (country or "").strip()
 	if not country or not frappe.db.exists("Country", country):
 		frappe.throw("Please select your country.")
+
+	# CLINZA: a clinic signs up with its clinic type, which decides the charting templates,
+	# appointment types and starter services its site is provisioned with.
+	clinic_type = (clinic_type or "").strip().lower() or None
+	if clinic_type:
+		from custom_erp.api.clinic_catalog import CLINIC_TYPES
+
+		if clinic_type not in CLINIC_TYPES:
+			frappe.throw("Please choose a valid clinic type.")
 
 	subdomain = (subdomain or "").strip().lower() or _generate_subdomain()
 	if frappe.db.exists("XentraERP Tenant", {"subdomain": subdomain}):
@@ -207,6 +217,7 @@ def complete_signup(
 			"mobile_verified": 0,
 			"country": country,
 			"time_zone": time_zone or None,
+			"clinic_type": clinic_type,
 		}
 	)
 	tenant.insert(ignore_permissions=True)
@@ -233,6 +244,14 @@ def complete_signup(
 		"status": tenant.status,
 		"login_url": f"/login?tenant={tenant.tenant_code}",
 	}
+
+
+@frappe.whitelist(allow_guest=True)
+def list_clinic_types():
+	"""Clinic types for the signup form (CLINZA). Static reference data, guest-safe."""
+	from custom_erp.api.clinic_catalog import public_catalog
+
+	return public_catalog()["clinic_types"]
 
 
 @frappe.whitelist(allow_guest=True)

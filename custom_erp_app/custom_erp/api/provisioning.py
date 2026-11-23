@@ -352,6 +352,23 @@ def _run_default_setup_on_site(
 	)
 
 
+def _apply_clinic_type_on_site(site_name: str, clinic_type: str, clinic_name: str | None, admin_email: str | None):
+	"""Run clinic_setup.apply_clinic_type on the tenant site (isolated `bench execute`)."""
+	kwargs = json.dumps({"clinic_type": clinic_type, "clinic_name": clinic_name, "admin_user": admin_email})
+	subprocess.run(
+		[
+			"bench", "--site", site_name, "execute",
+			"custom_erp.api.clinic_setup.apply_clinic_type",
+			"--kwargs", kwargs,
+		],
+		cwd=BENCH_DIR,
+		check=True,
+		capture_output=True,
+		text=True,
+		timeout=180,
+	)
+
+
 def get_default_setup_status():
 	"""Report which default masters exist on whichever site this runs
 	against, for the admin "Manage" panel. Only ever invoked via
@@ -406,6 +423,27 @@ def reconfigure_tenant_defaults(tenant_name: str):
 		frappe.throw((e.stderr or e.stdout or str(e))[:2000])
 
 	return get_tenant_setup_status(tenant_name)
+
+
+@frappe.whitelist()
+def set_tenant_clinic_type(tenant_name: str, clinic_type: str):
+	"""Turn an existing tenant into a CLINZA clinic (or change its clinic type) and
+	configure its site. Needs the site migrated with the Clinza DocTypes first.
+	Idempotent; only adds templates/services that are missing."""
+	_require_system_manager()
+	from custom_erp.api.clinic_catalog import CLINIC_TYPES
+
+	if clinic_type not in CLINIC_TYPES:
+		frappe.throw("Unknown clinic type.")
+	tenant = frappe.get_doc("XentraERP Tenant", tenant_name)
+	if not tenant.site_name or tenant.provisioning_status != "Completed":
+		frappe.throw("This tenant's site isn't provisioned yet.")
+	tenant.db_set("clinic_type", clinic_type)
+	try:
+		_apply_clinic_type_on_site(tenant.site_name, clinic_type, tenant.organization_name, tenant.tenant_admin_email)
+	except subprocess.CalledProcessError as e:
+		frappe.throw((e.stderr or e.stdout or str(e))[:2000])
+	return {"clinic_type": clinic_type}
 
 
 @frappe.whitelist()
@@ -476,6 +514,12 @@ def _run_site_creation(tenant_name: str, site_name: str):
 		_create_admin_user_on_site(
 			site_name, tenant_admin_email, tenant_admin_name or "Administrator"
 		)
+
+		# CLINZA: a clinic tenant gets its clinic type's charting templates, appointment
+		# types, services and VAT/GST preset (and its admin the clinic roles).
+		clinic_type = frappe.db.get_value("XentraERP Tenant", tenant_name, "clinic_type")
+		if clinic_type:
+			_apply_clinic_type_on_site(site_name, clinic_type, tenant_org_name, tenant_admin_email)
 
 		frappe.db.set_value(
 			"XentraERP Tenant",
