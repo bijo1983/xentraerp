@@ -735,6 +735,19 @@ both sites. ERP frontend was rebuilt into a fresh `erp-frontend/` with the old o
 `erp-frontend-prev-1795462860` (delete once no rollback is needed) — building in a copy elsewhere bakes that path
 into `.next`, so build at the real path. Backups before the deploy: `bench backup` 2026-11-23 on both sites.
 
+**Authenticator sign-up + sign-in 2FA (deployed 2026-11-23, commit 501428f, branch `claude/clinza-authenticator`)** —
+email delivery isn't configured, so CLINZA signup can verify with an authenticator app instead
+(`signup.clinza_authenticator_start/verify`, then `register_clinic(enroll_token=…)`; tenant stays `email_verified=0`).
+The secret is kept encrypted in `XentraERP Tenant.admin_totp_secret` (Password field) and installed at provisioning by
+`clinza_2fa.install_admin_authenticator` (secret passed via env `CLINZA_TOTP_SECRET`): Frappe 2FA on (OTP App), role
+`Authenticator Sign-in` (two_factor_auth=1) given only to that admin, `<user>_otpsecret` + `_otplogin` set. So
+`/api/method/login` itself requires the code (returns `tmp_id`; resend `{usr, otp, tmp_id}`); CLINZA sign-in and the
+ERP tenant login handle that step. Install failed during provisioning → note in `provisioning_error`; re-run
+`bench --site xentraerp.net execute custom_erp.api.provisioning.install_tenant_authenticator --kwargs '{"tenant_name": "…"}'`.
+Verified live with a throwaway user (since deleted, control-plane 2FA switched back off). Rollback dirs:
+`erp-frontend-prev-1795464419`, `clinic-frontend-dist-prev-*`. Known gaps: CLINZA sign-in never forces the first
+`admin` password to change; POS `reset_management_2fa` clears the secret but not `_otplogin`.
+
 Vue app `clinic-frontend/` (same stack/tokens as the POS) for **https://clinza.xentraerp.net** (user moved it from
 `.com` to `.net` on 2026-11-23, so DNS is an A record `clinza` in the DigitalOcean `xentraerp.net` zone, like `pos`). nginx:
 `scripts/nginx-clinza.xentraerp.net.conf` (+ `nginx-clinza-security-headers.conf`), static `dist`, `/api` → :8083.
