@@ -725,7 +725,15 @@ succeeded `mv dist dist-old && mv dist-new dist` (a failed build piped into `tai
 - Deployed by fast-forwarding this checkout to `claude/web-refresh`; previous builds kept as
   `pos-frontend/dist-prev-202610210805` and `erp-frontend/.next-old-1792569965` (delete once no rollback is needed).
 
-## CLINZA clinic management (merged to main 2026-11-23, PR #12) — NOT deployed yet
+## CLINZA clinic management (PR #12 + #13) — deployed 2026-11-23
+
+**Live at `https://clinza.xentraerp.net`**: DNS A `clinza` in the DO zone, Let's Encrypt cert (webroot), nginx site
+`clinza.xentraerp.net` = `scripts/nginx-clinza.xentraerp.net.conf` + `/etc/nginx/snippets/clinza-security-headers.conf`
+(`microphone=(self)` — the consultation screen dictates). Rebuild `clinic-frontend` like the POS (Node 22). Deployed by
+merging PR #13 into this checkout's branch (`User.validate` keeps both the user-limit and POS-role hooks), migrating
+both sites. ERP frontend was rebuilt into a fresh `erp-frontend/` with the old one renamed to
+`erp-frontend-prev-1795462860` (delete once no rollback is needed) — building in a copy elsewhere bakes that path
+into `.next`, so build at the real path. Backups before the deploy: `bench backup` 2026-11-23 on both sites.
 
 Vue app `clinic-frontend/` (same stack/tokens as the POS) for **https://clinza.xentraerp.net** (user moved it from
 `.com` to `.net` on 2026-11-23, so DNS is an A record `clinza` in the DigitalOcean `xentraerp.net` zone, like `pos`). nginx:
