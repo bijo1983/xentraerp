@@ -24,12 +24,12 @@ export const useAuthStore = defineStore('auth', {
     async lookup(code: string) {
       const clean = code.trim()
       if (!/^\d{4,8}$/.test(clean)) throw new ApiError('Enter your clinic code (the number you got at signup).', { code: 'BAD_CODE' })
-      setTenantCookie(clean)
       const res = await tenantLookup(clean)
       if (!res?.organization_name) {
         setTenantCookie('')
         throw new ApiError("We couldn't find an active clinic with that code.", { code: 'UNKNOWN_TENANT' })
       }
+      setTenantCookie(clean)
       this.org = { code: clean, name: res.organization_name }
       try {
         localStorage.setItem(ORG_KEY, JSON.stringify(this.org))

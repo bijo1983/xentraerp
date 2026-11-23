@@ -164,7 +164,8 @@ export async function loggedUser(): Promise<string> {
 }
 
 export async function tenantLookup(code: string): Promise<{ organization_name?: string; valid?: boolean } | null> {
-  return call<{ organization_name?: string; valid?: boolean }>('custom_erp.api.signup.tenant_lookup', { tenant_code: code })
+  // The registry of clinic codes lives on the control plane, never on the clinic's own site.
+  return controlPlane<{ organization_name?: string; valid?: boolean }>('custom_erp.api.signup.tenant_lookup', { tenant_code: code })
 }
 
 export function errorMessage(err: unknown, fallback = t('error.unexpected')): string {
