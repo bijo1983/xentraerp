@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Product picture for the landing page, drawn from the app's own pieces (tooth shapes, fundus,
+// Product picture for the landing page's "See it in action" feature block, drawn from the app's own pieces (tooth shapes, fundus,
 // appointment colours) so it always looks like the real thing and needs no image files.
 import { computed } from 'vue'
 import { BadgeCheck, CalendarCheck2, QrCode } from 'lucide-vue-next'
