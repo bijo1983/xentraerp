@@ -150,6 +150,7 @@ def get_context():
 			"Clinza Insurance Payer", filters={"disabled": 0}, fields=["name", "payer_code", "payer_type", "default_coverage", "claim_standard"],
 			order_by="name asc",
 		),
+		"modes_of_payment": frappe.get_all("Mode of Payment", filters={"enabled": 1}, pluck="name", order_by="name asc"),
 		"standards": cat.DOCUMENT_STANDARDS.get(s.region or "Other", cat.DOCUMENT_STANDARDS["Other"]),
 		"catalog": cat.public_catalog(),
 	}
@@ -816,6 +817,8 @@ def _pay(invoice: str, amount: float, mode_of_payment: str, reference_no: str | 
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
 	inv = frappe.get_doc("Sales Invoice", invoice)
+	if not frappe.db.exists("Mode of Payment", mode_of_payment):
+		frappe.throw(f"Unknown payment method {mode_of_payment}.")
 	if inv.docstatus != 1 or not (inv.remarks or "").startswith("CLINZA"):
 		frappe.throw("Only submitted CLINZA invoices can be paid here.")
 	amount = flt(amount)
@@ -1041,7 +1044,8 @@ def get_invoice_print(name: str):
 	enc = frappe.db.get_value("Clinza Encounter", enc_name, ["name", "patient", "policy", "practitioner", "encounter_date"], as_dict=True) if enc_name else None
 	visit_patient = frappe.db.get_value("Clinza Patient", enc.patient, ["name", "patient_name", "id_type", "id_number", "mobile"], as_dict=True) if enc else None
 	policy = frappe.db.get_value("Clinza Insurance Policy", enc.policy, ["policy_no", "member_id", "payer", "coverage_pct"], as_dict=True) if enc and enc.policy else None
-	title, title_ar = cat.document_title(preset, buyer_has_tax_id=bool(customer.tax_id), any_taxable=any_taxable)
+	title, title_ar = cat.document_title(preset, buyer_has_tax_id=bool(customer.tax_id), any_taxable=any_taxable,
+		any_exempt=any(l["exempt"] for l in lines))
 	total = flt(inv.rounded_total or inv.grand_total)
 	qr = None
 	if s.region == "GCC" and preset.get("qr") == "zatca_phase1" and s.tax_id:

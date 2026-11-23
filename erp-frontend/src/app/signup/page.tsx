@@ -16,6 +16,11 @@ interface CountryOption {
   isd: string;
 }
 
+interface ClinicTypeOption {
+  code: string;
+  label: string;
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>('details');
@@ -29,6 +34,11 @@ export default function SignupPage() {
   const [country, setCountry] = useState('');
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [timeZone, setTimeZone] = useState('');
+  // CLINZA: a clinic picks its clinic type, which decides its charting templates,
+  // appointment types and services (custom_erp.api.clinic_catalog).
+  const [isClinic, setIsClinic] = useState(false);
+  const [clinicType, setClinicType] = useState('');
+  const [clinicTypes, setClinicTypes] = useState<ClinicTypeOption[]>([]);
 
   const [result, setResult] = useState<{ tenant_code: string; subdomain: string; status: string } | null>(null);
 
@@ -41,6 +51,11 @@ export default function SignupPage() {
     frappe.call('custom_erp.api.signup.list_countries')
       .then((res) => setCountries((res as CountryOption[]) || []))
       .catch(() => {});
+    frappe.call('custom_erp.api.signup.list_clinic_types')
+      .then((res) => setClinicTypes((res as ClinicTypeOption[]) || []))
+      .catch(() => {});
+    // Arriving from the CLINZA site (…/signup?product=clinza) starts as a clinic signup.
+    if (new URLSearchParams(window.location.search).get('product') === 'clinza') setIsClinic(true);
   }, []);
 
   function selectCountry(name: string) {
@@ -70,6 +85,7 @@ export default function SignupPage() {
         plan: 'Free Trial',
         country: country || undefined,
         time_zone: timeZone || undefined,
+        clinic_type: isClinic ? clinicType : undefined,
       });
       setResult(res as { tenant_code: string; subdomain: string; status: string });
       setStep('done');
@@ -101,6 +117,36 @@ export default function SignupPage() {
                   You&apos;ll get a short login code after approval
                 </p>
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Business type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant={isClinic ? 'outline' : 'default'} onClick={() => setIsClinic(false)}>
+                    Business (ERP)
+                  </Button>
+                  <Button type="button" variant={isClinic ? 'default' : 'outline'} onClick={() => setIsClinic(true)}>
+                    Clinic (CLINZA)
+                  </Button>
+                </div>
+              </div>
+              {isClinic && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Clinic type</label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                    required
+                    value={clinicType}
+                    onChange={(e) => setClinicType(e.target.value)}
+                  >
+                    <option value="">Select your clinic type</option>
+                    {clinicTypes.map((c) => (
+                      <option key={c.code} value={c.code}>{c.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Sets up the charting templates, appointment types and services for your specialty. You can change them later.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Your Name</label>
                 <Input required value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Jane Doe" />

@@ -46,7 +46,8 @@ def _json(value, default):
 def ensure_roles():
 	for role in ROLES:
 		if not frappe.db.exists("Role", role):
-			frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 0}).insert(ignore_permissions=True)
+			# desk_access=1 so staff with only a clinic role stay "System Users" (counted by the user limit).
+			frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1}).insert(ignore_permissions=True)
 
 
 def _ensure_group(doctype: str, name: str, parent: str, parent_field: str):

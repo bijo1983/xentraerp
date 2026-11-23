@@ -52,6 +52,7 @@ check("regions", [cat.region_of(c) for c in ("Kuwait", "India", "France", "Japan
 # titles
 check("India all exempt -> Bill of Supply", cat.document_title(ind, buyer_has_tax_id=False, any_taxable=False)[0] == "Bill of Supply")
 check("India taxable -> Tax Invoice", cat.document_title(ind, buyer_has_tax_id=False, any_taxable=True)[0] == "Tax Invoice")
+check("India mixed -> Invoice-cum-Bill of Supply", cat.document_title(ind, buyer_has_tax_id=False, any_taxable=True, any_exempt=True)[0] == "Invoice-cum-Bill of Supply")
 check("KSA B2C -> simplified, Arabic", cat.document_title(sa, buyer_has_tax_id=False, any_taxable=True) == ("Simplified Tax Invoice", "فاتورة ضريبية مبسطة"))
 check("UAE B2B -> Tax Invoice", cat.document_title(ae, buyer_has_tax_id=True, any_taxable=True)[0] == "Tax Invoice")
 

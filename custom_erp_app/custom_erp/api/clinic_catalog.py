@@ -454,9 +454,13 @@ def gstin_state(gstin: str | None) -> str:
 	return g[:2] if len(g) == 15 and g[:2].isdigit() else ""
 
 
-def document_title(preset: dict, *, buyer_has_tax_id: bool, any_taxable: bool) -> tuple[str, str]:
-	"""(English title, Arabic title or '') for an invoice under the tenant's preset."""
+def document_title(preset: dict, *, buyer_has_tax_id: bool, any_taxable: bool, any_exempt: bool = False) -> tuple[str, str]:
+	"""(English title, Arabic title or '') for an invoice under the tenant's preset.
+	India: Tax Invoice (all taxable), Bill of Supply (all exempt), or Invoice-cum-Bill of
+	Supply when one bill has both (CGST Rule 46A)."""
 	if preset.get("region") == "India":
+		if any_taxable and any_exempt:
+			return "Invoice-cum-Bill of Supply", ""
 		return (preset["invoice_title"] if any_taxable else preset["bill_of_supply_title"]), ""
 	if preset.get("region") == "GCC" and preset.get("regime") == "VAT":
 		if buyer_has_tax_id:
