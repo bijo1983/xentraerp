@@ -85,7 +85,7 @@ async function signOut() {
   .shell { grid-template-columns: 1fr; }
   .side { position: sticky; z-index: var(--x-z-shell); height: auto; flex-direction: row; align-items: center; padding: var(--x-space-2) var(--x-space-3); border-inline-end: 0; border-bottom: 1px solid var(--x-border); overflow-x: auto; }
   .brand__org, .side__type, .me__name, .me__mail, .me__avatar, .nav__item span { display: none; }
-  .nav { flex-direction: row; }
+  .nav { flex-direction: row; overflow-x: auto; min-width: 0; }
   .nav__item.is-active::before { display: none; }
   .side__foot { margin-top: 0; margin-inline-start: auto; }
   .me { border: 0; padding: 0; }

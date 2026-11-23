@@ -28,7 +28,7 @@ for code, t in cat.CLINIC_TYPES.items():
 	check(f"{code}: appointment types have minutes", all(m > 0 for _, m in t["appointment_types"]))
 
 # template field types are the ones the frontend renders
-TYPES = {"text", "textarea", "number", "select", "check", "date", "scale", "tooth_chart", "rows"}
+TYPES = {"text", "textarea", "number", "select", "check", "date", "scale", "tooth_chart", "eye_diagram", "rows"}
 for k, t in cat.TEMPLATES.items():
 	keys = [f["key"] for s in t["sections"] for f in s["fields"]]
 	check(f"template {k}: field types known", all(f["type"] in TYPES for s in t["sections"] for f in s["fields"]))

@@ -32,7 +32,7 @@ from datetime import datetime
 
 # ---------------------------------------------------------------------------
 # Charting templates. Field types the CLINZA chart renderer understands:
-#   text, textarea, number, select, check, date, scale (0-10), tooth_chart, rows
+#   text, textarea, number, select, check, date, scale (0-10), tooth_chart, eye_diagram, rows
 # `rows` = a small repeating table with its own `columns` (same field types minus rows).
 # ---------------------------------------------------------------------------
 
@@ -115,6 +115,9 @@ TEMPLATES: dict[str, dict] = {
 				_f("os_sph", "Left SPH", "number", step=0.25), _f("os_cyl", "Left CYL", "number", step=0.25),
 				_f("os_axis", "Left axis", "number", min=0, max=180), _f("os_add", "Left ADD", "number", step=0.25),
 				_f("pd", "Pupillary distance", "number", unit="mm"),
+			]},
+			{"label": "Anterior segment & fundus", "fields": [
+				_f("eye_map", "Both eyes", "eye_diagram"),
 			]},
 			{"label": "Examination", "fields": [
 				_f("iop_od", "IOP right", "number", unit="mmHg"), _f("iop_os", "IOP left", "number", unit="mmHg"),

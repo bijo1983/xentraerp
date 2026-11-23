@@ -5,6 +5,8 @@ import { Plus, Trash2 } from 'lucide-vue-next'
 import { bmi } from '@/lib/format'
 import type { ChartTemplate, TemplateField } from '@/lib/types'
 import ToothChart from '@/components/ToothChart.vue'
+import EyeDiagram from '@/components/EyeDiagram.vue'
+import type { EyeValue } from '@/lib/eye'
 
 const props = defineProps<{ template: ChartTemplate; modelValue: Record<string, unknown> | undefined; readonly?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: Record<string, unknown>): void }>()
@@ -32,7 +34,7 @@ function num(v: string): number | '' {
   return v === '' ? '' : Number(v)
 }
 function wide(f: TemplateField) {
-  return ['textarea', 'rows', 'tooth_chart', 'scale'].includes(f.type)
+  return ['textarea', 'rows', 'tooth_chart', 'eye_diagram', 'scale'].includes(f.type)
 }
 </script>
 
@@ -44,7 +46,7 @@ function wide(f: TemplateField) {
         <template v-for="f in s.fields" :key="f.key">
           <div class="f" :class="{ wide: wide(f) }">
             <span>{{ f.label }}<span v-if="f.unit" class="unit"> ({{ f.unit }})</span></span>
-            <template v-if="readonly && !['tooth_chart', 'rows'].includes(f.type)">
+            <template v-if="readonly && !['tooth_chart', 'eye_diagram', 'rows'].includes(f.type)">
               <div class="ro">{{ f.type === 'check' ? (data[f.key] ? 'Yes' : 'No') : data[f.key] ?? '' }}<span v-if="!data[f.key] && data[f.key] !== 0" class="faint">—</span></div>
             </template>
             <textarea v-else-if="f.type === 'textarea'" :value="String(data[f.key] ?? '')" @input="set(f.key, ($event.target as HTMLTextAreaElement).value)" />
@@ -67,6 +69,7 @@ function wide(f: TemplateField) {
               <button v-for="n in 11" :key="n" type="button" role="radio" :aria-checked="data[f.key] === n - 1" class="scale__b" :class="{ on: data[f.key] === n - 1, hi: n - 1 >= 7, mid: n - 1 >= 4 && n - 1 < 7 }" @click="set(f.key, data[f.key] === n - 1 ? '' : n - 1)">{{ n - 1 }}</button>
             </div>
             <ToothChart v-else-if="f.type === 'tooth_chart'" :model-value="data[f.key] as Record<string, string>" :conditions="f.conditions || []" :readonly="readonly" @update:model-value="set(f.key, $event)" />
+            <EyeDiagram v-else-if="f.type === 'eye_diagram'" :model-value="data[f.key] as EyeValue" :readonly="readonly" @update:model-value="set(f.key, $event)" />
             <div v-else-if="f.type === 'rows'" class="tbl-wrap">
               <table class="tbl">
                 <thead><tr><th v-for="c in f.columns" :key="c.key">{{ c.label }}</th><th v-if="!readonly" /></tr></thead>
@@ -98,6 +101,7 @@ function wide(f: TemplateField) {
 .cf__h { font-size: var(--x-text-sm); text-transform: uppercase; letter-spacing: 0.05em; color: var(--x-text-muted); margin-bottom: 10px; }
 .cf__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 14px; }
 .wide { grid-column: 1 / -1; }
+.cf__grid > .f { min-width: 0; }
 .ro { min-height: 40px; display: flex; align-items: center; gap: 4px; padding: 8px 0; white-space: pre-wrap; }
 .scale { display: flex; gap: 4px; flex-wrap: wrap; }
 .scale__b { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--x-border); background: var(--x-surface); font: inherit; font-weight: 700; cursor: pointer; color: var(--x-text); }

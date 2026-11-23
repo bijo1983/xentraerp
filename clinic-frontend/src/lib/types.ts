@@ -3,7 +3,7 @@ export type Cap = 'patients' | 'appointments' | 'chart' | 'billing' | 'claims' |
 export interface TemplateField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'select' | 'check' | 'date' | 'scale' | 'tooth_chart' | 'rows'
+  type: 'text' | 'textarea' | 'number' | 'select' | 'check' | 'date' | 'scale' | 'tooth_chart' | 'eye_diagram' | 'rows'
   unit?: string
   min?: number
   max?: number
