@@ -7,13 +7,20 @@ import {
 } from 'lucide-vue-next'
 import AuroraBg from '@/components/AuroraBg.vue'
 import ClinzaMark from '@/components/ClinzaMark.vue'
-import HeroVisual from '@/components/HeroVisual.vue'
+import LandingAppPreview from '@/components/LandingAppPreview.vue'
+import LandingHeroVisual from '@/components/LandingHeroVisual.vue'
 
 const SPECIALTIES = [
   { icon: Stethoscope, label: 'General practice' }, { icon: Smile, label: 'Dental' }, { icon: Sparkles, label: 'Dermatology & aesthetics' },
   { icon: Eye, label: 'Ophthalmology' }, { icon: Activity, label: 'Physiotherapy' }, { icon: Baby, label: 'Pediatrics' },
   { icon: Flower2, label: "Women's health" }, { icon: Ear, label: 'ENT' }, { icon: HeartPulse, label: 'Cardiology' },
   { icon: Building2, label: 'Multispecialty' },
+]
+// Static illustrations in public/landing/ (see CREDITS.md there).
+const SCENES = [
+  { src: '/landing/dental.svg', alt: 'A dentist treating a patient reclined in a dental chair', title: 'Dental', text: 'Tooth chart with surfaces, treatment plans and lab work.' },
+  { src: '/landing/pediatrics.svg', alt: 'A pediatrician listening to a young child with a stethoscope', title: 'Pediatrics', text: 'Growth charts, vaccinations and parent details on every visit.' },
+  { src: '/landing/reception.svg', alt: 'A receptionist welcoming a patient at the clinic front desk', title: 'Front desk', text: 'Walk-ins, check-in and a waiting list everyone can see.' },
 ]
 const STEPS = [
   { n: '1', title: 'Sign up in a minute', text: 'Verify your email with a code or continue with Google. No card, no password to invent.' },
@@ -50,13 +57,19 @@ const STEPS = [
           <li><Users :size="16" /> Unlimited staff during your trial</li>
         </ul>
       </div>
-      <HeroVisual />
+      <LandingHeroVisual />
     </section>
 
     <section id="specialties" class="lp__spec">
       <p class="lp__eyebrow">Set up for your specialty from day one</p>
       <div class="lp__chips">
         <span v-for="s in SPECIALTIES" :key="s.label" class="lp__chip"><component :is="s.icon" :size="16" /> {{ s.label }}</span>
+      </div>
+      <div class="scenes">
+        <figure v-for="sc in SCENES" :key="sc.title" class="scene">
+          <img :src="sc.src" :alt="sc.alt" width="640" height="440" loading="lazy" />
+          <figcaption><b>{{ sc.title }}</b>{{ sc.text }}</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -88,6 +101,18 @@ const STEPS = [
           <h3>Billing that lands in your accounts</h3>
           <p>Every bill is a real XentraERP invoice, posted to your ledger with the right tax. Payments, outstanding balances and reports come with it.</p>
         </article>
+      </div>
+      <div class="demo">
+        <div class="demo__copy">
+          <p class="lp__eyebrow">See it in action</p>
+          <h3>Your day, your charts and your bills on one screen</h3>
+          <ul>
+            <li><CalendarCheck2 :size="18" /> Today's list per practitioner, with who's in the chair now</li>
+            <li><Smile :size="18" /> Specialty charts drawn like the patient: teeth, eyes, growth</li>
+            <li><Receipt :size="18" /> Tax invoices with the ZATCA QR and the insurer's share split out</li>
+          </ul>
+        </div>
+        <LandingAppPreview />
       </div>
     </section>
 
@@ -164,6 +189,17 @@ h2 { font-family: var(--x-font-display); font-size: clamp(28px, 3.4vw, 40px); le
 .tile h3 { font-family: var(--x-font-display); font-size: 19px; margin: 14px 0 8px; letter-spacing: -0.01em; }
 .tile p { margin: 0; color: #475569; line-height: 1.55; font-size: 15px; }
 .ic { width: 42px; height: 42px; padding: 10px; border-radius: 12px; color: #2563eb; background: #eff6ff; }
+.scenes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 36px 0 0; text-align: start; }
+.scene { margin: 0; border-radius: 24px; overflow: hidden; background: rgba(255, 255, 255, 0.78); border: 1px solid rgba(255, 255, 255, 0.95); box-shadow: 0 20px 40px -28px rgba(30, 41, 99, 0.35); backdrop-filter: blur(12px); }
+.scene img { display: block; width: 100%; height: auto; aspect-ratio: 640 / 440; object-fit: cover; }
+.scene figcaption { padding: 14px 18px 18px; color: #475569; font-size: 14.5px; line-height: 1.5; }
+.scene figcaption b { display: block; color: #0f172a; font-family: var(--x-font-display); font-size: 17px; margin-bottom: 2px; }
+.demo { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 40px; align-items: center; margin-top: 40px; padding: 36px; border-radius: 28px; background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); }
+.demo .lp__eyebrow { text-align: start; margin-bottom: 8px; }
+.demo__copy h3 { font-family: var(--x-font-display); font-size: 26px; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 18px; }
+.demo__copy ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; color: #334155; font-size: 15px; line-height: 1.45; }
+.demo__copy li { display: flex; gap: 10px; align-items: flex-start; }
+.demo__copy li svg { flex: none; color: #2563eb; margin-top: 1px; }
 .comp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .comp__c { padding: 22px; border-radius: 20px; background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(15, 23, 42, 0.06); }
 .comp__c svg { color: #4f46e5; }
@@ -181,7 +217,9 @@ h2 { font-family: var(--x-font-display); font-size: clamp(28px, 3.4vw, 40px); le
 @media (max-width: 960px) {
   .lp__hero { grid-template-columns: 1fr; padding-top: 24px; }
   .lp__links { display: none; }
-  .bento, .comp, .steps { grid-template-columns: 1fr; }
+  .bento, .comp, .steps, .scenes { grid-template-columns: 1fr; }
+  .scenes { max-width: 520px; margin-inline: auto; }
+  .demo { grid-template-columns: 1fr; padding: 24px 18px; gap: 28px; }
   .tile.wide, .tile.full { grid-column: auto; }
   .tile.tall { grid-row: auto; }
   .lp__final { margin-inline: 16px; }
@@ -191,5 +229,7 @@ h2 { font-family: var(--x-font-display); font-size: clamp(28px, 3.4vw, 40px); le
   .lp__ghost:not(.lg) { display: none; }
   .lp__hero, .lp__section, .lp__spec { padding-inline: 16px; }
   .lp__lead { font-size: 16.5px; }
+  .demo { padding: 20px 14px 28px; }
+  .demo__copy h3 { font-size: 22px; }
 }
 </style>
