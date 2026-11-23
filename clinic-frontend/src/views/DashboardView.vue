@@ -2,10 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CalendarPlus, Stethoscope, UserPlus } from 'lucide-vue-next'
-import { clinic } from '@/lib/api'
+import { clinic, flow } from '@/lib/api'
 import { isoDate, money, weekday } from '@/lib/format'
 import { statusClass } from '@/lib/appointments'
-import type { Appointment, Encounter, Patient } from '@/lib/types'
+import type { Appointment, Encounter, Patient, TokenTicket } from '@/lib/types'
+import WalkInDialog from '@/components/WalkInDialog.vue'
+import TokenDialog from '@/components/TokenDialog.vue'
 import { useClinicStore } from '@/stores/clinic'
 import UiButton from '@/ui/UiButton.vue'
 import UiCard from '@/ui/UiCard.vue'
@@ -36,7 +38,7 @@ const registering = ref(false)
 const mine = ref(!!store.ctx?.practitioner)
 
 const shown = computed(() => (mine.value && store.ctx?.practitioner ? appts.value.filter((a) => a.practitioner === store.ctx?.practitioner) : appts.value))
-const waiting = computed(() => appts.value.filter((a) => a.status === 'Checked In').length)
+const waiting = computed(() => appts.value.filter((a) => a.status === 'Checked In' || a.status === 'Triaged').length)
 
 async function load() {
   loading.value = true
@@ -51,23 +53,27 @@ async function load() {
     loading.value = false
   }
 }
-async function walkIn() {
-  if (!store.ctx?.practitioner) {
-    router.push('/patients')
-    return
-  }
-  router.push('/patients')
+const walkInOpen = ref(false)
+const ticket = ref<TokenTicket | null>(null)
+function walkIn() {
+  walkInOpen.value = true
+}
+function walkedIn(t: TokenTicket) {
+  walkInOpen.value = false
+  ticket.value = t
+  load()
 }
 function registered(p: Patient) {
   registering.value = false
   router.push({ name: 'patient', params: { id: p.name } })
 }
 async function openVisit(a: Appointment) {
-  if (a.encounter) router.push({ name: 'encounter', params: { id: a.encounter } })
-  else if (store.can('chart') && a.status === 'Checked In') {
-    const enc = await clinic<Encounter>('start_encounter', { appointment: a.name })
+  if (store.can('chart') && ['Checked In', 'Triaged', 'In Consultation'].includes(a.status)) {
+    const enc = await flow<Encounter>('call_in', { appointment: a.name })
     router.push({ name: 'encounter', params: { id: enc.name } })
-  } else router.push({ name: 'patient', params: { id: a.patient } })
+  } else if (a.encounter && store.can('chart')) router.push({ name: 'encounter', params: { id: a.encounter } })
+  else if (a.encounter && store.can('billing')) router.push({ name: 'bill', params: { id: a.encounter } })
+  else router.push({ name: 'patient', params: { id: a.patient } })
 }
 onMounted(load)
 </script>
@@ -92,7 +98,7 @@ onMounted(load)
 
     <div class="grid grid-4">
       <div class="kpi"><div class="kpi__label">Appointments today</div><div class="kpi__value">{{ dash?.appointments ?? '—' }}</div><div class="kpi__sub">{{ dash?.by_status?.Completed || 0 }} completed · {{ dash?.by_status?.['No Show'] || 0 }} no-show</div></div>
-      <div class="kpi"><div class="kpi__label">Waiting now</div><div class="kpi__value">{{ waiting }}</div><div class="kpi__sub">checked in, not yet seen</div></div>
+      <div class="kpi"><div class="kpi__label">Waiting now</div><div class="kpi__value">{{ waiting }}</div><div class="kpi__sub">checked in or triaged, not yet seen</div></div>
       <div v-if="dash?.billed_today !== undefined" class="kpi"><div class="kpi__label">Billed today</div><div class="kpi__value">{{ money(dash.billed_today, store.currency) }}</div><div class="kpi__sub">unpaid overall {{ money(dash.unpaid_total, store.currency) }}</div></div>
       <div v-else class="kpi"><div class="kpi__label">New patients</div><div class="kpi__value">{{ dash?.new_patients ?? '—' }}</div><div class="kpi__sub">registered today</div></div>
       <div v-if="dash?.open_claims !== undefined" class="kpi"><div class="kpi__label">Open claims</div><div class="kpi__value">{{ dash.open_claims }}</div><div class="kpi__sub">{{ money(dash.open_claims_amount, store.currency) }} awaiting insurers</div></div>
@@ -105,16 +111,16 @@ onMounted(load)
         <UiButton size="sm" variant="ghost" @click="router.push('/appointments')">Day view</UiButton>
       </template>
       <div v-if="loading" style="padding: 20px"><UiSkeleton :lines="4" /></div>
-      <UiEmptyState v-else-if="!shown.length" :icon="Stethoscope" title="No appointments today" message="Book one, or register a walk-in patient and start their visit from the patient page.">
+      <UiEmptyState v-else-if="!shown.length" :icon="Stethoscope" title="No appointments today" message="Book one, or check in a walk-in patient — they get a token and go to triage.">
         <UiButton v-if="store.can('appointments')" size="sm" @click="booking = true">Book appointment</UiButton>
-        <UiButton v-if="store.can('patients')" size="sm" variant="secondary" @click="walkIn">Walk-in</UiButton>
+        <UiButton v-if="store.can('appointments')" size="sm" variant="secondary" @click="walkIn">Walk-in</UiButton>
       </UiEmptyState>
       <div v-else class="tbl-wrap" style="border: 0; border-radius: 0">
         <table class="tbl">
           <thead><tr><th>Time</th><th>Patient</th><th>Practitioner</th><th>Visit</th><th>Status</th><th></th></tr></thead>
           <tbody>
             <tr v-for="a in shown" :key="a.name" class="clickable" @click="openVisit(a)">
-              <td class="tabular nowrap"><strong>{{ a.appointment_time }}</strong> <span class="faint small">{{ a.duration }}m</span></td>
+              <td class="tabular nowrap"><strong>{{ a.appointment_time }}</strong> <span class="faint small">{{ a.duration }}m</span><div v-if="a.token_no" class="small muted">Token {{ String(a.token_no).padStart(3, '0') }}</div></td>
               <td><strong>{{ a.patient_name }}</strong><div class="small faint">{{ a.patient }}</div></td>
               <td>{{ store.practitionerName(a.practitioner) }}</td>
               <td>{{ a.appointment_type }}</td>
@@ -127,5 +133,7 @@ onMounted(load)
     </UiCard>
     <BookDialog :open="booking" :date="today" @close="booking = false" @saved="booking = false; load()" />
     <PatientDialog :open="registering" @close="registering = false" @saved="registered" />
+    <WalkInDialog :open="walkInOpen" @close="walkInOpen = false" @done="walkedIn" />
+    <TokenDialog :ticket="ticket" @close="ticket = null" />
   </div>
 </template>

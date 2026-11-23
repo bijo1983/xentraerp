@@ -160,3 +160,7 @@ export function errorMessage(err: unknown, fallback = t('error.unexpected')): st
   if (err instanceof ApiError) return err.message || fallback
   return fallback
 }
+
+const F = 'custom_erp.api.clinic_flow.'
+/** Shorthand for a visit-flow method (front desk → triage → doctor). */
+export const flow = <T = unknown>(name: string, args?: Record<string, unknown>) => call<T>(F + name, args)

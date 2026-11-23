@@ -204,6 +204,15 @@ onMounted(load)
             <div><span class="lbl">Reg. / licence no.</span><span>{{ doc.practitioner?.registration_no || '—' }}</span></div>
           </div>
         </section>
+        <p v-if="doc.chief_complaint"><strong>Complaint:</strong> {{ doc.chief_complaint }}</p>
+        <p v-if="doc.vitals && (doc.vitals.bp_systolic || doc.vitals.pulse || doc.vitals.temperature || doc.vitals.weight)" class="small">
+          <strong>Vitals:</strong>
+          <span v-if="doc.vitals.bp_systolic"> BP {{ doc.vitals.bp_systolic }}/{{ doc.vitals.bp_diastolic }} mmHg</span>
+          <span v-if="doc.vitals.pulse"> · Pulse {{ doc.vitals.pulse }}</span>
+          <span v-if="doc.vitals.temperature"> · Temp {{ doc.vitals.temperature }} °C</span>
+          <span v-if="doc.vitals.spo2"> · SpO₂ {{ doc.vitals.spo2 }}%</span>
+          <span v-if="doc.vitals.weight"> · Wt {{ doc.vitals.weight }} kg</span>
+        </p>
         <p v-if="doc.diagnoses.length"><strong>{{ L('diagnosis', 'Diagnosis') }}:</strong> {{ doc.diagnoses.map((d: Doc) => `${d.description || ''} ${d.code ? '(' + d.code + ')' : ''}`.trim()).join('; ') }}</p>
         <div class="rx">℞</div>
         <table class="lines">
@@ -211,13 +220,14 @@ onMounted(load)
           <tbody>
             <tr v-for="(m, i) in doc.items" :key="i">
               <td>{{ Number(i) + 1 }}</td>
-              <td><strong :class="{ caps: india }">{{ m.medicine }}</strong> {{ m.strength }} <span class="muted">{{ m.dosage_form }}</span><div v-if="m.instructions" class="small muted">{{ m.instructions }}</div></td>
+              <td><strong :class="{ caps: india }">{{ m.medicine }}</strong> {{ m.strength }} <span class="muted">{{ m.dosage_form }}</span><div v-if="m.brand" class="small">Brand: {{ m.brand }}</div><div v-else class="small muted">Generic — any brand</div><div v-if="m.instructions" class="small muted">{{ m.instructions }}</div></td>
               <td>{{ m.dose }}</td><td>{{ m.frequency }}</td><td>{{ m.route }}</td><td>{{ m.duration }}</td><td class="r">{{ m.quantity }}</td>
             </tr>
           </tbody>
         </table>
         <p v-if="doc.advice"><strong>Advice:</strong> {{ doc.advice }}</p>
-        <p v-if="doc.follow_up_days"><strong>Follow up:</strong> in {{ doc.follow_up_days }} days</p>
+        <p v-if="doc.follow_up_date"><strong>Follow up:</strong> {{ niceDate(doc.follow_up_date) }}</p>
+        <p v-else-if="doc.follow_up_days"><strong>Follow up:</strong> in {{ doc.follow_up_days }} days</p>
         <p class="small muted">Valid for {{ doc.valid_days }} days from the date of issue. {{ doc.standard_note }}</p>
         <div class="sign"><div>{{ doc.practitioner?.practitioner_name }}<div class="line">{{ L('signature', 'Signature & stamp') }}</div></div></div>
       </template>

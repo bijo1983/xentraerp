@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarDays, FileHeart, LayoutDashboard, LogOut, Receipt, Settings2, ShieldCheck, Users } from 'lucide-vue-next'
+import { Activity, CalendarDays, ConciergeBell, FileHeart, LayoutDashboard, LogOut, Receipt, Settings2, ShieldCheck, Stethoscope, Users } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useClinicStore } from '@/stores/clinic'
 import type { Cap } from '@/lib/types'
@@ -13,6 +13,9 @@ const router = useRouter()
 
 const NAV: { to: string; label: string; icon: unknown; cap?: Cap }[] = [
   { to: '/today', label: 'Today', icon: LayoutDashboard },
+  { to: '/front-desk', label: 'Front desk', icon: ConciergeBell, cap: 'appointments' },
+  { to: '/triage', label: 'Triage', icon: Activity, cap: 'triage' },
+  { to: '/consult', label: 'Consultations', icon: Stethoscope, cap: 'chart' },
   { to: '/appointments', label: 'Appointments', icon: CalendarDays, cap: 'appointments' },
   { to: '/patients', label: 'Patients', icon: Users, cap: 'patients' },
   { to: '/billing', label: 'Billing', icon: Receipt, cap: 'billing' },

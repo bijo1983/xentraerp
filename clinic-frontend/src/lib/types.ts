@@ -1,4 +1,4 @@
-export type Cap = 'patients' | 'appointments' | 'chart' | 'billing' | 'claims' | 'reports' | 'setup' | 'staff'
+export type Cap = 'patients' | 'appointments' | 'triage' | 'chart' | 'billing' | 'claims' | 'reports' | 'setup' | 'staff'
 
 export interface TemplateField {
   key: string
@@ -141,8 +141,14 @@ export interface Appointment {
   notes?: string
   encounter?: string
   source?: string
+  token_no?: number
+  priority?: Priority
+  checked_in_at?: string
+  triaged_at?: string
+  called_at?: string
 }
-export type AppointmentStatus = 'Booked' | 'Confirmed' | 'Checked In' | 'In Consultation' | 'Completed' | 'Cancelled' | 'No Show'
+export type Priority = 'Routine' | 'Urgent' | 'Emergency'
+export type AppointmentStatus = 'Booked' | 'Confirmed' | 'Checked In' | 'Triaged' | 'In Consultation' | 'Completed' | 'Cancelled' | 'No Show'
 export interface Diagnosis {
   code: string
   description: string
@@ -150,6 +156,7 @@ export interface Diagnosis {
 }
 export interface RxItem {
   medicine: string
+  brand?: string
   strength?: string
   dosage_form?: string
   dose?: string
@@ -190,6 +197,13 @@ export interface Encounter {
   chart_data: Record<string, Record<string, unknown>>
   diagnoses: Diagnosis[]
   notes?: string
+  chief_complaint?: string
+  history?: string
+  examination?: string
+  advice?: string
+  follow_up_date?: string | null
+  triage_by?: string
+  triage_at?: string
   prescriptions: RxItem[]
   services: ServiceLine[]
   patient_invoice?: string
@@ -199,6 +213,7 @@ export interface Encounter {
   practitioner_doc: Practitioner
   policy_doc: Policy | null
   bill_preview: BillPreview | null
+  appointment_doc?: { name: string; token_no?: number; priority?: Priority; status: AppointmentStatus; appointment_type?: string; source?: string; checked_in_at?: string; triaged_at?: string } | null
 }
 export interface InvoiceRow {
   name: string
@@ -237,4 +252,77 @@ export interface Claim extends ClaimRow {
   items: { service: string; code?: string; qty: number; amount: number; approved_amount?: number }[]
   policy_doc: Policy | null
   payer_doc: Payer & { submission_email?: string; portal_url?: string }
+}
+
+export interface Vitals {
+  bp_systolic?: number | string
+  bp_diastolic?: number | string
+  pulse?: number | string
+  temperature?: number | string
+  resp_rate?: number | string
+  spo2?: number | string
+  weight?: number | string
+  height?: number | string
+  pain?: number | string
+  glucose?: number | string
+  notes?: string
+}
+/** A row of custom_erp.api.clinic_flow.queue. */
+export interface QueueRow {
+  name: string
+  patient: string
+  patient_name: string
+  practitioner: string
+  appointment_type?: string
+  status: AppointmentStatus
+  token_no?: number
+  priority?: Priority
+  source?: string
+  checked_in_at?: string
+  triaged_at?: string
+  called_at?: string
+  encounter?: string
+  notes?: string
+  age?: string
+  gender?: string
+  allergies?: string
+  waiting_min: number
+  vitals?: Vitals
+  chief_complaint?: string
+}
+export interface TokenTicket {
+  clinic?: string
+  phone?: string
+  token: number
+  patient: string
+  patient_id: string
+  practitioner?: string
+  appointment_type?: string
+  priority: Priority
+  date: string
+  checked_in_at?: string
+  ahead: number
+  name: string
+  walk_in: boolean
+}
+export interface Medicine {
+  generic: string
+  form: string
+  strengths: string[]
+  route: string
+  dose: string
+  frequency: string
+  brands: string[]
+  source: 'catalogue' | 'clinic'
+}
+export interface BillingQueueRow {
+  name: string
+  patient: string
+  patient_name: string
+  practitioner: string
+  encounter_date: string
+  policy?: string
+  appointment?: string
+  token_no?: number
+  total: number
 }

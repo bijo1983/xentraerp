@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { clinic } from '@/lib/api'
+import { clinic, errorMessage, flow } from '@/lib/api'
 import { nextActions } from '@/lib/appointments'
-import type { Appointment, Encounter } from '@/lib/types'
+import type { Appointment, Encounter, TokenTicket } from '@/lib/types'
+import TokenDialog from '@/components/TokenDialog.vue'
 import { useClinicStore } from '@/stores/clinic'
 import { useToast } from '@/composables/useToast'
 
@@ -13,21 +14,30 @@ const store = useClinicStore()
 const router = useRouter()
 const toast = useToast()
 const busy = ref('')
+const ticket = ref<TokenTicket | null>(null)
 const actions = computed(() =>
-  nextActions(props.appointment.status).filter((a) => (a.status === 'start' ? store.can('chart') || !!props.appointment.encounter : store.can('appointments'))),
+  nextActions(props.appointment.status).filter((a) => (a.status === 'start' ? store.can('chart') : store.can('appointments'))),
 )
 
 async function run(status: string) {
   busy.value = status
   try {
     if (status === 'start') {
-      const enc = await clinic<Encounter>('start_encounter', { appointment: props.appointment.name })
+      const enc = await flow<Encounter>('call_in', { appointment: props.appointment.name })
       router.push({ name: 'encounter', params: { id: enc.name } })
+      return
+    }
+    if (status === 'Checked In' || status === 'token') {
+      // Check-in goes through the visit flow: it issues the day's token and queues the patient for triage.
+      ticket.value = await flow<TokenTicket>(status === 'token' ? 'token_ticket' : 'check_in', { name: props.appointment.name })
+      if (status !== 'token') emit('changed')
       return
     }
     await clinic('set_appointment_status', { name: props.appointment.name, status })
     toast.success(`${props.appointment.patient_name}: ${status}`)
     emit('changed')
+  } catch (e) {
+    toast.error(errorMessage(e))
   } finally {
     busy.value = ''
   }
@@ -47,6 +57,7 @@ async function run(status: string) {
     >
       {{ busy === a.status ? '…' : a.label }}
     </button>
+    <TokenDialog :ticket="ticket" @close="ticket = null" />
   </div>
 </template>
 

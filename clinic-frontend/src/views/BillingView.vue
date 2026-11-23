@@ -4,7 +4,8 @@ import { useRouter } from 'vue-router'
 import { Printer, Receipt } from 'lucide-vue-next'
 import { clinic } from '@/lib/api'
 import { money, niceDate } from '@/lib/format'
-import type { InvoiceRow } from '@/lib/types'
+import type { BillingQueueRow, InvoiceRow } from '@/lib/types'
+import { tokenLabel } from '@/lib/flow'
 import { useClinicStore } from '@/stores/clinic'
 import UiButton from '@/ui/UiButton.vue'
 import UiSearchField from '@/ui/UiSearchField.vue'
@@ -18,6 +19,7 @@ const rows = ref<InvoiceRow[]>([])
 const status = ref<'' | 'unpaid' | 'paid'>('unpaid')
 const q = ref('')
 const paying = ref<InvoiceRow | null>(null)
+const toBill = ref<BillingQueueRow[]>([])
 let timer: number | undefined
 
 const totals = computed(() => ({
@@ -25,7 +27,9 @@ const totals = computed(() => ({
   due: rows.value.reduce((s, r) => s + Number(r.outstanding_amount), 0),
 }))
 async function load() {
-  rows.value = await clinic<InvoiceRow[]>('list_invoices', { status: status.value, query: q.value })
+  const [r, b] = await Promise.all([clinic<InvoiceRow[]>('list_invoices', { status: status.value, query: q.value }), clinic<BillingQueueRow[]>('billing_queue').catch(() => [])])
+  rows.value = r
+  toBill.value = b
 }
 function tone(r: InvoiceRow) {
   return r.outstanding_amount <= 0 ? 'success' : r.status === 'Overdue' ? 'danger' : r.outstanding_amount < (r.rounded_total || r.grand_total) ? 'warning' : 'neutral'
@@ -45,6 +49,16 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <div><h1>Billing</h1><p>Every bill is a submitted Sales Invoice in Accounting; payments are Payment Entries against it.</p></div>
+    </div>
+    <div v-if="toBill.length" class="ready">
+      <h2 class="ready__t">Ready to bill <span class="faint">· {{ toBill.length }}</span></h2>
+      <div class="ready__list">
+        <button v-for="b in toBill" :key="b.name" type="button" class="ready__i" @click="router.push({ name: 'bill', params: { id: b.name } })">
+          <span class="tabular tok">{{ tokenLabel(b.token_no) }}</span>
+          <span class="grow"><strong>{{ b.patient_name }}</strong><span class="small muted block">{{ store.practitionerName(b.practitioner) }} · {{ b.policy ? 'Insurance' : 'Self-pay' }}</span></span>
+          <span class="tabular">{{ money(b.total, store.currency) }}</span>
+        </button>
+      </div>
     </div>
     <div class="row">
       <button v-for="[k, l] in ([['unpaid', 'Unpaid'], ['paid', 'Paid'], ['', 'All']] as const)" :key="k" type="button" class="chip" :class="{ on: status === k }" @click="status = k">{{ l }}</button>
@@ -70,7 +84,7 @@ onMounted(load)
             <td class="right">
               <div class="row" style="justify-content: flex-end">
                 <UiButton v-if="r.outstanding_amount > 0" size="sm" @click="paying = r">Pay</UiButton>
-                <UiButton v-if="encounterOf(r)?.startsWith('ENC')" size="sm" variant="ghost" @click="router.push({ name: 'encounter', params: { id: encounterOf(r) } })">Visit</UiButton>
+                <UiButton v-if="encounterOf(r)?.startsWith('ENC')" size="sm" variant="ghost" @click="router.push({ name: 'bill', params: { id: encounterOf(r) } })">Visit</UiButton>
                 <a class="chip" :href="router.resolve({ name: 'print', params: { kind: 'invoice', id: r.name } }).href" target="_blank" rel="noopener"><Printer :size="14" /> Print</a>
               </div>
             </td>
@@ -81,3 +95,13 @@ onMounted(load)
     <PayDialog :open="!!paying" :invoice="paying?.name || ''" :outstanding="paying?.outstanding_amount || 0" :currency="paying?.currency" :who="paying?.customer_name" @close="paying = null" @paid="paying = null; load()" />
   </div>
 </template>
+
+<style scoped>
+.ready { display: flex; flex-direction: column; gap: 8px; }
+.ready__t { margin: 0; font-size: var(--x-text-md); }
+.ready__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.ready__i { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--x-primary); border-radius: var(--x-radius-lg); background: var(--x-surface); font: inherit; color: var(--x-text); text-align: start; cursor: pointer; box-shadow: var(--x-shadow-xs); }
+.ready__i:hover { background: var(--x-primary-soft); }
+.tok { font-family: var(--x-font-display); font-weight: 800; color: var(--x-primary-text); background: var(--x-primary-soft); border-radius: 8px; padding: 6px 8px; }
+.block { display: block; }
+</style>

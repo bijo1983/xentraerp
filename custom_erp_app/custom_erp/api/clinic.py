@@ -513,7 +513,7 @@ def list_appointments(date: str | None = None, practitioner: str | None = None, 
 	rows = frappe.get_all(
 		"Clinza Appointment", filters=filters,
 		fields=["name", "patient", "patient_name", "practitioner", "appointment_type", "appointment_date", "appointment_time", "duration",
-			"status", "notes", "encounter", "source"],
+			"status", "notes", "encounter", "source", "token_no", "priority", "checked_in_at"],
 		order_by="appointment_date asc, appointment_time asc", limit_page_length=1000,
 	)
 	for r in rows:
@@ -684,7 +684,8 @@ def _save_encounter(data: dict):
 			code = (d.get("code") or "").strip().upper()
 			desc = (d.get("description") or "").strip()
 			if code or desc:
-				dx.append({"code": code[:12], "description": desc[:200], "primary": 1 if d.get("primary") else 0})
+				dx.append({"code": code[:12], "description": desc[:200], "primary": 1 if d.get("primary") else 0,
+					"certainty": "Provisional" if d.get("certainty") == "Provisional" else "Confirmed"})
 		if dx and not any(d["primary"] for d in dx):
 			dx[0]["primary"] = 1
 		doc.diagnoses = json.dumps(dx)
@@ -1191,7 +1192,8 @@ def get_invoice_print(name: str):
 def get_prescription_print(name: str):
 	"""Prescription for an encounter (regional layout chosen by the app)."""
 	caps = _caps()
-	if "chart" not in caps:
+	if not ({"chart", "billing", "appointments"} & caps):
+		# the doctor prints it, or the front desk hands it over at checkout
 		require_cap("chart")
 	s = _settings()
 	e = frappe.get_doc("Clinza Encounter", name)
@@ -1205,9 +1207,12 @@ def get_prescription_print(name: str):
 		"patient": patient, "practitioner": frappe.db.get_value("Clinza Practitioner", e.practitioner,
 			["practitioner_name", "specialty", "registration_no", "qualification"], as_dict=True),
 		"diagnoses": _j(e.diagnoses, []),
-		"items": [{k: rx.get(k) for k in ("medicine", "strength", "dosage_form", "dose", "frequency", "route", "duration", "quantity", "instructions")} for rx in e.prescriptions],
+		"items": [{k: rx.get(k) for k in ("medicine", "brand", "strength", "dosage_form", "dose", "frequency", "route", "duration", "quantity", "instructions")} for rx in e.prescriptions],
+		"chief_complaint": e.chief_complaint or (_j(e.chart_data, {}).get("soap") or {}).get("chief_complaint"),
+		"vitals": (_j(e.chart_data, {}).get("vitals") or {}),
+		"follow_up_date": str(e.follow_up_date) if e.follow_up_date else None,
 		"follow_up_days": (_j(e.chart_data, {}).get("soap") or {}).get("follow_up_days"),
-		"advice": (_j(e.chart_data, {}).get("soap") or {}).get("advice"),
+		"advice": e.advice or (_j(e.chart_data, {}).get("soap") or {}).get("advice"),
 		"valid_days": 30 if s.region != "GCC" else 7,
 		"standard_note": cat.DOCUMENT_STANDARDS.get(s.region or "Other", cat.DOCUMENT_STANDARDS["Other"])["prescription"],
 	}

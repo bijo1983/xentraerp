@@ -9,6 +9,7 @@
   --st-booked: #64748b; --st-booked-soft: #f1f5f9;
   --st-confirmed: #4338ca; --st-confirmed-soft: #eef2ff;
   --st-checkedin: #b45309; --st-checkedin-soft: #fffbeb;
+  --st-triaged: #7c3aed; --st-triaged-soft: #f5f3ff;
   --st-inconsult: #1d4ed8; --st-inconsult-soft: #dbeafe;
   --st-completed: #047857; --st-completed-soft: #ecfdf5;
   --st-cancelled: #b91c1c; --st-cancelled-soft: #fef2f2;
@@ -92,6 +93,7 @@ a { color: var(--x-primary-text); }
 .st-Booked { background: var(--st-booked-soft); color: var(--st-booked); }
 .st-Confirmed { background: var(--st-confirmed-soft); color: var(--st-confirmed); }
 .st-Checked-In { background: var(--st-checkedin-soft); color: var(--st-checkedin); }
+.st-Triaged { background: var(--st-triaged-soft); color: var(--st-triaged); }
 .st-In-Consultation { background: var(--st-inconsult-soft); color: var(--st-inconsult); }
 .st-Completed { background: var(--st-completed-soft); color: var(--st-completed); }
 .st-Cancelled, .st-No-Show { background: var(--st-cancelled-soft); color: var(--st-cancelled); }
