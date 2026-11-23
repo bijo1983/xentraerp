@@ -1,0 +1,111 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "payer_name",
+  "payer_code",
+  "payer_type",
+  "customer",
+  "cb1",
+  "claim_standard",
+  "default_coverage",
+  "submission_email",
+  "portal_url",
+  "tax_id",
+  "disabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "payer_name",
+   "fieldtype": "Data",
+   "label": "Payer Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "payer_code",
+   "fieldtype": "Data",
+   "label": "Payer Code",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "payer_type",
+   "fieldtype": "Select",
+   "label": "Payer Type",
+   "options": "Insurer\nTPA\nGovernment scheme\nCorporate",
+   "default": "Insurer",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "claim_standard",
+   "fieldtype": "Data",
+   "label": "Claim Standard"
+  },
+  {
+   "fieldname": "default_coverage",
+   "fieldtype": "Float",
+   "label": "Default coverage (%)",
+   "default": "80"
+  },
+  {
+   "fieldname": "submission_email",
+   "fieldtype": "Data",
+   "label": "Submission Email"
+  },
+  {
+   "fieldname": "portal_url",
+   "fieldtype": "Data",
+   "label": "Portal Url"
+  },
+  {
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Payer tax registration no."
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Insurance Payer",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "autoname": "field:payer_name",
+ "naming_rule": "By fieldname"
+}

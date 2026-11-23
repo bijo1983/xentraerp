@@ -1,0 +1,107 @@
+/*
+ * CLINZA uses the XentraERP theme exactly as the POS does (tokens.css, copied from pos-frontend):
+ * brand blue primary, slate surfaces, soft/text colour pairs. Only clinic-specific tokens live here.
+ */
+:root {
+  --sidebar-w: 232px;
+
+  /* appointment status pairs */
+  --st-booked: #64748b; --st-booked-soft: #f1f5f9;
+  --st-confirmed: #4338ca; --st-confirmed-soft: #eef2ff;
+  --st-checkedin: #b45309; --st-checkedin-soft: #fffbeb;
+  --st-triaged: #7c3aed; --st-triaged-soft: #f5f3ff;
+  --st-inconsult: #1d4ed8; --st-inconsult-soft: #dbeafe;
+  --st-completed: #047857; --st-completed-soft: #ecfdf5;
+  --st-cancelled: #b91c1c; --st-cancelled-soft: #fef2f2;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  background: var(--x-bg);
+  color: var(--x-text);
+  font-family: var(--x-font-sans);
+  font-size: var(--x-text-sm);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .display { font-family: var(--x-font-display); letter-spacing: var(--x-tracking-tight); text-wrap: balance; }
+h1 { font-size: var(--x-text-2xl); margin: 0; }
+h2 { font-size: var(--x-text-lg); margin: 0; }
+h3 { font-size: var(--x-text-md); margin: 0; }
+a { color: var(--x-primary-text); }
+.tabular, .x-tabular { font-variant-numeric: tabular-nums; }
+.muted { color: var(--x-text-muted); }
+.faint { color: var(--x-text-faint); }
+.small { font-size: var(--x-text-xs); }
+.right { text-align: end; }
+.nowrap { white-space: nowrap; }
+.grow { flex: 1; min-width: 0; }
+
+.page { padding: var(--x-space-6); max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--x-space-5); }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--x-space-4); flex-wrap: wrap; }
+.page-head p { margin: 4px 0 0; color: var(--x-text-muted); }
+.row { display: flex; align-items: center; gap: var(--x-space-2); flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: var(--x-space-3); }
+.grid { display: grid; gap: var(--x-space-4); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--x-space-5); align-items: start; }
+@media (max-width: 1100px) { .split { grid-template-columns: minmax(0, 1fr); } .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .page { padding: var(--x-space-4); } .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+
+/* native controls that ui/UiInput doesn't cover */
+.f { display: flex; flex-direction: column; gap: var(--x-space-1); min-width: 0; }
+.f > span { font-size: var(--x-text-sm); font-weight: var(--x-weight-semibold); }
+.f select, .f textarea, .f input, .ctl {
+  font: inherit; color: var(--x-text); background: var(--x-surface); border: 1px solid var(--x-border); border-radius: var(--x-radius-md);
+  min-height: 40px; padding: 8px 12px; box-shadow: var(--x-shadow-xs); width: 100%;
+}
+.f textarea { min-height: 72px; resize: vertical; line-height: 1.45; }
+.f select:focus, .f textarea:focus, .f input:focus, .ctl:focus { outline: none; border-color: var(--x-primary); box-shadow: var(--x-focus-ring); }
+.f .unit { font-size: var(--x-text-xs); color: var(--x-text-faint); }
+.check { display: inline-flex; align-items: center; gap: var(--x-space-2); cursor: pointer; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--x-primary); }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--x-border); border-radius: var(--x-radius-lg); background: var(--x-surface); }
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { text-align: start; font-size: var(--x-text-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--x-text-muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--x-border); background: var(--x-surface-2); white-space: nowrap; }
+.tbl td { padding: 10px 14px; border-bottom: 1px solid var(--x-surface-3); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl tbody tr.clickable { cursor: pointer; }
+.tbl tbody tr.clickable:hover td { background: var(--x-primary-soft); }
+.tbl input, .tbl select { font: inherit; width: 100%; min-height: 34px; border: 1px solid var(--x-border); border-radius: var(--x-radius-sm); padding: 4px 8px; background: var(--x-surface); color: var(--x-text); }
+
+/* KPI tiles */
+.kpi { background: var(--x-surface); border: 1px solid var(--x-border); border-radius: var(--x-radius-lg); padding: var(--x-space-4) var(--x-space-5); box-shadow: var(--x-shadow-sm); }
+.kpi__label { color: var(--x-text-muted); font-size: var(--x-text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.kpi__value { font-family: var(--x-font-display); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.kpi__sub { color: var(--x-text-muted); font-size: var(--x-text-xs); margin-top: 2px; }
+
+/* chips & tabs */
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--x-border); background: var(--x-surface); color: var(--x-text); border-radius: var(--x-radius-full); padding: 6px 12px; font: inherit; font-size: var(--x-text-xs); font-weight: 600; cursor: pointer; }
+.chip.on { background: var(--x-primary-soft); border-color: var(--x-primary); color: var(--x-primary-text); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--x-border); overflow-x: auto; }
+.tab { border: 0; background: none; font: inherit; font-weight: 600; color: var(--x-text-muted); padding: 10px 14px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+.tab.on { color: var(--x-primary-text); border-bottom-color: var(--x-primary); }
+
+.st { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.st::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.st-Booked { background: var(--st-booked-soft); color: var(--st-booked); }
+.st-Confirmed { background: var(--st-confirmed-soft); color: var(--st-confirmed); }
+.st-Checked-In { background: var(--st-checkedin-soft); color: var(--st-checkedin); }
+.st-Triaged { background: var(--st-triaged-soft); color: var(--st-triaged); }
+.st-In-Consultation { background: var(--st-inconsult-soft); color: var(--st-inconsult); }
+.st-Completed { background: var(--st-completed-soft); color: var(--st-completed); }
+.st-Cancelled, .st-No-Show { background: var(--st-cancelled-soft); color: var(--st-cancelled); }
+
+.alert-strip { display: flex; gap: var(--x-space-2); align-items: center; padding: 8px 12px; border-radius: var(--x-radius-md); background: var(--x-danger-soft); color: var(--x-danger-text); font-weight: 600; font-size: var(--x-text-xs); }
+.empty-row { padding: var(--x-space-8); text-align: center; color: var(--x-text-muted); }
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+}

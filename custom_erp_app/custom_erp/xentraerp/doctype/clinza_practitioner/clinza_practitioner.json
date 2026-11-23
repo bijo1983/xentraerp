@@ -1,0 +1,105 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "practitioner_name",
+  "specialty",
+  "registration_no",
+  "qualification",
+  "user",
+  "cb1",
+  "consultation_item",
+  "slot_minutes",
+  "color",
+  "disabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "practitioner_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "specialty",
+   "fieldtype": "Data",
+   "label": "Specialty",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "registration_no",
+   "fieldtype": "Data",
+   "label": "Licence / registration no.",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "qualification",
+   "fieldtype": "Data",
+   "label": "Qualification"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "consultation_item",
+   "fieldtype": "Link",
+   "label": "Consultation fee item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "slot_minutes",
+   "fieldtype": "Int",
+   "label": "Slot Minutes",
+   "default": "15"
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Data",
+   "label": "Color"
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Practitioner",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "autoname": "PRAC-.####",
+ "title_field": "practitioner_name",
+ "naming_rule": "Expression (old style)",
+ "show_title_field_in_link": 1
+}

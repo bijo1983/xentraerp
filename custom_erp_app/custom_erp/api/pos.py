@@ -79,7 +79,11 @@ def _fetch_tenant_entitlements() -> dict | None:
 		)
 		resp.raise_for_status()
 		message = resp.json().get("message") or {}
-		return {"modules": list(message.get("modules") or []), "reports": dict(message.get("reports") or {})}
+		return {
+			"modules": list(message.get("modules") or []),
+			"reports": dict(message.get("reports") or {}),
+			"max_users": int(message.get("max_users") or 0),
+		}
 	except Exception:
 		frappe.log_error(title="XentraERP module entitlement check failed")
 		return None

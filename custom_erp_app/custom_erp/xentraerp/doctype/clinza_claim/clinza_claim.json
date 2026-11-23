@@ -1,0 +1,178 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "payer",
+  "patient",
+  "patient_name",
+  "policy",
+  "encounter",
+  "invoice",
+  "cb1",
+  "claim_date",
+  "status",
+  "claimed_amount",
+  "approved_amount",
+  "paid_amount",
+  "preauth_no",
+  "payer_reference",
+  "submitted_on",
+  "rejection_reason",
+  "payment_entry",
+  "items_section",
+  "diagnoses",
+  "items"
+ ],
+ "fields": [
+  {
+   "fieldname": "payer",
+   "fieldtype": "Link",
+   "label": "Payer",
+   "options": "Clinza Insurance Payer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "patient",
+   "fieldtype": "Link",
+   "label": "Patient",
+   "options": "Clinza Patient",
+   "reqd": 1
+  },
+  {
+   "fieldname": "patient_name",
+   "fieldtype": "Data",
+   "label": "Patient Name",
+   "read_only": 1,
+   "in_list_view": 1,
+   "fetch_from": "patient.patient_name"
+  },
+  {
+   "fieldname": "policy",
+   "fieldtype": "Link",
+   "label": "Policy",
+   "options": "Clinza Insurance Policy"
+  },
+  {
+   "fieldname": "encounter",
+   "fieldtype": "Link",
+   "label": "Encounter",
+   "options": "Clinza Encounter"
+  },
+  {
+   "fieldname": "invoice",
+   "fieldtype": "Link",
+   "label": "Invoice",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "claim_date",
+   "fieldtype": "Date",
+   "label": "Claim Date"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSubmitted\nUnder Review\nApproved\nPartially Approved\nRejected\nPaid",
+   "default": "Draft",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "claimed_amount",
+   "fieldtype": "Currency",
+   "label": "Claimed Amount",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "approved_amount",
+   "fieldtype": "Currency",
+   "label": "Approved Amount"
+  },
+  {
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "label": "Paid Amount"
+  },
+  {
+   "fieldname": "preauth_no",
+   "fieldtype": "Data",
+   "label": "Pre-authorisation no."
+  },
+  {
+   "fieldname": "payer_reference",
+   "fieldtype": "Data",
+   "label": "Payer claim reference"
+  },
+  {
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On"
+  },
+  {
+   "fieldname": "rejection_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason"
+  },
+  {
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "fieldname": "diagnoses",
+   "fieldtype": "Long Text",
+   "label": "Diagnoses (JSON)"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Clinza Claim Item"
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Claim",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "autoname": "CLM-.YYYY.-.#####",
+ "title_field": "patient_name",
+ "naming_rule": "Expression (old style)",
+ "show_title_field_in_link": 1
+}

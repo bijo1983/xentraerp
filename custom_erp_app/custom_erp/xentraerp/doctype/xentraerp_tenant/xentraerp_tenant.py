@@ -10,7 +10,7 @@ ALL_MODULES = [
 	"accounting", "selling", "buying", "inventory", "manufacturing",
 	"projects", "assets", "hr", "payroll", "quality", "support",
 	"maintenance", "pos", "website", "contracts", "tenders",
-	"budget", "vendor", "documents", "lms",
+	"budget", "vendor", "documents", "lms", "clinic",
 ]
 
 

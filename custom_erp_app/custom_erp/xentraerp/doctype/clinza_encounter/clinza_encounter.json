@@ -1,0 +1,247 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "patient",
+  "patient_name",
+  "practitioner",
+  "appointment",
+  "cb1",
+  "encounter_date",
+  "status",
+  "policy",
+  "consult_section",
+  "chief_complaint",
+  "history",
+  "examination",
+  "advice",
+  "follow_up_date",
+  "triage_by",
+  "triage_at",
+  "chart_section",
+  "templates",
+  "chart_data",
+  "diagnoses",
+  "notes",
+  "rx_section",
+  "prescriptions",
+  "svc_section",
+  "services",
+  "bill_section",
+  "patient_invoice",
+  "payer_invoice",
+  "claim",
+  "tax_snapshot"
+ ],
+ "fields": [
+  {
+   "fieldname": "patient",
+   "fieldtype": "Link",
+   "label": "Patient",
+   "options": "Clinza Patient",
+   "reqd": 1
+  },
+  {
+   "fieldname": "patient_name",
+   "fieldtype": "Data",
+   "label": "Patient Name",
+   "read_only": 1,
+   "in_list_view": 1,
+   "fetch_from": "patient.patient_name"
+  },
+  {
+   "fieldname": "practitioner",
+   "fieldtype": "Link",
+   "label": "Practitioner",
+   "options": "Clinza Practitioner",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "appointment",
+   "fieldtype": "Link",
+   "label": "Appointment",
+   "options": "Clinza Appointment"
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break",
+   "label": "Cb1"
+  },
+  {
+   "fieldname": "encounter_date",
+   "fieldtype": "Date",
+   "label": "Encounter Date",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nCompleted\nBilled\nCancelled",
+   "default": "Draft",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "policy",
+   "fieldtype": "Link",
+   "label": "Insurance policy",
+   "options": "Clinza Insurance Policy"
+  },
+  {
+   "fieldname": "consult_section",
+   "fieldtype": "Section Break",
+   "label": "Consultation"
+  },
+  {
+   "fieldname": "chief_complaint",
+   "fieldtype": "Small Text",
+   "label": "Chief complaint"
+  },
+  {
+   "fieldname": "history",
+   "fieldtype": "Text",
+   "label": "History of present illness"
+  },
+  {
+   "fieldname": "examination",
+   "fieldtype": "Text",
+   "label": "Examination"
+  },
+  {
+   "fieldname": "advice",
+   "fieldtype": "Text",
+   "label": "Advice / plan"
+  },
+  {
+   "fieldname": "follow_up_date",
+   "fieldtype": "Date",
+   "label": "Follow-up date"
+  },
+  {
+   "fieldname": "triage_by",
+   "fieldtype": "Link",
+   "label": "Triaged by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "triage_at",
+   "fieldtype": "Datetime",
+   "label": "Triaged at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "chart_section",
+   "fieldtype": "Section Break",
+   "label": "Chart"
+  },
+  {
+   "fieldname": "templates",
+   "fieldtype": "Small Text",
+   "label": "Templates used (JSON)"
+  },
+  {
+   "fieldname": "chart_data",
+   "fieldtype": "Long Text",
+   "label": "Chart data (JSON)"
+  },
+  {
+   "fieldname": "diagnoses",
+   "fieldtype": "Long Text",
+   "label": "Diagnoses (JSON)"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "rx_section",
+   "fieldtype": "Section Break",
+   "label": "Prescription"
+  },
+  {
+   "fieldname": "prescriptions",
+   "fieldtype": "Table",
+   "label": "Prescriptions",
+   "options": "Clinza Prescription Item"
+  },
+  {
+   "fieldname": "svc_section",
+   "fieldtype": "Section Break",
+   "label": "Services"
+  },
+  {
+   "fieldname": "services",
+   "fieldtype": "Table",
+   "label": "Services",
+   "options": "Clinza Encounter Service"
+  },
+  {
+   "fieldname": "bill_section",
+   "fieldtype": "Section Break",
+   "label": "Billing"
+  },
+  {
+   "fieldname": "patient_invoice",
+   "fieldtype": "Link",
+   "label": "Patient Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payer_invoice",
+   "fieldtype": "Link",
+   "label": "Payer Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "claim",
+   "fieldtype": "Link",
+   "label": "Claim",
+   "options": "Clinza Claim",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tax_snapshot",
+   "fieldtype": "Small Text",
+   "label": "Tax treatment at billing (JSON)",
+   "read_only": 1,
+   "hidden": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Encounter",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "autoname": "ENC-.YYYY.-.#####",
+ "title_field": "patient_name",
+ "naming_rule": "Expression (old style)",
+ "show_title_field_in_link": 1
+}

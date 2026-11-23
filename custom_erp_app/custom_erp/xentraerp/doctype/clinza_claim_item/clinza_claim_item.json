@@ -1,0 +1,58 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "service",
+  "code",
+  "qty",
+  "amount",
+  "approved_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "service",
+   "fieldtype": "Data",
+   "label": "Service",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "code",
+   "fieldtype": "Data",
+   "label": "Code",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "label": "Qty",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "approved_amount",
+   "fieldtype": "Currency",
+   "label": "Approved Amount",
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Xentraerp",
+ "name": "Clinza Claim Item",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "permissions": [],
+ "editable_grid": 1
+}

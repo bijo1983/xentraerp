@@ -270,11 +270,11 @@ def get_entitlements(tenant_code: str):
 	tenant = frappe.get_all(
 		"XentraERP Tenant",
 		filters={"tenant_code": tenant_code},
-		fields=["enabled_modules", "status", "plan"],
+		fields=["enabled_modules", "status", "plan", "max_users"],
 		limit_page_length=1,
 	)
 	if not tenant or tenant[0].status not in ("Trial", "Active"):
-		return {"modules": [], "reports": {}}
+		return {"modules": [], "reports": {}, "max_users": 0}
 	t = tenant[0]
 	reports: dict[str, list[str]] = {}
 	if t.plan and frappe.db.exists("XentraERP Plan", t.plan):
@@ -282,7 +282,13 @@ def get_entitlements(tenant_code: str):
 		for m in plan.modules:
 			if m.report_access == "Selected Reports":
 				reports[m.module_code] = [r.report for r in plan.reports if r.module_code == m.module_code]
-	return {"modules": [m for m in (t.enabled_modules or "").split(",") if m], "reports": reports}
+	# max_users: 0 = unlimited (the default for every plan today); the tenant site enforces
+	# it when users are created (custom_erp.api.users.enforce_user_limit).
+	return {
+		"modules": [m for m in (t.enabled_modules or "").split(",") if m],
+		"reports": reports,
+		"max_users": int(t.max_users or 0),
+	}
 
 
 @frappe.whitelist()
