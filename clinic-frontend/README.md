@@ -5,7 +5,7 @@ Vue 3 + Vite + Pinia app for clinics on XentraERP. Same stack, folder layout and
 a clinical teal). It talks only to `custom_erp.api.clinic.*` through the erp-frontend `/api` proxy,
 exactly like the POS: the proxy picks the tenant site from the `xentra_tenant` cookie.
 
-Live host: **https://clinza.xentraerp.com** (see "Deploy").
+Live host: **https://clinza.xentraerp.net** (see "Deploy").
 
 ## What's in this first slice
 
@@ -46,8 +46,8 @@ npm run build      # vue-tsc + vite build -> dist/
    tenant admin and pick the clinic type in Setup. Add `clinic` to the tenant's modules (Trial tenants get all modules).
 3. Frontend: `cd clinic-frontend && npm ci && npx vite build --outDir dist-new --emptyOutDir` (Node 22), then
    `mv dist dist-old; mv dist-new dist`.
-4. DNS: an **A record `clinza` in the `xentraerp.com` zone** pointing at the droplet's IP.
-5. nginx + TLS: see the header of `scripts/nginx-clinza.xentraerp.com.conf` (certbot webroot, then reload).
+4. DNS: an **A record `clinza` in the DigitalOcean `xentraerp.net` zone** pointing at the droplet (same as `pos`): `doctl compute domain records create xentraerp.net --record-type A --record-name clinza --record-data <droplet IP> --record-ttl 3600`.
+5. nginx + TLS: see the header of `scripts/nginx-clinza.xentraerp.net.conf` (certbot webroot, then reload).
 6. Rebuild erp-frontend (signup page has the clinic-type picker) with the usual safe-rebuild procedure.
 
 ## Not in this slice

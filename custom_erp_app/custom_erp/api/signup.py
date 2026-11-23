@@ -307,7 +307,7 @@ def tenant_lookup(tenant_code: str):
 
 
 # ---------------------------------------------------------------------------
-# CLINZA self-signup (clinza.xentraerp.com/signup). The clinic's own landing page and signup run
+# CLINZA self-signup (clinza.xentraerp.net/signup). The clinic's own landing page and signup run
 # against the control-plane site; registering creates a normal XentraERP Tenant (Pending Approval)
 # with its clinic type, exactly like the ERP signup, but only after the email has been proven:
 # either a 6-digit code sent to it (request_otp with brand "clinza", then verify_otp) or a
