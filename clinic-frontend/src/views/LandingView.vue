@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Public landing page of clinza.xentraerp.com. Signed-in users never see it (the router sends them
+// Public landing page of clinza.xentraerp.net. Signed-in users never see it (the router sends them
 // to their dashboard); "Start free" goes to /signup, which registers the clinic in XentraERP.
 import {
   Activity, ArrowRight, Baby, BadgeCheck, Building2, CalendarCheck2, Ear, Eye, FileText, Flower2, Globe2,

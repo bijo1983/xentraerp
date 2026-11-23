@@ -28,7 +28,7 @@ const SLOTS = [
 <template>
   <div class="hv" aria-hidden="true">
     <div class="hv__window">
-      <div class="hv__bar"><i /><i /><i /><span>clinza.xentraerp.com</span></div>
+      <div class="hv__bar"><i /><i /><i /><span>clinza.xentraerp.net</span></div>
       <div class="hv__body">
         <div class="hv__side">
           <div class="hv__h"><CalendarCheck2 :size="14" /> Today</div>
