@@ -570,6 +570,27 @@ def set_appointment_status(name: str, status: str):
 # encounters (charting, diagnoses, prescriptions, services)
 # ---------------------------------------------------------------------------
 
+def policy_covers(policy, on=None) -> bool:
+	"""Active and inside its validity window (both ends) on `on` (default today)."""
+	d = getdate(on or today())
+	return bool(
+		policy and cint(policy.get("active"))
+		and (not policy.get("valid_from") or getdate(policy.get("valid_from")) <= d)
+		and (not policy.get("valid_to") or getdate(policy.get("valid_to")) >= d)
+	)
+
+
+def _current_policy(patient: str) -> str | None:
+	"""The patient's policy that covers today, if any (most recently changed first)."""
+	for p in frappe.get_all(
+		"Clinza Insurance Policy", filters={"patient": patient, "active": 1},
+		fields=["name", "active", "valid_from", "valid_to"], order_by="modified desc",
+	):
+		if policy_covers(p):
+			return p.name
+	return None
+
+
 @frappe.whitelist()
 def start_encounter(patient: str | None = None, appointment: str | None = None, practitioner: str | None = None):
 	"""Open (or return the open) encounter for an appointment / a walk-in patient."""
@@ -583,10 +604,7 @@ def start_encounter(patient: str | None = None, appointment: str | None = None, 
 	if not patient or not practitioner:
 		frappe.throw("Choose the patient and the practitioner.")
 	s = _settings()
-	policy = frappe.db.get_value(
-		"Clinza Insurance Policy",
-		{"patient": patient, "active": 1, "valid_to": ["is", "not set"]}, "name",
-	) or frappe.db.get_value("Clinza Insurance Policy", {"patient": patient, "active": 1, "valid_to": [">=", today()]}, "name")
+	policy = _current_policy(patient)
 	enc = frappe.get_doc({
 		"doctype": "Clinza Encounter", "patient": patient, "practitioner": practitioner, "appointment": appointment,
 		"encounter_date": today(), "status": "Draft", "policy": policy,
@@ -759,6 +777,9 @@ def bill_encounter(name: str):
 	insurer invoice. Both invoices post to Accounting; payment comes after."""
 	require_cap("billing")
 	s = _settings()
+	# Row lock for the rest of this request's transaction: a second "Bill visit" (another
+	# tab / user) waits here and then sees the invoices, instead of billing twice.
+	frappe.db.get_value("Clinza Encounter", name, "name", for_update=True)
 	e = frappe.get_doc("Clinza Encounter", name)
 	if e.status == "Billed" or e.patient_invoice or e.payer_invoice:
 		frappe.throw("[ALREADY_BILLED] This visit has already been billed.")
@@ -766,8 +787,8 @@ def bill_encounter(name: str):
 		frappe.throw("Add at least one service before billing.")
 	patient = frappe.get_doc("Clinza Patient", e.patient)
 	policy = frappe.get_doc("Clinza Insurance Policy", e.policy) if e.policy else None
-	if policy and (not policy.active or (policy.valid_to and getdate(policy.valid_to) < getdate(today()))):
-		frappe.throw("[POLICY_INACTIVE] The patient's insurance policy is not active — remove it from the visit or update the policy.")
+	if policy and not policy_covers(policy.as_dict()):
+		frappe.throw("[POLICY_INACTIVE] The patient's insurance policy doesn't cover today (inactive, not started yet or expired) — remove it from the visit or update the policy.")
 	coverage = flt(policy.coverage_pct) if policy else 0
 	payer_lines, patient_lines = [], []
 	for row in e.services:

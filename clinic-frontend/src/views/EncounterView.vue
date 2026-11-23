@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AlertTriangle, CheckCircle2, Pill, Plus, Printer, Receipt, Save, Trash2 } from 'lucide-vue-next'
 import { clinic, errorMessage } from '@/lib/api'
-import { money, niceDate, round, splitShare } from '@/lib/format'
+import { isoDate, money, niceDate, round, splitShare } from '@/lib/format'
 import { searchIcd } from '@/lib/icd10'
 import type { Diagnosis, Encounter, Patient, Policy, RxItem, ServiceLine, TaxClass } from '@/lib/types'
 import { useClinicStore } from '@/stores/clinic'
@@ -69,7 +69,9 @@ async function load() {
   dirty.value = false
   if (store.can('patients')) {
     const p = await clinic<Patient>('get_patient', { name: e.patient }).catch(() => null)
-    policies.value = (p?.policies || []).filter((x) => x.active)
+    const day = e.encounter_date || isoDate()
+    // Only policies that cover the visit date (the server checks the same before billing).
+    policies.value = (p?.policies || []).filter((x) => x.active && (!x.valid_from || x.valid_from <= day) && (!x.valid_to || x.valid_to >= day))
     for (const inv of p?.invoices || []) invoiceInfo.value[inv.name] = { outstanding: inv.outstanding_amount, total: inv.rounded_total || inv.grand_total }
   }
 }
@@ -115,8 +117,9 @@ function addService(name: string) {
   touch()
 }
 
-async function save(complete = false) {
-  if (!enc.value) return
+/** Saves the visit; resolves false (with the error shown) when the server refused it. */
+async function save(complete = false): Promise<boolean> {
+  if (!enc.value) return false
   busy.value = complete ? 'complete' : 'save'
   error.value = ''
   try {
@@ -132,15 +135,19 @@ async function save(complete = false) {
     enc.value = saved
     dirty.value = false
     toast.success(complete ? 'Visit completed' : 'Saved')
+    return true
   } catch (err) {
     error.value = errorMessage(err)
+    return false
   } finally {
     busy.value = ''
   }
 }
 async function bill() {
   if (!enc.value) return
-  if (dirty.value && store.can('chart')) await save()
+  // Never bill an older saved version: if the unsaved changes can't be saved, stop here
+  // (the save error stays on screen and the edits stay in the form).
+  if (dirty.value && store.can('chart') && !(await save())) return
   busy.value = 'bill'
   error.value = ''
   try {

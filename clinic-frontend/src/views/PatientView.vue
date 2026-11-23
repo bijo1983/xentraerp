@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AlertTriangle, CalendarPlus, Pencil, Plus, Printer, ShieldCheck, Stethoscope } from 'lucide-vue-next'
 import { clinic } from '@/lib/api'
-import { money, niceDate } from '@/lib/format'
+import { isoDate, money, niceDate } from '@/lib/format'
 import { statusClass } from '@/lib/appointments'
 import type { Encounter, Patient, Policy } from '@/lib/types'
 import { useClinicStore } from '@/stores/clinic'
@@ -26,7 +26,10 @@ const policyOpen = ref<Policy | null | undefined>(undefined)
 const booking = ref(false)
 const paying = ref<{ name: string; outstanding: number } | null>(null)
 const starting = ref(false)
-const activePolicy = computed(() => p.value?.policies.find((x) => x.active && (!x.valid_to || x.valid_to >= new Date().toISOString().slice(0, 10))))
+const activePolicy = computed(() => {
+  const d = isoDate()
+  return p.value?.policies.find((x) => x.active && (!x.valid_from || x.valid_from <= d) && (!x.valid_to || x.valid_to >= d))
+})
 
 async function load() {
   p.value = await clinic<Patient>('get_patient', { name: route.params.id })
